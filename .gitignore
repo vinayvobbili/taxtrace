@@ -1,0 +1,22 @@
+.venv/
+.venv-py*/
+__pycache__/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+# Your own watchlist and state stay out of the repo.
+*.db
+
+# Tax documents and anything derived from them never belong here.
+*.pdf
+*.xlsx
+*.xls
+*.docx
+*.jpg
+*.jpeg
+*.png
+*.heic
+TaxData/
+redacted/

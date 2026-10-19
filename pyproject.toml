@@ -1,0 +1,47 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "taxtrace"
+version = "0.0.1"
+description = "Prepare a US federal and state return from your own documents on your own machine: every number traced to the page it came from, nothing guessed, nothing sent to a cloud model."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+dependencies = ["pdfplumber>=0.11"]
+keywords = ["tax", "tax-return", "schedule-e", "rental-property", "fbar", "foreign-tax-credit", "provenance", "local-llm"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.13",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "Topic :: Office/Business :: Financial :: Accounting",
+]
+
+[project.urls]
+Homepage = "https://github.com/vinayvobbili/taxtrace"
+Repository = "https://github.com/vinayvobbili/taxtrace"
+Issues = "https://github.com/vinayvobbili/taxtrace/issues"
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.14", "reportlab>=4"]
+
+[project.scripts]
+taxtrace = "taxtrace.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["taxtrace"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "RUF"]
+ignore = ["RUF001", "RUF002", "RUF003"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
