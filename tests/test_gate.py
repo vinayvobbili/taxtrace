@@ -130,6 +130,17 @@ def test_setup_moves_every_entry_over(monkeypatch: pytest.MonkeyPatch, capsys):
     assert "anthropic: no such entry, skipped" in out
 
 
+def test_status_says_how_each_entry_is_read_without_reading_it(fake_gate: Path, monkeypatch: pytest.MonkeyPatch,
+                                                               capsys):
+    present = ("taxtrace", "anthropic", "anthropic.taxtrace-backup")
+    monkeypatch.setattr(chat, "keychain_has", lambda item: item in present)
+    assert cli.main(["keychain", "status", "--account", "2024 Return.pdf"]) == 0
+    out = capsys.readouterr().out
+    assert "taxtrace/default: Apple Watch or Touch ID\n" in out
+    assert "taxtrace/2024 Return.pdf: the classic prompt (password, then Allow): run setup to move it" in out
+    assert "anthropic: Apple Watch or Touch ID; a backup copy is left over, setup clears it" in out
+
+
 def test_new_entries_are_stored_for_the_helper_once_it_is_built(fake_gate: Path):
     assert f"-T '{fake_gate}' -w" in workspace.keychain_hint()
 

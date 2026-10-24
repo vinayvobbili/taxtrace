@@ -379,6 +379,23 @@ def cmd_keychain(args: argparse.Namespace) -> int:
     """Approve Keychain reads with Apple Watch or Touch ID instead of typing the login password (macOS)."""
     from . import chat, gate
 
+    if args.action == "status":  # asks the Keychain for attributes only: no prompt, no secret
+        built = "built, current" if gate.current() else "built, out of date: run setup" if gate.ready() else "not built"
+        print(f"helper: {built}")
+        entries = [(workspace.KEYCHAIN_SERVICE, account) for account in [workspace.KEYCHAIN_DEFAULT, *args.account]]
+        entries.append((args.keychain, ""))
+        for service, account in entries:
+            shown = f"{service}/{account}" if account else service
+            if not chat.keychain_has(service):
+                state = "no such entry"
+            elif gate.adopted(service, account):
+                state = "Apple Watch or Touch ID"
+            else:
+                state = "the classic prompt (password, then Allow): run setup to move it"
+            leftover = "; a backup copy is left over, setup clears it" if chat.keychain_has(
+                f"{service}.taxtrace-backup") else ""
+            print(f"  {shown}: {state}{leftover}")
+        return 0
     try:
         rebuilt = gate.build()
     except gate.GateError as err:
@@ -449,7 +466,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_k1)
     p = sub.add_parser("keychain", help="approve Keychain reads with Apple Watch or Touch ID (macOS)",
                        description=cmd_keychain.__doc__)
-    p.add_argument("action", choices=["setup"])
+    p.add_argument("action", choices=["setup", "status"],
+                   help="setup: build the helper and move entries over; status: how each entry is read now")
     p.add_argument("--keychain", default="anthropic", help="the chat's API key item to include (default: anthropic)")
     p.add_argument("--account", action="append", default=[], metavar="FILE NAME",
                    help="also move a file's own entry (repeatable); the default entry is always moved")
