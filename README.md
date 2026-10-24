@@ -67,6 +67,12 @@ security add-generic-password -s taxtrace -a "2024 Return.pdf" -T "" -w   # just
 ```
 
 Click **Allow**, not **Always Allow**: that would add the reader to the trusted list and end the prompts.
+taxtrace reads each entry at most once per command, so a folder of returns sharing the `default` password
+costs one prompt. `taxtrace unlock` says which entry opens each locked file, and how each stored password
+is shaped (`aaaa99999`), never what it is.
+
+`redact`, `outline` and `unlock` with no paths read the whole workspace, leaving out what taxtrace wrote
+there itself (`redacted/`, `ocr-cache/`).
 
 ## Development
 

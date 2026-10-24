@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -71,4 +72,32 @@ def test_keychain_lookup_misses_cleanly(tmp_path: Path, monkeypatch):
     # Never the real default entry: this machine may hold one.
     monkeypatch.setattr(workspace, "KEYCHAIN_DEFAULT", "no-such-account-taxtrace-test")
     assert workspace.pdf_passwords(tmp_path / "no-such-file-taxtrace-test.pdf") == []
+
+
+def test_the_keychain_is_asked_once_per_entry_however_many_files_share_it(tmp_path: Path, monkeypatch):
+    # Each read of an entry made with -T "" is an Allow prompt for the person: four locked returns, one prompt.
+    asked = []
+
+    def security(cmd, **kw):
+        asked.append(cmd[cmd.index("-a") + 1])
+        found = cmd[-2] == "default"
+        return subprocess.CompletedProcess(cmd, 0 if found else 44, stdout=f"{PASSWORD}\n" if found else "")
+    monkeypatch.setattr(workspace.sys, "platform", "darwin")
+    monkeypatch.setattr(workspace.subprocess, "run", security)
+    workspace._keychain_password.cache_clear()
+    try:
+        files = [make_pdf(tmp_path / "docs" / f"{year} Return.pdf", PRIOR_RETURN, password=PASSWORD)
+                 for year in (2021, 2022)]
+        assert cli.main(["unlock", str(tmp_path / "docs")]) == 0
+    finally:
+        workspace._keychain_password.cache_clear()  # nothing faked outlives this test
+    assert sorted(asked) == sorted([f.name for f in files] + ["default"])
+
+
+def test_with_no_paths_named_the_workspace_is_read_without_its_derived_folders(workspace_home: Path, capsys):
+    make_pdf(workspace_home / "2023" / "1099-INT.pdf", PRIOR_RETURN)
+    for derived in workspace.DERIVED:
+        make_pdf(workspace_home / derived / "copy.pdf", PRIOR_RETURN)
+    assert cli.main(["unlock"]) == 0
+    assert capsys.readouterr().out.splitlines() == ["1099-INT.pdf: not locked"]
 

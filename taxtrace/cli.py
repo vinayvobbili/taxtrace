@@ -15,11 +15,11 @@ def cmd_redact(args: argparse.Namespace) -> int:
     Only the masked file names and counts are printed, never a document's own name or text, so the output is
     safe to show to whoever is helping with the layout.
     """
-    docs = text.documents([Path(p) for p in args.paths])
+    docs = _documents(args)
     if not docs:
         print("no readable documents", file=sys.stderr)
         return 1
-    out = workspace.outside_git(Path(args.out) if args.out else workspace.home() / "redacted")
+    out = workspace.outside_git(Path(args.out) if args.out else workspace.home() / workspace.REDACTED)
     out.mkdir(parents=True, exist_ok=True)
     terms = workspace.redact_terms(Path(args.terms) if args.terms else None)
     written = 0
@@ -46,6 +46,11 @@ def cmd_redact(args: argparse.Namespace) -> int:
     return 0
 
 
+def _documents(args: argparse.Namespace) -> list[Path]:
+    """The documents named on the command line, or with none named, every one in the workspace."""
+    return text.documents([Path(p) for p in args.paths] or workspace.sources())
+
+
 def _open(doc: Path) -> list[str]:
     """A document's pages, trying each password the Keychain holds for it when it's locked."""
     def passwords():
@@ -64,7 +69,7 @@ def _open(doc: Path) -> list[str]:
 def cmd_outline(args: argparse.Namespace) -> int:
     """Each page's first lines, masked: which forms and worksheets a document holds, and in what order."""
     terms = workspace.redact_terms()
-    for doc in text.documents([Path(p) for p in args.paths]):
+    for doc in _documents(args):
         name = redact.redact(doc.name, terms, bare_years=True).text
         try:
             pages = _open(doc)
@@ -80,7 +85,7 @@ def cmd_outline(args: argparse.Namespace) -> int:
 
 def cmd_unlock(args: argparse.Namespace) -> int:
     """Say which Keychain entry opens each locked PDF, and what each stored password looks like (never what it is)."""
-    docs = text.documents([Path(p) for p in args.paths])
+    docs = _documents(args)
     terms = workspace.redact_terms()
     shown: set[str] = set()
     failed = 0
@@ -132,12 +137,15 @@ def cmd_import(args: argparse.Namespace) -> int:
     return 0
 
 
+PATHS_HELP = "documents or folders (default: the whole workspace)"
+
+
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="taxtrace", description=__doc__)
     ap.add_argument("--version", action="version", version=f"taxtrace {__version__}")
     sub = ap.add_subparsers(dest="command", required=True)
     p = sub.add_parser("redact", help="mask documents down to their layout", description=cmd_redact.__doc__)
-    p.add_argument("paths", nargs="+", help="documents or folders")
+    p.add_argument("paths", nargs="*", help=PATHS_HELP)
     p.add_argument("--out", help="folder for the masked text (default: <workspace>/redacted)")
     p.add_argument("--terms", help=f"extra words to mask, one per line (default: <workspace>/{workspace.TERMS_FILE})")
     p.set_defaults(func=cmd_redact)
@@ -148,10 +156,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_import)
     p = sub.add_parser("unlock", help="check which stored password opens each locked PDF",
                        description=cmd_unlock.__doc__)
-    p.add_argument("paths", nargs="+", help="documents or folders")
+    p.add_argument("paths", nargs="*", help=PATHS_HELP)
     p.set_defaults(func=cmd_unlock)
     p = sub.add_parser("outline", help="list each page's masked heading", description=cmd_outline.__doc__)
-    p.add_argument("paths", nargs="+", help="documents or folders")
+    p.add_argument("paths", nargs="*", help=PATHS_HELP)
     p.add_argument("--lines", type=int, default=2, help="lines per page (default: 2)")
     p.set_defaults(func=cmd_outline)
     return ap

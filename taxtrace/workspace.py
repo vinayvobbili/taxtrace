@@ -6,6 +6,7 @@ for desktop, iCloud Drive) to have it backed up.
 
 from __future__ import annotations
 
+import functools
 import os
 import subprocess
 import sys
@@ -13,6 +14,8 @@ from pathlib import Path
 
 TERMS_FILE = "redact-terms.txt"
 OCR_CACHE = "ocr-cache"
+REDACTED = "redacted"
+DERIVED = {OCR_CACHE, REDACTED}  # what taxtrace writes into the workspace, never read back as a document
 KEYCHAIN_SERVICE = "taxtrace"
 KEYCHAIN_DEFAULT = "default"  # tried after the file's own entry: one password for every return a preparer sends
 
@@ -49,13 +52,25 @@ def keychain_entries(path: Path) -> list[tuple[str, str]]:
     """
     if sys.platform != "darwin":
         return []
-    found = []
-    for account in (path.name, KEYCHAIN_DEFAULT):
-        r = subprocess.run(["security", "find-generic-password", "-s", KEYCHAIN_SERVICE, "-a", account, "-w"],
-                           capture_output=True, text=True)
-        if r.returncode == 0:
-            found.append((account, r.stdout.rstrip("\n")))
-    return found
+    return [(account, password) for account in (path.name, KEYCHAIN_DEFAULT)
+            if (password := _keychain_password(KEYCHAIN_SERVICE, account)) is not None]
+
+
+@functools.cache
+def _keychain_password(service: str, account: str) -> str | None:
+    """Read once per run: an entry made with `-T ""` asks the person (Allow / Deny) on every read, so a folder of
+    returns that share the default password costs one prompt, not one per file."""
+    r = subprocess.run(["security", "find-generic-password", "-s", service, "-a", account, "-w"],
+                       capture_output=True, text=True)
+    return r.stdout.rstrip("\n") if r.returncode == 0 else None
+
+
+def sources() -> list[Path]:
+    """The workspace's documents, without what taxtrace derived from them (masked text, OCR copies)."""
+    root = home()
+    if not root.is_dir():
+        return []
+    return sorted(p for p in root.iterdir() if p.name not in DERIVED and not p.name.startswith("."))
 
 
 def pdf_passwords(path: Path) -> list[str]:
