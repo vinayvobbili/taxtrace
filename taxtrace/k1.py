@@ -73,6 +73,19 @@ class Item:
 
 
 @dataclass
+class StatementItem:
+    """An amount on the partnership's attached statement, for a box and code the face sends there."""
+
+    box: str
+    code: str
+    description: str
+    amount: Decimal
+    section: str  # the statement's heading above it ("LINE 20, CODE Z SECTION 199A INFORMATION")
+    page: int
+    quote: str  # the line exactly as `text.pages` gives it
+
+
+@dataclass
 class K1:
     file: str
     page: int
@@ -98,6 +111,7 @@ class K1:
     items: list[Item] = field(default_factory=list)  # Part III, in box order
     k3_attached: bool = False  # box 16
     more_than_one_activity: dict[str, bool] = field(default_factory=dict)  # boxes 22, 23
+    statement: list[StatementItem] = field(default_factory=list)  # from the pages after the face
     checks: list[Check] = field(default_factory=list)
     questions: list[Question] = field(default_factory=list)
 
@@ -137,13 +151,20 @@ class K1:
         return out
 
 
-def read(name: str, pages: dict[int, list[dict]]) -> list[K1]:
+def read(name: str, pages: dict[int, list[dict]], texts: list[str] | None = None) -> list[K1]:
     """The K-1 faces among a document's pages, given each page's words (`text.words`) by page number.
 
-    A face that repeats an earlier one exactly (the same partnership, partner and amounts) is a second copy: it's
-    kept, marked `copy_of`, and counts once. The same amounts for another partner (a spouse) are their own K-1.
+    With the document's text (`text.pages`), each face also gets the amounts on the statement pages after it, up to
+    the next face. A face that repeats an earlier one exactly (the same partnership, partner and amounts) is a second
+    copy: it's kept, marked `copy_of`, and counts once. The same amounts for another partner (a spouse) are their
+    own K-1.
     """
     found = [k1 for n, words in sorted(pages.items()) if (k1 := face(name, n, words)) is not None]
+    for n, k1 in enumerate(found):
+        if texts is not None:
+            stop = found[n + 1].page - 1 if n + 1 < len(found) else len(texts)
+            k1.statement = statements(texts, k1.page + 1, stop)
+        _statement_questions(k1)
     for n, later in enumerate(found):
         if first := next((k for k in found[:n] if k.copy_of is None and _same(k, later)), None):
             later.copy_of = first.page
@@ -360,10 +381,6 @@ def _checks(k1: K1) -> None:
     if k1.final:
         k1.ask("a final K-1: was the partnership interest sold or the partnership wound up? Its passive losses "
                "carried over from earlier years may be allowed in full this year.")
-    for item in k1.items:
-        if item.statement:
-            k1.ask(f"box {item.box}" + (f" code {item.code}" if item.code else "") +
-                   ": the amount is on the partnership's attached statement", item.value.quote)
     for box, checked in k1.more_than_one_activity.items():
         if checked:
             k1.ask(f"box {box}: the partnership has more than one activity; its statement says how the items "
@@ -375,8 +392,95 @@ def _checks(k1: K1) -> None:
                f"{paid} against {k1.capital['withdrawals'].quote}")
 
 
-def verify(k1: K1, words: list[dict]) -> list[str]:
-    """Each value's text still at its place on its page: the position and the exact text both."""
-    return [f"p{v.page}: {v.quote!r} isn't at {v.top}, {v.x0}" for v in k1.values()
-            if not any(w["text"] == v.quote and abs(w["top"] - v.top) < 0.6 and abs(w["x0"] - v.x0) < 0.6
-                       for w in words)]
+def _statement_questions(k1: K1) -> None:
+    """A box the face sends to the statement is a question only when the statement gives it no amount."""
+    if k1.retirement_plan:
+        return
+    for item in k1.items:
+        if item.statement and not any(s.box == item.box and (s.code == item.code or not item.code)
+                                      for s in k1.statement):
+            k1.ask(f"box {item.box}" + (f" code {item.code}" if item.code else "") +
+                   ": the amount is on the partnership's statement, and no statement page after the face gives it",
+                   item.value.quote)
+
+
+# "LINE 20, CODE Z ...", "LINE 20Z ...", "Line 20, AF ...", "Box 19C: ...", "Line 13 - Other Deductions"
+REF = re.compile(r"^\s*(?i:line|box)\s+(\d{1,2})\s*(?:[,:-]\s*)?(?:(?i:code)\s+)?([A-Z]{1,2})?\b\s*[:-]?\s*")
+ANYWHERE = re.compile(r"(?i:line)\s+(\d{1,2}),?\s+(?i:code)\s+([A-Z]{1,2})\b")  # "Schedule K-1, Line 20, Code Z"
+ROW_CODE = re.compile(r"^\s*([A-Z]{1,2})(?:-\s|\s{2,})\s*")  # a table row: "C    Meals (general)", "AE- DEDUCTIONS"
+# the amount ending a line: set apart by a column gap, or a "$" or "(" (never "Line 1", an EIN, or a %)
+TRAILING = re.compile(r"(?:^\s*|\s{2,}|\s(?=-?\$|\())(-?\$?-?\(?\$?[\d,]*\d(?:\.\d+)?\)?)\s*$")
+COLUMN_HEADS = re.compile(r"^\s*(?:Code\s+)?Description\s+Amount\s*$|^\s*Explanation\s*$", re.IGNORECASE)
+SHORT = 30  # characters: a label wrapped onto the lines around its amount is short
+# an underlined heading, as layout text draws it: "S_e_c_t_i_o_n_" (an underlined amount, "____5_", isn't one)
+HEADING = re.compile(r"(?:[A-Za-z0-9]_){4,}")
+LONE_YEAR = re.compile(r"^\s*(?:19|20)\d\d\s*$")  # a tax year on a line of its own, not an amount
+RECONCILE = re.compile(r"(?i)\b(?:section|item)\s+L\b")  # item L's reconciliation repeats the face's amounts
+
+
+def statements(texts: list[str], first: int, last: int) -> list[StatementItem]:
+    """The amounts on pages `first` to `last` (1-based) that a line or table ties to a box, and its code if any.
+
+    A "Line 20, Code Z" or "Box 19C" reference sets the box and code for the lines under it, until the next
+    reference or heading. Each line ending in an amount under one becomes an item, its description the line's
+    text (or the lines around a lone amount, where a label wraps around it). Totals and item L's reconciliation,
+    which repeat amounts given elsewhere, are left out.
+    """
+    found: list[StatementItem] = []
+    for page in range(first, min(last, len(texts)) + 1):
+        lines = [raw.replace("_", "") for raw in texts[page - 1].splitlines()]
+        raws = texts[page - 1].splitlines()
+        box = code = section = ""
+        reconciling = False  # under item L's reconciliation, whose rows repeat the face
+        for n, line in enumerate(lines):
+            if not line.strip() or COLUMN_HEADS.match(line) or LONE_YEAR.match(line):
+                continue  # a table's column headings neither start nor end a section
+            ref = REF.match(line)
+            ends = TRAILING.search(line[ref.end():] if ref else line)
+            if not ref and not ends and (mid := ANYWHERE.search(line)):
+                box, code, section, reconciling = mid.group(1), mid.group(2), line.strip(), False
+                continue
+            if RECONCILE.search(line):
+                box, code, section, reconciling = "", "", line.strip(), True
+                continue
+            if reconciling and (ends or not (ref or HEADING.search(raws[n]))):
+                continue  # a reconciliation row; a reference or heading without an amount ends it
+            reconciling = False
+            if ref:
+                box, code, section = ref.group(1), ref.group(2) or "", line.strip()
+                rest = line[ref.end():]
+            elif HEADING.search(raws[n]):  # another heading ends the reference above it
+                box, code, section = "", "", line.strip()
+                continue
+            elif box and (row := ROW_CODE.match(line)):
+                code, rest = row.group(1), line[row.end():]
+            else:
+                rest = line
+            if not box or not (ends := TRAILING.search(rest)):
+                continue
+            description = rest[:ends.start()].strip(" .:-")
+            around = [lines[i].strip() for i in (n - 1, n + 1) if 0 <= i < len(lines)]
+            text_only = [a for a in around if a and not TRAILING.search(a)]
+            if not description:  # a lone amount: its label wraps around it
+                description = " ".join(text_only)
+            elif len(text_only) == 2 and all(len(a) <= SHORT for a in text_only):  # a label in three lines
+                description = f"{text_only[0]} {description} {text_only[1]}"
+            if not description or description.lower().startswith("total"):
+                continue
+            try:
+                value = amount(ends.group(1).replace("$", ""))
+            except ValueError:
+                continue
+            found.append(StatementItem(box, code, description, value, section, page, raws[n].rstrip()))
+    return found
+
+
+def verify(k1: K1, words: list[dict], texts: list[str] | None = None) -> list[str]:
+    """Each face value's text still at its place on its page, and each statement line still on its page."""
+    problems = [f"p{v.page}: {v.quote!r} isn't at {v.top}, {v.x0}" for v in k1.values()
+                if not any(w["text"] == v.quote and abs(w["top"] - v.top) < 0.6 and abs(w["x0"] - v.x0) < 0.6
+                           for w in words)]
+    if texts is not None:
+        problems += [f"p{s.page}: {s.quote.strip()!r} isn't on the page" for s in k1.statement
+                     if s.quote not in texts[s.page - 1]]
+    return problems

@@ -155,7 +155,12 @@ codes that hold amounts, with failed checks and questions, never an amount or a 
 - A face printed twice for the same partner counts once. The same amounts for another partner, such as a spouse,
   are that partner's own K-1.
 - An IRA's K-1 (item I2 checked) is marked as one: its income stays in the account, off the return.
-- An amount on the partnership's statement, a final K-1, or more than one activity (boxes 22, 23) is a question.
+- An amount the face sends to the partnership's statement ("STMT", "See statement") is read from the statement
+  pages after the face. A "Line 20, Code Z" or "Box 19C" reference, or a code in a box's table, ties each amount
+  line under it to its box and code, with its description; a label wrapped around its amount (Statement A's
+  199A grid) is put back together. Totals and item L's reconciliation, which repeat amounts given elsewhere, are
+  left out. A statement amount the pages don't give is a question.
+- A final K-1, or more than one activity (boxes 22, 23), is a question.
 
 ## Chat
 

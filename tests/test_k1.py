@@ -66,19 +66,74 @@ FACE = [
     (453, 506.5, "21"), (471, 506.5, "Foreign taxes paid or accrued"),
     (362, 760, "Cat. No. 11394R"), (452, 760, "Schedule K-1 (Form 1065) 2025"),
 ]
+# statement pages in the two layouts seen: a preparer's (underlined headings, code tables, a 199A grid) and a fund's
+SUPPLEMENT = [
+    "Schedule K-1 Supplemental Information 2025",
+    "Name of Partnership                Partnership EIN",
+    f"{PARTNERSHIP}                     {EIN}",
+    "            L_i_n_e_ _1_8_ _-_ _O_t_h_e_r_ _I_n_f_o_r_m_a_t_i_o_n_ Statement 101",
+    "C_o_d_e_ D_e_s_c_r_i_p_t_i_o_n_                          A_m_o_u_n_t_",
+    "C    Meals (general)                                    ______64_",
+    "Total                                                   __________64__",
+    "         S_e_c_t_i_o_n_ _L_:_ _C_u_r_r_e_n_t_ _Y_e_a_r_ _N_e_t_ _I_n_c_o_m_e_",
+    "D_e_s_c_r_i_p_t_i_o_n_                                  A_m_o_u_n_t_",
+    "Ordinary business  income (loss)                        (4,210)",
+    "Line 13, Code AE -  Portfolio deductions                (112)",
+    "         F_o_r_m_ _1_0_6_5_ _S_c_h_e_d_u_l_e_ _K_-_1_ _C_o_d_e_s_",
+    "Line 20, Code Z  -  Section 199A information",
+    "              [See K-1 instructions, pages 26-27]",
+]
+STATEMENT_A = [
+    "STATEMENT A - QBI Pass-through Entity Reporting",
+    "Schedule K-1, Line 20, Code Z",
+    "      2025",
+    "LINE NUMBER        NO. 1         NO.",
+    "Ordinary Business",
+    "                   (4,210)",
+    "Income (Loss)",
+    "Section 179",
+    "Other Deductions   1,388",
+    "W-2 Wages          2,940",
+    "Unadjusted Basis",
+    "Immediately After  61,500",
+    "Acquisition",
+]
+FUND_STATEMENT = [
+    "LINE 13 - OTHER DEDUCTIONS",
+    "AE- DEDUCTIONS-PORTFOLIO INCOME                              $112",
+    "LINE 20, CODE Z SECTION 199A INFORMATION",
+    "TRADE OR BUSINESS: Real Estate for Development",
+    "EIN (IF APPLICABLE): 88-7654321",
+    "LINE 20Z SECTION 199A QUALIFIED BUSINESS INCOME              -$4,210",
+    "THE QBI REPORTED ABOVE INCLUDES ITEMS REPORTED ON LINE 1",
+    "UBTI INCLUDED ON LINE 1 - QUALIFIED ORG*                     100.00%",
+    "Box 19C: PROPERTY DISTRIBUTIONS - OTHER PROPERTY:",
+    "FAIR MARKET VALUE OF PROPERTY DISTRIBUTED                    $950",
+    "THE PARTNERSHIP'S ADJUSTED BASIS OF PROPERTY DISTRIBUTED     $900",
+    "ITEM L, PARTNER'S CAPITAL ACCOUNT ANALYSIS",
+    "TAX BASIS",
+    "Box 20, CODE AG GROSS RECEIPTS FOR SECTION 448(C)",
+    "CURRENT YEAR GROSS PROCEEDS                                  $77",
+]
 SECRETS = ["4,210", "1,875", "18,500", "15,302", "2,298", "14,300", "Larkspur", "Quarrystone", "1234567", "4410"]
 
 
-def draw(path: Path, pages: list[list[tuple[float, float, str]]]) -> Path:
+def draw(path: Path, pages: list[list]) -> Path:
+    """A face is (x, top, phrase) tuples placed on the page; a statement page is lines, in a fixed-width font."""
     from reportlab.lib.pagesizes import letter
     from reportlab.pdfgen import canvas
 
     path.parent.mkdir(parents=True, exist_ok=True)
     c = canvas.Canvas(str(path), pagesize=letter)
     for page in pages:
-        c.setFont("Helvetica", 7)
-        for x, top, phrase in page:
-            c.drawString(x, letter[1] - top - 5.2, phrase)  # a 7-point word's top sits about 5 points over its baseline
+        if page and isinstance(page[0], str):
+            c.setFont("Courier", 12)  # 7.2 points a character, the width of a layout text column: gaps survive
+            for i, line in enumerate(page):
+                c.drawString(20, letter[1] - 40 - 14 * i, line)
+        else:
+            c.setFont("Helvetica", 7)
+            for x, top, phrase in page:
+                c.drawString(x, letter[1] - top - 5.2, phrase)  # a 7-point word's top sits 5 points over its baseline
         c.showPage()
     c.save()
     return path
@@ -97,7 +152,7 @@ def face_pdf(tmp_path: Path) -> Path:
 
 def read(path: Path) -> list[k1.K1]:
     pages = text.pages(path)
-    return k1.read(path.name, {n: text.words(path, n) for n, p in enumerate(pages, 1) if k1.is_face(p)})
+    return k1.read(path.name, {n: text.words(path, n) for n, p in enumerate(pages, 1) if k1.is_face(p)}, pages)
 
 
 def test_every_box_and_code_is_read_by_where_it_sits(face_pdf: Path):
@@ -115,8 +170,35 @@ def test_every_box_and_code_is_read_by_where_it_sits(face_pdf: Path):
     assert [q.text for q in found.questions] == [
         "a final K-1: was the partnership interest sold or the partnership wound up? Its passive losses carried "
         "over from earlier years may be allowed in full this year.",
-        "box 20 code Z: the amount is on the partnership's attached statement"]
+        "box 20 code Z: the amount is on the partnership's statement, and no statement page after the face gives it"]
     assert k1.verify(found, text.words(face_pdf, 2)) == []
+
+
+def test_statement_amounts_in_a_preparers_layout(tmp_path: Path):
+    path = draw(tmp_path / "k1.pdf", [FACE, SUPPLEMENT, STATEMENT_A, FACE])
+    first, copy = read(path)
+    assert [(s.box, s.code, s.description, s.amount, s.page) for s in first.statement] == [
+        ("18", "C", "Meals (general)", Decimal(64), 2),  # not the table's total, or the heading's statement number
+        ("20", "Z", "Ordinary Business Income (Loss)", Decimal(-4210), 3),  # a label wrapped around its amount
+        ("20", "Z", "Other Deductions", Decimal(1388), 3),
+        ("20", "Z", "W-2 Wages", Decimal(2940), 3),
+        ("20", "Z", "Unadjusted Basis Immediately After Acquisition", Decimal(61500), 3),
+    ]  # item L's reconciliation repeats the face's amounts, so its "Line 13, Code AE" row isn't one
+    assert first.questions[1:] == []  # box 20 Z is on the statement: only the final K-1 is asked about
+    assert copy.statement == [] and copy.copy_of == 1  # the pages after the last face hold no statement
+    assert k1.verify(first, text.words(path, 1), text.pages(path)) == []
+
+
+def test_statement_amounts_in_a_funds_layout(tmp_path: Path):
+    (found,) = read(draw(tmp_path / "k1.pdf", [FACE, FUND_STATEMENT]))
+    assert [(s.box, s.code, s.description, s.amount) for s in found.statement] == [
+        ("13", "AE", "DEDUCTIONS-PORTFOLIO INCOME", Decimal(112)),
+        ("20", "Z", "SECTION 199A QUALIFIED BUSINESS INCOME", Decimal(-4210)),  # not the EIN, "LINE 1" or a %
+        ("19", "C", "FAIR MARKET VALUE OF PROPERTY DISTRIBUTED", Decimal(950)),
+        ("19", "C", "THE PARTNERSHIP'S ADJUSTED BASIS OF PROPERTY DISTRIBUTED", Decimal(900)),
+        ("20", "AG", "CURRENT YEAR GROSS PROCEEDS", Decimal(77)),
+    ]
+    assert found.statement[1].section.startswith("LINE 20Z SECTION 199A QUALIFIED BUSINESS INCOME")
 
 
 def test_parts_one_and_two_are_read_by_their_labels(face_pdf: Path):
@@ -169,7 +251,7 @@ def test_cli_writes_the_values_and_prints_none(face_pdf: Path, workspace_home: P
     for secret in SECRETS:
         assert secret not in out
     assert "amounts in 1, 2, 5, 13 AE, 19 A, 20 A, 20 Z (statement); 10 of 10 checks pass, 2 questions" in out
-    assert "question: box 20 code Z: the amount is on the partnership's attached statement (****)" in out
+    assert "question: box 20 code Z: the amount is on the partnership's statement, and no statement page" in out
     assert "box 1: (#,###) at" in out
     saved = json.loads((workspace_home / "k1" / "2025 K-1 Larkspur.json").read_text())
     assert saved[0]["items"][0] | {"value": None} == {"box": "1", "code": "", "value": None, "statement": False,

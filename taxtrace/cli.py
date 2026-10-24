@@ -288,13 +288,13 @@ def cmd_k1(args: argparse.Namespace) -> int:
         if not faces or doc.suffix.lower() not in text.PDF_SUFFIXES:
             continue
         words = {n: text.words(doc, n, password) for n in faces}
-        found = k1.read(doc.name, words)
+        found = k1.read(doc.name, words, pages)
         if not found:
             continue
         out.mkdir(parents=True, exist_ok=True)
         (out / f"{doc.stem}.json").write_text(json.dumps([f.to_json() for f in found], indent=2) + "\n")
         for f in found:
-            problems = k1.verify(f, words[f.page])
+            problems = k1.verify(f, words[f.page], pages)
             bad = f.failed
             failed += bool(bad or problems)
             boxes = ", ".join(i.box + (f" {i.code}" if i.code else "") + (" (statement)" if i.statement else "")
@@ -306,6 +306,12 @@ def cmd_k1(args: argparse.Namespace) -> int:
                   + (f"; a second copy of p{f.copy_of}'s, counted once" if f.copy_of else "")
                   + ("; final K-1" if f.final else "") + ("; amended" if f.amended else "")
                   + ("; Schedule K-3 attached" if f.k3_attached else ""))
+            if f.statement:
+                counts: dict[str, int] = {}
+                for s in f.statement:
+                    key = s.box + (f" {s.code}" if s.code else "")
+                    counts[key] = counts.get(key, 0) + 1
+                print("  statement amounts: " + ", ".join(f"{k} ×{n}" if n > 1 else k for k, n in counts.items()))
             # checks and questions name boxes and lines only, never the document's text: that's in the quotes
             for c in bad:
                 print(f"  failed: {c.what}" + (f" ({masked(c.quote)})" if c.quote else ""))
@@ -327,6 +333,9 @@ def cmd_k1(args: argparse.Namespace) -> int:
                 for i in f.items:
                     print(f"  box {i.box}{' ' + i.code if i.code else ''}: {masked(i.value.quote)} at "
                           f"{i.value.top}, {i.value.x0}")
+                for s in f.statement:
+                    print(f"  p{s.page} statement {s.box}{' ' + s.code if s.code else ''} "
+                          f"{masked(s.description)!r}: {masked(s.quote)}")
     print(f"wrote to {out}" if out.exists() else "no K-1s found")
     return 1 if failed else 0
 
