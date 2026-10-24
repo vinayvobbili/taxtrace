@@ -15,7 +15,9 @@ from pathlib import Path
 TERMS_FILE = "redact-terms.txt"
 OCR_CACHE = "ocr-cache"
 REDACTED = "redacted"
-DERIVED = {OCR_CACHE, REDACTED}  # what taxtrace writes into the workspace, never read back as a document
+MANIFEST = "imports.jsonl"
+# taxtrace's own files and folders in the workspace, never read back as documents: its output and its settings
+DERIVED = {OCR_CACHE, REDACTED, MANIFEST, TERMS_FILE}
 KEYCHAIN_SERVICE = "taxtrace"
 KEYCHAIN_DEFAULT = "default"  # tried after the file's own entry: one password for every return a preparer sends
 

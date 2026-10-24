@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>taxtrace</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f766e'/%3E%3Cpath d='M9 10h14M16 10v13M11 23h10' stroke='white' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #f6f7f5; --panel: #ffffff; --ink: #1c2321; --muted: #66706c; --line: #e3e7e4;
+  --accent: #0f766e; --accent-soft: #e2f2ef; --warn: #9a5b00; --warn-soft: #fbf0dc; --bad: #b42318;
+  --cloud: #3b5bdb; --cloud-soft: #e7ecfd; --mine: #0f766e; --mine-soft: #e2f2ef;
+  --shadow: 0 1px 2px rgba(16, 24, 20, .06), 0 8px 24px rgba(16, 24, 20, .06);
+  --radius: 14px; color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1312; --panel: #171c1b; --ink: #e7ecea; --muted: #94a09b; --line: #29312f;
+    --accent: #2dd4bf; --accent-soft: #133631; --warn: #f0b75a; --warn-soft: #3a2c12; --bad: #f97066;
+    --cloud: #8ea6ff; --cloud-soft: #1d2645; --mine: #2dd4bf; --mine-soft: #133631;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .3); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1312; --panel: #171c1b; --ink: #e7ecea; --muted: #94a09b; --line: #29312f;
+  --accent: #2dd4bf; --accent-soft: #133631; --warn: #f0b75a; --warn-soft: #3a2c12; --bad: #f97066;
+  --cloud: #8ea6ff; --cloud-soft: #1d2645; --mine: #2dd4bf; --mine-soft: #133631;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .3); color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; }
+header { display: flex; align-items: center; gap: 14px; padding: 18px 28px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; letter-spacing: -.01em; }
+.brand .mark { width: 30px; height: 30px; border-radius: 9px; background: var(--accent); display: grid; place-items: center; color: #fff; }
+.where { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.pill.cloud { background: var(--cloud-soft); color: var(--cloud); }
+.pill.mine { background: var(--mine-soft); color: var(--mine); }
+.pill.warn { background: var(--warn-soft); color: var(--warn); }
+main { max-width: 1120px; margin: 0 auto; padding: 28px; display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 24px; align-items: start; }
+h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 12px; font-weight: 650; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+.folders { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+.folder { padding: 16px; }
+.folder .top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.folder b { font-size: 17px; }
+.folder .n { color: var(--muted); font-size: 13px; }
+.folder ul { margin: 0; padding: 0; list-style: none; font-size: 13px; color: var(--muted); }
+.folder li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 0; }
+.folder li.more { font-style: italic; }
+.empty { padding: 28px; text-align: center; color: var(--muted); }
+.empty code, .side code { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; font-size: 13px; }
+.side { padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+.models { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; counter-reset: m; }
+.models li { display: grid; grid-template-columns: 22px 1fr; gap: 8px; align-items: start; counter-increment: m; }
+.models li::before { content: counter(m); width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; background: var(--bg); border: 1px solid var(--line); }
+.models .name { font-weight: 600; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.models .why { font-size: 12.5px; color: var(--muted); }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: var(--accent); }
+.dot.off { background: var(--bad); }
+.note { font-size: 13px; color: var(--muted); margin: 0; }
+
+/* chat */
+.fab { position: fixed; right: 28px; bottom: 28px; z-index: 9; display: inline-flex; align-items: center; gap: 8px; padding: 12px 18px;
+  border: 0; border-radius: 999px; background: var(--accent); color: #fff; font: inherit; font-weight: 650; cursor: pointer; box-shadow: var(--shadow); transition: transform .15s; }
+.fab:hover { transform: translateY(-2px); }
+.pop { position: fixed; right: 28px; bottom: 28px; z-index: 10; width: min(460px, calc(100vw - 32px)); height: min(680px, calc(100vh - 56px));
+  display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 20px 60px rgba(0, 0, 0, .25); overflow: hidden; }
+.pop[hidden] { display: none; }
+.pop-head { display: flex; align-items: center; gap: 10px; padding: 12px 12px 12px 16px; border-bottom: 1px solid var(--line); }
+.pop-head .t { flex: 1; min-width: 0; line-height: 1.25; }
+.pop-head .t b { display: block; }
+.pop-head .t span { font-size: 12.5px; color: var(--muted); }
+.icon-btn { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 6px; border-radius: 8px; font: inherit; }
+.icon-btn:hover { background: var(--bg); color: var(--ink); }
+.log { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 14px; display: flex; flex-direction: column; gap: 12px; }
+.hello { margin: auto 0; text-align: center; color: var(--muted); font-size: 14px; padding: 0 10px; }
+.hello .ask { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.hello button { border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 12px; padding: 8px 12px; font: inherit; font-size: 13.5px; cursor: pointer; text-align: left; }
+.hello button:hover { border-color: var(--accent); }
+.msg { max-width: 92%; padding: 10px 13px; border-radius: 14px; font-size: 14.5px; overflow-wrap: anywhere; }
+.msg.user { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 4px; white-space: pre-wrap; }
+.msg.bot { align-self: flex-start; background: var(--bg); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+.msg.bot p { margin: 0 0 8px; } .msg.bot p:last-child { margin-bottom: 0; }
+.msg.bot ul, .msg.bot ol { margin: 4px 0 8px; padding-left: 20px; }
+.msg.bot code { background: var(--panel); border: 1px solid var(--line); border-radius: 5px; padding: 0 4px; font-size: 13px; }
+.msg.err { align-self: stretch; background: var(--warn-soft); color: var(--warn); font-size: 13.5px; }
+.meta { font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 2px; }
+.meta.right { align-self: flex-end; justify-content: flex-end; }
+.meta.left { align-self: flex-start; }
+.meta .pill.warn { white-space: normal; border-radius: 10px; font-weight: 500; }
+details.sent { font-size: 12px; color: var(--muted); align-self: flex-end; max-width: 92%; }
+details.sent summary { cursor: pointer; }
+details.sent div { margin-top: 4px; padding: 8px 10px; border: 1px dashed var(--line); border-radius: 10px; white-space: pre-wrap; font-family: ui-monospace, Menlo, monospace; }
+.typing { display: inline-flex; gap: 4px; } .typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: blink 1.2s infinite; }
+.typing i:nth-child(2) { animation-delay: .2s; } .typing i:nth-child(3) { animation-delay: .4s; }
+@keyframes blink { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
+form.input { display: flex; gap: 8px; align-items: flex-end; padding: 10px 12px 12px; border-top: 1px solid var(--line); }
+form.input textarea { flex: 1; min-height: 42px; max-height: 160px; resize: none; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px;
+  font: inherit; font-size: 14.5px; line-height: 1.4; background: var(--bg); color: var(--ink); }
+form.input textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+form.input button { border: 0; border-radius: 12px; background: var(--accent); color: #fff; font: inherit; font-weight: 650; padding: 10px 14px; cursor: pointer; }
+.foot { font-size: 11.5px; color: var(--muted); padding: 0 14px 10px; text-align: center; }
+@media (max-width: 860px) {
+  header { padding: 14px 16px; flex-wrap: wrap; } .where { flex-basis: 100%; order: 3; }
+  main { grid-template-columns: 1fr; padding: 16px; }
+  .fab { right: 16px; bottom: 16px; } .pop { right: 16px; bottom: 16px; height: calc(100vh - 32px); }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="mark">T</span>taxtrace</div>
+  <div class="where" id="where">Loading the workspace…</div>
+  <span class="pill cloud" title="Before a question goes to Claude or agy, its amounts become # and its names become *. A question with your values in it is answered on this Mac.">Cloud models see masked text only</span>
+</header>
+<main>
+  <section>
+    <h2>Documents by folder</h2>
+    <div id="folders" class="folders"></div>
+  </section>
+  <aside class="card side">
+    <h2 style="margin:0">Who answers the chat</h2>
+    <ol class="models" id="models"></ol>
+    <p class="note">The first ready model answers; if it can't, the next one does. Claude and agy get your question and
+      the document list masked, the way <code>taxtrace redact</code> masks a document. A question with an amount or a name
+      from <code>redact-terms.txt</code> goes only to the model on this Mac.</p>
+  </aside>
+</main>
+
+<button class="fab" id="fab" type="button">✦ Ask taxtrace</button>
+<div class="pop" id="pop" hidden role="dialog" aria-label="Ask taxtrace">
+  <div class="pop-head">
+    <div class="t"><b>Ask about your return</b><span id="who">Tax rules, forms, what a document is for</span></div>
+    <button class="icon-btn" id="clear" type="button" title="Start over">New</button>
+    <button class="icon-btn" id="close" type="button" title="Close" aria-label="Close">✕</button>
+  </div>
+  <div class="log" id="log" aria-live="polite"></div>
+  <form class="input" id="form">
+    <textarea id="input" rows="1" placeholder="Ask a question…" aria-label="Your question"></textarea>
+    <button type="submit" id="send">Send</button>
+  </form>
+  <div class="foot">It reads only the document list and what you type. It can't open files or file anything.</div>
+</div>
+
+<script>
+const TOKEN = "__TAXTRACE_TOKEN__";
+const $ = id => document.getElementById(id);
+function h(tag, attrs = {}, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (v !== false && v != null) el.setAttribute(k, v === true ? "" : v);
+  }
+  for (const kid of kids.flat()) if (kid != null && kid !== false) el.append(kid.nodeType ? kid : String(kid));
+  return el;
+}
+async function api(path, body) {
+  const r = await fetch(path, { method: body ? "POST" : "GET", headers: { "X-Taxtrace-Token": TOKEN, "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || r.statusText);
+  return data;
+}
+
+// -- the page: the workspace's folders and the models in order
+const SHOWN = 8;
+function folderCard(f) {
+  const docs = f.documents, more = docs.length - SHOWN;
+  return h("div", { class: "card folder" },
+    h("div", { class: "top" }, h("b", {}, f.name || "Loose files"), h("span", { class: "n" }, `${docs.length} document${docs.length === 1 ? "" : "s"}`)),
+    h("ul", {}, docs.slice(0, SHOWN).map(d => h("li", { title: d }, d)), more > 0 ? h("li", { class: "more" }, `and ${more} more`) : null));
+}
+async function load() {
+  try {
+    const s = await api("/api/status");
+    const w = s.workspace;
+    $("where").textContent = `${w.documents} documents in ${w.path}`;
+    $("folders").replaceChildren(...(w.folders.length ? w.folders.map(folderCard) : [h("div", { class: "card empty" },
+      w.exists ? "No documents yet. Add some with " : "No workspace yet. Create it with ", h("code", {}, "taxtrace import <folder or zip>"))]));
+    $("models").replaceChildren(...s.models.map(m => h("li", {},
+      h("div", {}, h("div", { class: "name" }, h("span", { class: "dot" + (m.ready ? "" : " off") }), m.label,
+        h("span", { class: "pill " + (m.cloud ? "cloud" : "mine") }, m.cloud ? "masked" : "unmasked, on this Mac")),
+        h("div", { class: "why" }, m.ready ? m.model : m.why)))));
+  } catch (e) { $("where").textContent = `Couldn't load the workspace: ${e.message}`; }
+}
+
+// -- the chat
+const history = [];  // [{role, content}], kept while the page is open
+let busy = null;
+const SUGGESTED = ["What carries forward from last year's return into this one?",
+  "Which documents should I expect for a rental property?",
+  "When do I need to file an FBAR, and what goes on it?"];
+
+function render(md) {  // a little Markdown: paragraphs, bullets, numbered lists, **bold**, `code`
+  const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const inline = s => esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/`([^`]+)`/g, "<code>$1</code>");
+  const out = []; let list = null;
+  for (const raw of md.split("\n")) {
+    const line = raw.trimEnd(), bullet = line.match(/^\s*[-*•]\s+(.*)/), num = line.match(/^\s*\d+[.)]\s+(.*)/);
+    if (bullet || num) {
+      const kind = bullet ? "ul" : "ol";
+      if (list !== kind) { if (list) out.push(`</${list}>`); out.push(`<${kind}>`); list = kind; }
+      out.push(`<li>${inline((bullet || num)[1])}</li>`);
+      continue;
+    }
+    if (list) { out.push(`</${list}>`); list = null; }
+    if (line.trim()) out.push(`<p>${inline(line.replace(/^#+\s*/, ""))}</p>`);
+  }
+  if (list) out.push(`</${list}>`);
+  return out.join("");
+}
+function hello() {
+  return h("div", { class: "hello" }, h("div", {}, "Ask about tax rules, forms or your documents."),
+    h("div", { class: "ask" }, SUGGESTED.map(q => h("button", { type: "button", onclick: () => ask(q) }, q))));
+}
+function scroll() { const log = $("log"); log.scrollTop = log.scrollHeight; }
+function reset() { if (busy) busy.abort(); history.length = 0; $("log").replaceChildren(hello()); $("who").textContent = "Tax rules, forms, what a document is for"; }
+
+async function ask(question) {
+  question = question.trim();
+  if (!question || busy) return;
+  const log = $("log");
+  log.querySelector(".hello")?.remove();
+  history.push({ role: "user", content: question });
+  log.append(h("div", { class: "msg user" }, question));
+  $("input").value = ""; grow();
+  const notes = h("div", { class: "meta left" });
+  const bubble = h("div", { class: "msg bot" }, h("span", { class: "typing" }, h("i"), h("i"), h("i")));
+  const meta = h("div", { class: "meta left" });
+  log.append(notes, bubble, meta); scroll();
+  busy = new AbortController(); $("send").textContent = "Stop";
+  let text = "", answering = null;
+  try {
+    const r = await fetch("/api/chat", { method: "POST", signal: busy.signal,
+      headers: { "X-Taxtrace-Token": TOKEN, "Content-Type": "application/json" }, body: JSON.stringify({ messages: history }) });
+    if (!r.ok) throw new Error((await r.json()).error || r.statusText);
+    const reader = r.body.getReader(), dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let nl;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const ev = JSON.parse(buf.slice(0, nl)); buf = buf.slice(nl + 1);
+        if (ev.note) notes.append(h("span", { class: "pill warn" }, ev.note));
+        if (ev.answering) {
+          answering = ev.answering;
+          $("who").textContent = `Answering: ${answering.label}`;
+          meta.append(h("span", { class: "pill " + (answering.local ? "mine" : "cloud") }, answering.label), h("span", {}, answering.model));
+          if (answering.sent !== undefined) log.insertBefore(h("details", { class: "sent" }, h("summary", {}, `What ${answering.label} was sent`),
+            h("div", {}, answering.sent)), notes);
+        }
+        if (ev.text) { text += ev.text; bubble.innerHTML = render(text); scroll(); }
+        if (ev.done) {
+          const s = ev.stats || {};
+          meta.append(h("span", {}, [s.seconds != null ? `${s.seconds}s` : "", s.output_tokens ? `${s.output_tokens} tokens` : ""].filter(Boolean).join(" · ")));
+        }
+        if (ev.error) throw new Error(ev.error);
+      }
+    }
+    history.push({ role: "assistant", content: text });
+    if (!text) bubble.textContent = "(no answer)";
+  } catch (e) {
+    if (e.name === "AbortError") { bubble.innerHTML = render(text || "(stopped)"); if (text) history.push({ role: "assistant", content: text }); }
+    else { bubble.replaceWith(h("div", { class: "msg err" }, e.message)); history.pop(); }
+  } finally { busy = null; $("send").textContent = "Send"; scroll(); }
+}
+
+function grow() { const t = $("input"); t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 160) + "px"; }
+$("input").addEventListener("input", grow);
+$("input").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask($("input").value); } });
+$("form").addEventListener("submit", e => { e.preventDefault(); busy ? busy.abort() : ask($("input").value); });
+$("fab").addEventListener("click", () => { $("pop").hidden = false; $("fab").style.visibility = "hidden"; $("input").focus(); });
+$("close").addEventListener("click", () => { $("pop").hidden = true; $("fab").style.visibility = ""; });
+$("clear").addEventListener("click", reset);
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("pop").hidden) $("close").click(); });
+reset(); load();
+</script>
+</body>
+</html>

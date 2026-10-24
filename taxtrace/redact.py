@@ -64,7 +64,8 @@ def _in_amount(text: str, start: int, end: int) -> bool:
     return bool(re.search(r"[$]$|\d[.,]$", before) or re.match(r"[.,]\d", after))
 
 
-def _mask_terms(text: str, terms: list[str]) -> str:
+def mask_terms(text: str, terms: list[str]) -> str:
+    """`text` with each of `terms` (whole words, any case) turned into *s, longest first."""
     for term in sorted({t.strip() for t in terms if t.strip()}, key=len, reverse=True):
         pattern = re.compile(r"(?<![A-Za-z0-9])" + re.escape(term) + r"(?![A-Za-z0-9])", re.I)
         text = pattern.sub(lambda m: re.sub(r"\S", "*", m.group(0)), text)
@@ -75,7 +76,7 @@ def redact(text: str, terms: list[str] | None = None, vocab: frozenset[str] | No
            bare_years: bool = False) -> Redaction:
     """`bare_years` keeps a year standing on its own, for text that holds no amounts: a file name."""
     vocab = vocabulary() if vocab is None else vocab
-    text = _mask_terms(text, terms or [])
+    text = mask_terms(text, terms or [])
     out = Redaction(text="")
 
     def swap(m: re.Match) -> str:

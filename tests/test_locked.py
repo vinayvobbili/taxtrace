@@ -96,8 +96,9 @@ def test_the_keychain_is_asked_once_per_entry_however_many_files_share_it(tmp_pa
 
 def test_with_no_paths_named_the_workspace_is_read_without_its_derived_folders(workspace_home: Path, capsys):
     make_pdf(workspace_home / "2023" / "1099-INT.pdf", PRIOR_RETURN)
-    for derived in workspace.DERIVED:
+    for derived in (workspace.OCR_CACHE, workspace.REDACTED):
         make_pdf(workspace_home / derived / "copy.pdf", PRIOR_RETURN)
+    (workspace_home / workspace.MANIFEST).write_text("{}\n")
     assert cli.main(["unlock"]) == 0
     assert capsys.readouterr().out.splitlines() == ["1099-INT.pdf: not locked"]
 

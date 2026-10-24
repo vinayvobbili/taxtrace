@@ -23,9 +23,11 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
+from . import workspace
+
 PRIOR_RETURNS = "prior-returns"
 UNSORTED = "unsorted"
-MANIFEST = "imports.jsonl"
+MANIFEST = workspace.MANIFEST
 # A preparer's copy of a filed return is usually named for it, or marked signed (the return, or its 8879).
 RETURN = re.compile(r"tax[ _-]*returns?|return[ _-]*documents|(?<![A-Za-z])signed", re.I)
 IDENTITY = re.compile(r"driv(?:er|ing)[ _-]*licen[cs]e|(?<![A-Za-z])(?:DL|SSN)(?![A-Za-z])|passport|"

@@ -12,8 +12,9 @@ Three rules hold everywhere:
 
 1. **Nothing is guessed.** Every value carries the file, the page and the exact text it was read from,
    and a deterministic check rejects any value whose quote isn't on that page.
-2. **Nothing leaves your machine.** Where a language model helps (sorting documents, reading messy
-   receipts), it is a local MLX model on your Mac. No tax document goes to a cloud API.
+2. **Your documents never leave your machine.** Where a language model reads them (sorting documents,
+   reading messy receipts), it is a local MLX model on your Mac. The chat can use a cloud model, which
+   only ever sees masked text (see [Chat](#chat)).
 3. **Nothing is decided silently.** A receipt that could be a repair or an improvement, a missing
    1099, a rate choice: each is a question for you, with the evidence next to it.
 
@@ -25,6 +26,9 @@ Early. What works today:
   an AI assistant helping write a parser) without its values, names or places. Every digit becomes `#`,
   and every word the IRS's own publications don't use in lowercase becomes `*`s, so names, streets
   and towns go without anyone listing them.
+- `taxtrace import`, `outline` and `unlock`: sort a preparer's export into the workspace, list the forms
+  in each document, and check passwords kept in the Keychain.
+- `taxtrace ui`: the workspace in the browser, with a chat (see [Chat](#chat)).
 
 Planned, in order: reading a prior-year return's carryforwards (depreciation schedule, Form 8582
 passive-loss carryovers), Schedule E, the foreign side (interest at Treasury rates, foreign tax
@@ -73,6 +77,30 @@ is shaped (`aaaa99999`), never what it is.
 
 `redact`, `outline` and `unlock` with no paths read the whole workspace, leaving out what taxtrace wrote
 there itself (`redacted/`, `ocr-cache/`).
+
+## Chat
+
+```bash
+pip install -e ".[chat,local]"   # Claude's SDK, and the model that runs on your Mac
+taxtrace ui                      # opens http://taxtrace.localhost:8766/
+```
+
+The page lists your workspace by folder and has a chat for tax rules, forms and what a document is for.
+It answers with the first model in `--models` (default `claude,agy,local`) that can, and moves on to the
+next when one can't (no key, quota used up, not installed):
+
+- `claude`: Anthropic's API, with `ANTHROPIC_API_KEY` or a Keychain item holding the key (`--keychain`,
+  default `anthropic`).
+- `agy`: Google's [Antigravity CLI](https://antigravity.google/docs/cli), on its subscription, run in an
+  empty folder.
+- `local`: an MLX model on your Mac.
+
+Claude and agy only ever see masked text. Every message, and the list of your documents, goes through the
+same masking as `taxtrace redact` first: digits become `#`, and words outside the IRS's own vocabulary
+become `*`s. A question with an amount in it, or a name from `redact-terms.txt`, isn't sent to them at all:
+the model on your Mac answers it, and the page says why. Under each question a cloud model answered, the
+page shows exactly what it was sent. The chat reads only the document list and what you type: it can't open
+a document, change a file or file anything.
 
 ## Development
 

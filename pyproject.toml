@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "taxtrace"
 version = "0.0.1"
-description = "Prepare a US federal and state return from your own documents on your own machine: every number traced to the page it came from, nothing guessed, nothing sent to a cloud model."
+description = "Prepare a US federal and state return from your own documents on your own machine: every number traced to the page it came from, nothing guessed, and no document sent to a cloud model."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -27,6 +27,8 @@ Repository = "https://github.com/vinayvobbili/taxtrace"
 Issues = "https://github.com/vinayvobbili/taxtrace/issues"
 
 [project.optional-dependencies]
+chat = ["anthropic>=0.40"]
+local = ["mlx-lm>=0.28; sys_platform == 'darwin' and platform_machine == 'arm64'"]
 dev = ["pytest>=8", "ruff>=0.14", "reportlab>=4"]
 
 [project.scripts]

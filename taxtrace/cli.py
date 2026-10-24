@@ -137,6 +137,25 @@ def cmd_import(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ui(args: argparse.Namespace) -> int:
+    """Open the workspace and a chat in the browser, at http://taxtrace.localhost:8766/."""
+    from . import chat, web
+
+    order = tuple(b.strip() for b in args.models.split(",") if b.strip())
+    if unknown := [b for b in order if b not in chat.BACKENDS]:
+        print(f"unknown model {', '.join(unknown)}: choose from {', '.join(chat.BACKENDS)}", file=sys.stderr)
+        return 2
+    server = web.serve(args.port, open_browser=not args.no_open, settings=chat.Settings(order=order,
+                                                                                        keychain=args.keychain))
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()
+    return 0
+
+
 PATHS_HELP = "documents or folders (default: the whole workspace)"
 
 
@@ -162,6 +181,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("paths", nargs="*", help=PATHS_HELP)
     p.add_argument("--lines", type=int, default=2, help="lines per page (default: 2)")
     p.set_defaults(func=cmd_outline)
+    p = sub.add_parser("ui", help="open the workspace and a chat in the browser", description=cmd_ui.__doc__)
+    p.add_argument("--port", type=int, default=8766, help="port on 127.0.0.1 (default: 8766)")
+    p.add_argument("--no-open", action="store_true", help="don't open the browser")
+    p.add_argument("--models", default="claude,agy,local",
+                   help="the chat's models, tried in this order (default: claude,agy,local)")
+    p.add_argument("--keychain", default="anthropic",
+                   help="Keychain item with the Anthropic API key, if ANTHROPIC_API_KEY isn't set (default: anthropic)")
+    p.set_defaults(func=cmd_ui)
     return ap
 
 
