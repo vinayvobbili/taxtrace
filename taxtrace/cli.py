@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -137,6 +138,62 @@ def cmd_import(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_prior(args: argparse.Namespace) -> int:
+    """Read each filed return's carryforwards (depreciation, unallowed passive losses) into <workspace>/carryforwards.
+
+    The values go only to that file. What's printed is masked: counts, the checks that failed, the questions, and
+    with --layout each line a value was read from, so a layout can be checked without its numbers.
+    """
+    from . import prior
+
+    home = workspace.outside_git(workspace.home())
+    paths = [Path(p) for p in args.paths] or [home / importer.PRIOR_RETURNS]
+    terms = workspace.redact_terms()
+
+    def masked(line: str) -> str:
+        return redact.redact(line, terms).text.strip()
+
+    out = home / workspace.CARRYFORWARDS
+    failed = 0
+    for doc in text.documents(paths):
+        name = redact.redact(doc.name, terms, bare_years=True).text
+        try:
+            pages = _open(doc)
+        except text.UnsupportedDocument as err:
+            print(f"{name}: skipped, {err}")
+            continue
+        found = prior.read(doc.name, pages)
+        if not (found.assets or found.unallowed):
+            print(f"{name}: no depreciation schedule or Form 8582 worksheets")
+            continue
+        problems = prior.verify(found, pages)
+        out.mkdir(parents=True, exist_ok=True)
+        (out / f"{doc.stem}.json").write_text(json.dumps(found.to_json(), indent=2) + "\n")
+        bad = found.failed
+        failed += bool(bad or problems)
+        asset_pages = sorted({a.page for a in found.assets})
+        loss_pages = sorted({u.page for u in found.unallowed})
+        print(f"{name}: tax year {found.year or '?'}, {len(found.assets)} assets (p{asset_pages}), "
+              f"{len(found.unallowed)} activities with unallowed losses (p{loss_pages}); "
+              f"{len(found.checks) - len(bad)} of {len(found.checks)} checks pass, {len(found.questions)} questions"
+              + (f"; AMT and book copies skipped (p{found.skipped})" if found.skipped else "")
+              + "".join(f"; p{n} is the {y} schedule, skipped" for n, y in found.other_years.items()))
+        for c in bad:
+            print(f"  failed, p{c.page}: {masked(c.what)}")
+        for p in problems:
+            print(f"  failed: {p}")
+        for q in found.questions:
+            print(f"  question, p{q.page}: {masked(q.text)}" + (f"\n    {masked(q.quote)}" if q.quote else ""))
+        if args.layout:
+            for a in found.assets:
+                print(f"  p{a.page} asset {a.number}, {a.method} {a.convention} {masked(str(a.life))}: "
+                      f"{masked(a.quote)}")
+            for u in found.unallowed:
+                print(f"  p{u.page} unallowed loss: {masked(u.quote)}")
+    print(f"wrote to {out}" if out.exists() else "nothing to write")
+    return 1 if failed else 0
+
+
 def cmd_ui(args: argparse.Namespace) -> int:
     """Open the workspace and a chat in the browser, at http://taxtrace.localhost:8766/."""
     from . import chat, web
@@ -206,6 +263,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("paths", nargs="*", help=PATHS_HELP)
     p.add_argument("--lines", type=int, default=2, help="lines per page (default: 2)")
     p.set_defaults(func=cmd_outline)
+    p = sub.add_parser("prior", help="read filed returns' carryforwards: depreciation, unallowed passive losses",
+                       description=cmd_prior.__doc__)
+    p.add_argument("paths", nargs="*", help="returns or folders (default: <workspace>/prior-returns)")
+    p.add_argument("--layout", action="store_true", help="also print each line a value came from, masked")
+    p.set_defaults(func=cmd_prior)
     p = sub.add_parser("ui", help="open the workspace and a chat in the browser", description=cmd_ui.__doc__)
     p.add_argument("--port", type=int, default=8766, help="port on 127.0.0.1 (default: 8766)")
     p.add_argument("--no-open", action="store_true", help="don't open the browser")

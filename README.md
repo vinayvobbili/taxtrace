@@ -28,10 +28,10 @@ Early. What works today:
   and towns go without anyone listing them.
 - `taxtrace import`, `outline` and `unlock`: sort a preparer's export into the workspace, list the forms
   in each document, and check passwords kept in the Keychain.
+- `taxtrace prior`: reads a filed return's carryforwards (see [Carryforwards](#carryforwards)).
 - `taxtrace ui`: the workspace in the browser, with a chat (see [Chat](#chat)).
 
-Planned, in order: reading a prior-year return's carryforwards (depreciation schedule, Form 8582
-passive-loss carryovers), Schedule E, the foreign side (interest at Treasury rates, foreign tax
+Planned, in order: Schedule E, the foreign side (interest at Treasury rates, foreign tax
 credit, FBAR, Form 8938 check), the entry sheet, and a year-over-year check.
 
 ## Install
@@ -77,6 +77,30 @@ is shaped (`aaaa99999`), never what it is.
 
 `redact`, `outline` and `unlock` with no paths read the whole workspace, leaving out what taxtrace wrote
 there itself (`redacted/`, `ocr-cache/`).
+
+## Carryforwards
+
+```bash
+taxtrace prior            # every return in <workspace>/prior-returns
+taxtrace prior --layout   # also each line a value came from, masked
+```
+
+Next year's return starts from last year's: each asset's depreciation so far, and each passive activity's loss
+that couldn't be taken yet. `prior` reads them from the preparer's own printouts: the federal depreciation
+schedule (Drake's "Federal Depreciation Schedule", or its older "Depreciation Detail Listing") and Form 8582's
+Worksheets 5 and 6. The values go to `<workspace>/carryforwards/<return>.json`, each with its page and the exact
+line it was read from. The terminal gets counts, failed checks and questions, masked like `redact`'s output.
+
+Nothing is taken on trust:
+
+- Every row is added up against the schedule's totals line, and each asset's depreciation so far against its
+  basis.
+- On Form 8582, each activity's ratio is checked against its share of the loss, its unallowed loss against
+  its ratio of the total, and Worksheet 6 against Worksheet 5.
+- A schedule printed twice is kept once, and a second copy that disagrees is a question.
+- The alternative minimum tax and book copies are skipped. So is next year's projected schedule, which is
+  checked to start from this year's accumulated depreciation.
+- A Section 179, bonus or salvage amount, or business use under 100%, is a question for you, not a guess.
 
 ## Chat
 
