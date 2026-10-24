@@ -146,6 +146,8 @@ def test_the_page_answers_its_own_name_only_and_the_api_wants_the_token(server):
     status, html = request(server, "GET", "/")
     assert status == 200 and "t0ken" in html and "__TAXTRACE_TOKEN__" not in html
     assert request(server, "GET", "/", host=f"other.localhost:{port}")[0] == 403
+    status, icon = request(server, "GET", "/icon.svg", token="")
+    assert status == 200 and icon.startswith("<svg")
     assert request(server, "GET", "/api/status", token="wrong")[0] == 403
 
 

@@ -107,6 +107,9 @@ def make_handler(settings: chat.Settings, token: str, port_ref: list[int]):
             url = urlparse(self.path)
             if method == "GET" and url.path in ("/", "/index.html"):
                 return self._send(HTTPStatus.OK, page(token), "text/html; charset=utf-8")
+            if method == "GET" and url.path in ("/icon.svg", "/favicon.ico"):  # the tab's icon can't send the token
+                icon = resources.files("taxtrace").joinpath("static/icon.svg").read_bytes()
+                return self._send(HTTPStatus.OK, icon, "image/svg+xml")
             if not url.path.startswith("/api/"):
                 return self._json(HTTPStatus.NOT_FOUND, {"error": "not found"})
             if not secrets.compare_digest(self.headers.get("X-Taxtrace-Token", ""), token):
