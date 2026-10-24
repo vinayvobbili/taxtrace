@@ -195,11 +195,17 @@ def api_key(item: str) -> str:
         return key
     if sys.platform != "darwin" or not item:
         raise Unavailable("set ANTHROPIC_API_KEY before taxtrace ui")
-    r = subprocess.run(["security", "find-generic-password", "-s", item, "-w"], capture_output=True, text=True)
-    if r.returncode or not r.stdout.strip():
-        raise Unavailable(f"no API key in the Keychain item {item!r}: add one with "
+    from . import gate
+
+    if gate.ready():  # Apple Watch or Touch ID approves the read
+        key = gate.read(item, "", "read the Anthropic API key for the taxtrace chat") or ""
+    else:
+        r = subprocess.run(["security", "find-generic-password", "-s", item, "-w"], capture_output=True, text=True)
+        key = "" if r.returncode else r.stdout
+    if not key.strip():
+        raise Unavailable(f"no API key in the Keychain item {item!r}, or its read wasn't approved: add one with "
                           f"security add-generic-password -s {item} -a \"$USER\" -w")
-    os.environ["ANTHROPIC_API_KEY"] = r.stdout.strip()
+    os.environ["ANTHROPIC_API_KEY"] = key.strip()
     return os.environ["ANTHROPIC_API_KEY"]
 
 

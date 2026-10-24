@@ -262,7 +262,35 @@ def cmd_service(args: argparse.Namespace) -> int:
     return 0
 
 
-PATHS_HELP = "documents or folders (default: the whole workspace)"
+def cmd_keychain(args: argparse.Namespace) -> int:
+    """Approve Keychain reads with Apple Watch or Touch ID instead of typing the login password (macOS)."""
+    from . import chat, gate
+
+    try:
+        rebuilt = gate.build()
+    except gate.GateError as err:
+        print(f"taxtrace: {err}", file=sys.stderr)
+        return 1
+    print(f"Built {gate.helper_path()}" if rebuilt else f"Already built: {gate.helper_path()}")
+    entries = [(workspace.KEYCHAIN_SERVICE, account) for account in [workspace.KEYCHAIN_DEFAULT, *args.account]]
+    if chat.keychain_has(args.keychain):
+        entries.append((args.keychain, ""))  # the chat's key, whatever account it was stored under
+    print("Moving each entry over to the helper: macOS asks for it the old way one last time (password, then Allow).")
+    failed = 0
+    for service, account in entries:
+        shown = f"{service}/{account}" if account else service
+        try:
+            moved = gate.adopt(service, account)
+        except gate.GateError as err:
+            failed += 1
+            print(f"  {shown}: {err}")
+            continue
+        print(f"  {shown}: {'now asks for Apple Watch or Touch ID' if moved else 'no such entry, skipped'}")
+    print("Restart the service so the chat reads its key the new way: taxtrace service install")
+    return 1 if failed else 0
+
+
+PATHS_HELP ="documents or folders (default: the whole workspace)"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -294,6 +322,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--project", type=int, metavar="YEAR",
                    help="roll the latest return's depreciation forward through YEAR, for returns not in hand yet")
     p.set_defaults(func=cmd_prior)
+    p = sub.add_parser("keychain", help="approve Keychain reads with Apple Watch or Touch ID (macOS)",
+                       description=cmd_keychain.__doc__)
+    p.add_argument("action", choices=["setup"])
+    p.add_argument("--keychain", default="anthropic", help="the chat's API key item to include (default: anthropic)")
+    p.add_argument("--account", action="append", default=[], metavar="FILE NAME",
+                   help="also move a file's own entry (repeatable); the default entry is always moved")
+    p.set_defaults(func=cmd_keychain)
     p = sub.add_parser("ui", help="open the workspace and a chat in the browser", description=cmd_ui.__doc__)
     p.add_argument("--port", type=int, default=8766, help="port on 127.0.0.1 (default: 8766)")
     p.add_argument("--no-open", action="store_true", help="don't open the browser")

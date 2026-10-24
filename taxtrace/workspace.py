@@ -41,6 +41,10 @@ def outside_git(path: Path) -> Path:
 
 
 def keychain_hint() -> str:
+    from . import gate
+
+    if gate.ready():  # trusted by the approval helper only: each read asks for Apple Watch or Touch ID
+        return f"{gate.store_hint(KEYCHAIN_SERVICE, KEYCHAIN_DEFAULT)} (or -a '<file name>' for one file)"
     # -T "" trusts no app, so macOS asks the person (Allow / Deny) every time anything reads the entry,
     # this tool included: nothing running as them can take the password without their click.
     return (f"security add-generic-password -s {KEYCHAIN_SERVICE} -a {KEYCHAIN_DEFAULT} -T \"\" -w "
@@ -62,7 +66,13 @@ def keychain_entries(path: Path) -> list[tuple[str, str]]:
 @functools.cache
 def _keychain_password(service: str, account: str) -> str | None:
     """Read once per run: an entry made with `-T ""` asks the person (Allow / Deny) on every read, so a folder of
-    returns that share the default password costs one prompt, not one per file."""
+    returns that share the default password costs one prompt, not one per file. With the approval helper built
+    (`taxtrace keychain setup`), that prompt takes Apple Watch or Touch ID instead of the typed password."""
+    from . import gate
+
+    if gate.ready():
+        found = gate.read(service, account, f"open your tax documents (Keychain entry '{account}')")
+        return found.rstrip("\n") if found is not None else None
     r = subprocess.run(["security", "find-generic-password", "-s", service, "-a", account, "-w"],
                        capture_output=True, text=True)
     return r.stdout.rstrip("\n") if r.returncode == 0 else None

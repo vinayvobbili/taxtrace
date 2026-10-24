@@ -60,3 +60,13 @@ def workspace_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     home = tmp_path / "TaxData"
     monkeypatch.setenv("TAXTRACE_HOME", str(home))
     return home
+
+
+@pytest.fixture(autouse=True)
+def no_real_gate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Never the real Keychain approval helper: a test reaching it would ask the person for their Apple Watch."""
+    from taxtrace import gate
+
+    helper = tmp_path / "gate" / "keychain-gate"
+    monkeypatch.setattr(gate, "helper_path", lambda: helper)
+    return helper
