@@ -46,6 +46,13 @@ Your documents and everything derived from them live in a workspace folder, `~/T
 `$TAXTRACE_HOME`, which taxtrace refuses to place inside a git repository. Names that are also
 ordinary words (Will, Grace) go in `<workspace>/redact-terms.txt`, one per line.
 
+A password-protected PDF is read with a password kept in the macOS Keychain under the file's name, never
+in a file or on a command line. `security` asks for it without echoing:
+
+```bash
+security add-generic-password -s taxtrace -a "2024 Return.pdf" -w
+```
+
 ## Development
 
 ```bash

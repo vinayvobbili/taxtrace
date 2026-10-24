@@ -25,7 +25,10 @@ def cmd_redact(args: argparse.Namespace) -> int:
     for i, doc in enumerate(docs, 1):
         name = f"{i:02d}-{redact.redact(doc.stem, terms, bare_years=True).text}.txt"
         try:
-            pages = text.pages(doc)
+            pages = text.pages(doc, workspace.pdf_password(doc))
+        except text.Locked as err:
+            print(f"{name}: skipped, {err}; store its password with: {workspace.keychain_hint()}")
+            continue
         except text.UnsupportedDocument as err:
             print(f"{name}: skipped, {err}")
             continue

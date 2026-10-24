@@ -17,13 +17,25 @@ class UnsupportedDocument(ValueError):
     pass
 
 
-def pages(path: Path) -> list[str]:
+class Locked(UnsupportedDocument):
+    """A password-protected PDF, and the password given (if any) didn't open it."""
+
+
+def pages(path: Path, password: str | None = None) -> list[str]:
     suffix = path.suffix.lower()
     if suffix in PDF_SUFFIXES:
         import pdfplumber
+        from pdfminer.pdfdocument import PDFPasswordIncorrect
+        from pdfplumber.utils.exceptions import PdfminerException
 
-        with pdfplumber.open(path) as doc:
-            return [page.extract_text(layout=True) or "" for page in doc.pages]
+        try:
+            with pdfplumber.open(path, password=password or "") as doc:
+                return [page.extract_text(layout=True) or "" for page in doc.pages]
+        except PdfminerException as err:
+            # pdfplumber wraps pdfminer's error as the first argument.
+            if not (err.args and isinstance(err.args[0], PDFPasswordIncorrect)):
+                raise
+            raise Locked("password-protected" if password is None else "the stored password doesn't open it") from None
     if suffix in TEXT_SUFFIXES:
         return [path.read_text(errors="replace")]
     raise UnsupportedDocument(f"{path.suffix or 'no extension'}: not readable yet")

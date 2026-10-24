@@ -32,21 +32,26 @@ AMOUNTS = ["318,400.00", "61,250.00", "57,322.00", "9,350.91", "14,880.00", "946
 NAMES = ["Jordan", "Quillfeather", "Brambleworth", "Zentonville", "Halvorsen", "Pettigrew"]
 
 
-@pytest.fixture
-def prior_return(tmp_path: Path) -> Path:
+def make_pdf(path: Path, pages: list[list[str]], password: str | None = None) -> Path:
     from reportlab.lib.pagesizes import landscape, letter
+    from reportlab.lib.pdfencrypt import StandardEncryption
     from reportlab.pdfgen import canvas
 
-    path = tmp_path / "docs" / f"{TAXPAYER.replace(' ', '_')}_2025_Return.pdf"
-    path.parent.mkdir()
-    c = canvas.Canvas(str(path), pagesize=landscape(letter))
-    for page in PRIOR_RETURN:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    encrypt = StandardEncryption(password, canPrint=1) if password else None
+    c = canvas.Canvas(str(path), pagesize=landscape(letter), encrypt=encrypt)
+    for page in pages:
         c.setFont("Courier", 8)
         for i, line in enumerate(page):
             c.drawString(36, 560 - 14 * i, line)
         c.showPage()
     c.save()
     return path
+
+
+@pytest.fixture
+def prior_return(tmp_path: Path) -> Path:
+    return make_pdf(tmp_path / "docs" / f"{TAXPAYER.replace(' ', '_')}_2025_Return.pdf", PRIOR_RETURN)
 
 
 @pytest.fixture(autouse=True)
