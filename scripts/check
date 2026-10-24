@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Run what CI runs (ruff, then pytest on the oldest and newest supported Python) before a push, then the
+# privacy audit if one is configured. Needs uv (https://docs.astral.sh/uv/), which downloads each Python
+# on first use. Each version gets its own environment (.venv-py3.10, ...), so the .venv you work in is left
+# alone.
+#
+# PRE_PUSH_AUDIT: a command that checks a repository for personal data and exits non-zero if it finds any;
+# the repository's path is added as its last argument. Unset, the audit is skipped.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+# Keep these in step with the matrix in .github/workflows/ci.yml.
+VERSIONS=(3.10 3.13)
+
+# Tests make their own workspace; never let them find the real one.
+unset TAXTRACE_HOME
+
+for v in "${VERSIONS[@]}"; do
+  echo "== Python $v"
+  env=".venv-py$v"
+  uv venv --quiet --allow-existing --python "$v" "$env"
+  VIRTUAL_ENV="$env" uv pip install --quiet -e ".[dev]"
+  "$env/bin/ruff" check .
+  "$env/bin/python" -m pytest -q
+done
+
+if [[ -n "${PRE_PUSH_AUDIT:-}" ]]; then
+  echo "== Privacy audit"
+  # Word-split on purpose: the variable holds a command and its options.
+  # shellcheck disable=SC2086
+  $PRE_PUSH_AUDIT "$PWD"
+fi

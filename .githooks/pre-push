@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Run CI's checks (and the privacy audit, if PRE_PUSH_AUDIT is set) before a push.
+# Enable with: git config core.hooksPath .githooks
+# Skip once with: git push --no-verify
+exec "$(git rev-parse --show-toplevel)/scripts/check"
