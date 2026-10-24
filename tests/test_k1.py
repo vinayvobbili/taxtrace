@@ -105,7 +105,16 @@ FUND_STATEMENT = [
     "TRADE OR BUSINESS: Real Estate for Development",
     "EIN (IF APPLICABLE): 88-7654321",
     "LINE 20Z SECTION 199A QUALIFIED BUSINESS INCOME              -$4,210",
+    "LINE 20Z SECTION 199A W-2 WAGES FROM THE TRADE OR BUSINESS.   $2,940",
     "THE QBI REPORTED ABOVE INCLUDES ITEMS REPORTED ON LINE 1",
+    "TRADE OR BUSINESS: Residential Rental Real Estate",
+    "LINE 20Z SECTION 199A QUALIFIED BUSINESS INCOME              $35",
+    "TAXPAYER HAS ELECTED TO AGGREGATE THE FOLLOWING TRADES OR BUSINESSES",
+    "SEC. 1.199A-4",
+    "TRADE OR BUSINESS: Real Estate for Development",
+    "TOTALS: AGGREGATED GROUP 1",
+    "QUALIFIED BUSINESS INCOME                                    -$4,210",
+    "W-2 WAGES                                                    $2,940",
     "UBTI INCLUDED ON LINE 1 - QUALIFIED ORG*                     100.00%",
     "Box 19C: PROPERTY DISTRIBUTIONS - OTHER PROPERTY:",
     "FAIR MARKET VALUE OF PROPERTY DISTRIBUTED                    $950",
@@ -191,14 +200,35 @@ def test_statement_amounts_in_a_preparers_layout(tmp_path: Path):
 
 def test_statement_amounts_in_a_funds_layout(tmp_path: Path):
     (found,) = read(draw(tmp_path / "k1.pdf", [FACE, FUND_STATEMENT]))
-    assert [(s.box, s.code, s.description, s.amount) for s in found.statement] == [
-        ("13", "AE", "DEDUCTIONS-PORTFOLIO INCOME", Decimal(112)),
-        ("20", "Z", "SECTION 199A QUALIFIED BUSINESS INCOME", Decimal(-4210)),  # not the EIN, "LINE 1" or a %
-        ("19", "C", "FAIR MARKET VALUE OF PROPERTY DISTRIBUTED", Decimal(950)),
-        ("19", "C", "THE PARTNERSHIP'S ADJUSTED BASIS OF PROPERTY DISTRIBUTED", Decimal(900)),
-        ("20", "AG", "CURRENT YEAR GROSS PROCEEDS", Decimal(77)),
+    development, rental, group = "Real Estate for Development", "Residential Rental Real Estate", "AGGREGATED GROUP 1"
+    assert [(s.box, s.code, s.description, s.amount, s.kind, s.business, s.aggregate)
+            for s in found.statement] == [
+        ("13", "AE", "DEDUCTIONS-PORTFOLIO INCOME", Decimal(112), "", "", ""),
+        # not the EIN, "LINE 1" or a %
+        ("20", "Z", "SECTION 199A QUALIFIED BUSINESS INCOME", Decimal(-4210), "qbi", development, ""),
+        ("20", "Z", "SECTION 199A W-2 WAGES FROM THE TRADE OR BUSINESS", Decimal(2940), "wages", development, ""),
+        ("20", "Z", "SECTION 199A QUALIFIED BUSINESS INCOME", Decimal(35), "qbi", rental, ""),
+        # the group's totals repeat its business's amounts: marked, so nothing adds them in twice
+        ("20", "Z", "QUALIFIED BUSINESS INCOME", Decimal(-4210), "qbi", "", group),
+        ("20", "Z", "W-2 WAGES", Decimal(2940), "wages", "", group),
+        ("19", "C", "FAIR MARKET VALUE OF PROPERTY DISTRIBUTED", Decimal(950), "", "", ""),
+        ("19", "C", "THE PARTNERSHIP'S ADJUSTED BASIS OF PROPERTY DISTRIBUTED", Decimal(900), "", "", ""),
+        ("20", "AG", "CURRENT YEAR GROSS PROCEEDS", Decimal(77), "", "", ""),  # no business: another code's
     ]
     assert found.statement[1].section.startswith("LINE 20Z SECTION 199A QUALIFIED BUSINESS INCOME")
+    assert found.statement[4].members == (development,)
+    assert [c.what for c in found.checks if "aggregated" in c.what] == [
+        "box 20 code Z: an aggregated group's qbi is its businesses' added up",
+        "box 20 code Z: an aggregated group's wages is its businesses' added up"]
+    assert found.failed == []
+
+
+def test_an_aggregated_total_that_is_not_its_businesses_fails(tmp_path: Path):
+    statement = [line.replace("-$4,210", "-$4,120") if line.startswith("QUALIFIED") else line
+                 for line in FUND_STATEMENT]
+    (found,) = read(draw(tmp_path / "k1.pdf", [FACE, statement]))
+    assert [(c.what, c.quote.split()[:3]) for c in found.failed] == [
+        ("box 20 code Z: an aggregated group's qbi is its businesses' added up", ["-4210", "against", "QUALIFIED"])]
 
 
 def test_parts_one_and_two_are_read_by_their_labels(face_pdf: Path):

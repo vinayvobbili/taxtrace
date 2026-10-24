@@ -83,6 +83,22 @@ class StatementItem:
     section: str  # the statement's heading above it ("LINE 20, CODE Z SECTION 199A INFORMATION")
     page: int
     quote: str  # the line exactly as `text.pages` gives it
+    business: str = ""  # the trade or business a 199A amount is for ("Real Estate for Development")
+    aggregate: str = ""  # a total for an aggregated group of businesses: it repeats their amounts
+    members: tuple[str, ...] = ()  # the businesses in that group
+
+    @property
+    def kind(self) -> str:
+        """Which Section 199A amount this is: qbi, wages, ubia, reit or ptp ("" for another amount)."""
+        text = self.description.upper()
+        for kind, words in QBI_KINDS:
+            if any(w in text for w in words):
+                return kind
+        return ""
+
+
+QBI_KINDS = (("wages", ("W-2 WAGES",)), ("ubia", ("UBIA", "UNADJUSTED BASIS")), ("reit", ("REIT DIVIDENDS",)),
+             ("ptp", ("PUBLICLY TRADED PARTNERSHIP",)), ("qbi", ("QUALIFIED BUSINESS INCOME",)))
 
 
 @dataclass
@@ -164,6 +180,7 @@ def read(name: str, pages: dict[int, list[dict]], texts: list[str] | None = None
         if texts is not None:
             stop = found[n + 1].page - 1 if n + 1 < len(found) else len(texts)
             k1.statement = statements(texts, k1.page + 1, stop)
+            _aggregate_checks(k1)
         _statement_questions(k1)
     for n, later in enumerate(found):
         if first := next((k for k in found[:n] if k.copy_of is None and _same(k, later)), None):
@@ -392,6 +409,22 @@ def _checks(k1: K1) -> None:
                f"{paid} against {k1.capital['withdrawals'].quote}")
 
 
+def _aggregate_checks(k1: K1) -> None:
+    """Each aggregated group's 199A total is the sum of the same amount for the businesses in the group."""
+    for total in k1.statement:
+        if not total.aggregate or not total.kind:
+            continue
+        parts = [s for s in k1.statement if not s.aggregate and s.business in total.members and s.kind == total.kind
+                 and (s.box, s.code) == (total.box, total.code)]
+        if not total.members or not parts:
+            k1.ask(f"box {total.box} code {total.code}: an aggregated group's {total.kind} total, and no amounts for "
+                   "the businesses in the group to check it against", total.quote)
+            continue
+        k1.check(f"box {total.box} code {total.code}: an aggregated group's {total.kind} is its businesses' added up",
+                 abs(sum(s.amount for s in parts) - total.amount) <= CENT,
+                 f"{sum(s.amount for s in parts)} against {total.quote.strip()}")
+
+
 def _statement_questions(k1: K1) -> None:
     """A box the face sends to the statement is a question only when the statement gives it no amount."""
     if k1.retirement_plan:
@@ -416,6 +449,9 @@ SHORT = 30  # characters: a label wrapped onto the lines around its amount is sh
 HEADING = re.compile(r"(?:[A-Za-z0-9]_){4,}")
 LONE_YEAR = re.compile(r"^\s*(?:19|20)\d\d\s*$")  # a tax year on a line of its own, not an amount
 RECONCILE = re.compile(r"(?i)\b(?:section|item)\s+L\b")  # item L's reconciliation repeats the face's amounts
+BUSINESS = re.compile(r"(?i)^\s*trade or business:\s*(.+?)\s*$")  # whose 199A amounts follow
+GROUPING = re.compile(r"(?i)\belected to aggregate\b")  # the businesses named next are one group
+AGGREGATE = re.compile(r"(?i)^\s*totals?:\s*(aggregated group\b.*?)\s*$")  # the group's totals follow
 
 
 def statements(texts: list[str], first: int, last: int) -> list[StatementItem]:
@@ -424,7 +460,8 @@ def statements(texts: list[str], first: int, last: int) -> list[StatementItem]:
     A "Line 20, Code Z" or "Box 19C" reference sets the box and code for the lines under it, until the next
     reference or heading. Each line ending in an amount under one becomes an item, its description the line's
     text (or the lines around a lone amount, where a label wraps around it). Totals and item L's reconciliation,
-    which repeat amounts given elsewhere, are left out.
+    which repeat amounts given elsewhere, are left out. An aggregated group's 199A totals are kept, marked as
+    the group's, so they can be checked against its businesses' amounts and never added to them.
     """
     found: list[StatementItem] = []
     for page in range(first, min(last, len(texts)) + 1):
@@ -432,9 +469,24 @@ def statements(texts: list[str], first: int, last: int) -> list[StatementItem]:
         raws = texts[page - 1].splitlines()
         box = code = section = ""
         reconciling = False  # under item L's reconciliation, whose rows repeat the face
+        business = aggregate = ""
+        members: list[str] = []
+        grouping = False  # between "elected to aggregate" and the group's totals
+        tied = ("", "")  # the box and code the business or group was named under: it holds only there
         for n, line in enumerate(lines):
             if not line.strip() or COLUMN_HEADS.match(line) or LONE_YEAR.match(line):
                 continue  # a table's column headings neither start nor end a section
+            if trade := BUSINESS.match(line):
+                business, aggregate, tied = trade.group(1), "", (box, code)
+                if grouping:
+                    members.append(business)
+                continue
+            if GROUPING.search(line):
+                grouping, members = True, []
+                continue
+            if group := AGGREGATE.match(line):
+                business, aggregate, grouping, tied = "", group.group(1), False, (box, code)
+                continue
             ref = REF.match(line)
             ends = TRAILING.search(line[ref.end():] if ref else line)
             if not ref and not ends and (mid := ANYWHERE.search(line)):
@@ -471,7 +523,11 @@ def statements(texts: list[str], first: int, last: int) -> list[StatementItem]:
                 value = amount(ends.group(1).replace("$", ""))
             except ValueError:
                 continue
-            found.append(StatementItem(box, code, description, value, section, page, raws[n].rstrip()))
+            item = StatementItem(box, code, description, value, section, page, raws[n].rstrip())
+            if (box, code) == tied:
+                item.business, item.aggregate = business, aggregate
+                item.members = tuple(members) if aggregate else ()
+            found.append(item)
     return found
 
 

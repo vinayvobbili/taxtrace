@@ -311,7 +311,10 @@ def cmd_k1(args: argparse.Namespace) -> int:
                 for s in f.statement:
                     key = s.box + (f" {s.code}" if s.code else "")
                     counts[key] = counts.get(key, 0) + 1
-                print("  statement amounts: " + ", ".join(f"{k} ×{n}" if n > 1 else k for k, n in counts.items()))
+                totals = sum(bool(s.aggregate) for s in f.statement)
+                print("  statement amounts: " + ", ".join(f"{k} ×{n}" if n > 1 else k for k, n in counts.items())
+                      + (f"; {totals} of them an aggregated group's totals, which repeat its businesses' amounts"
+                         if totals else ""))
             # checks and questions name boxes and lines only, never the document's text: that's in the quotes
             for c in bad:
                 print(f"  failed: {c.what}" + (f" ({masked(c.quote)})" if c.quote else ""))
@@ -334,8 +337,11 @@ def cmd_k1(args: argparse.Namespace) -> int:
                     print(f"  box {i.box}{' ' + i.code if i.code else ''}: {masked(i.value.quote)} at "
                           f"{i.value.top}, {i.value.x0}")
                 for s in f.statement:
+                    whose = (f" [{s.kind or 'other'} of {masked(s.aggregate)}, the total of "
+                             f"{', '.join(masked(m) for m in s.members) or 'no business named'}]" if s.aggregate
+                             else f" [{s.kind or 'other'} of {masked(s.business)}]" if s.business else "")
                     print(f"  p{s.page} statement {s.box}{' ' + s.code if s.code else ''} "
-                          f"{masked(s.description)!r}: {masked(s.quote)}")
+                          f"{masked(s.description)!r}{whose}: {masked(s.quote)}")
     print(f"wrote to {out}" if out.exists() else "no K-1s found")
     return 1 if failed else 0
 

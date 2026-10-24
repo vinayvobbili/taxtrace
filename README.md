@@ -160,6 +160,9 @@ codes that hold amounts, with failed checks and questions, never an amount or a 
   line under it to its box and code, with its description; a label wrapped around its amount (Statement A's
   199A grid) is put back together. Totals and item L's reconciliation, which repeat amounts given elsewhere, are
   left out. A statement amount the pages don't give is a question.
+- Each Section 199A amount is marked with its kind (qualified business income, W-2 wages, UBIA, REIT dividends,
+  PTP income) and the trade or business it's for. An aggregated group's totals are kept but marked as the group's,
+  so they're never added in a second time, and each one has to be its businesses' amounts added up.
 - A final K-1, or more than one activity (boxes 22, 23), is a question.
 
 ## Chat
