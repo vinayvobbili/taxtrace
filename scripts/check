@@ -29,4 +29,6 @@ if [[ -n "${PRE_PUSH_AUDIT:-}" ]]; then
   # Word-split on purpose: the variable holds a command and its options.
   # shellcheck disable=SC2086
   $PRE_PUSH_AUDIT "$PWD"
+else
+  echo "== Privacy audit: SKIPPED, PRE_PUSH_AUDIT isn't set in this shell" >&2
 fi
