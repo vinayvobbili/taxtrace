@@ -61,6 +61,44 @@ def _open(doc: Path) -> list[str]:
     raise failure
 
 
+def cmd_unlock(args: argparse.Namespace) -> int:
+    """Say which Keychain entry opens each locked PDF, and what each stored password looks like (never what it is)."""
+    docs = text.documents([Path(p) for p in args.paths])
+    terms = workspace.redact_terms()
+    shown: set[str] = set()
+    failed = 0
+    for doc in docs:
+        name = redact.redact(doc.name, terms, bare_years=True).text
+        try:
+            text.pages(doc)
+            print(f"{name}: not locked")
+            continue
+        except text.Locked:
+            pass
+        except text.UnsupportedDocument:
+            continue
+        entries = workspace.keychain_entries(doc)
+        opened = None
+        for account, password in entries:
+            if account not in shown:
+                shown.add(account)
+                print(f"  Keychain entry '{redact.redact(account, terms, bare_years=True).text}': "
+                      f"{workspace.shape(password)}")
+            try:
+                text.pages(doc, password)
+                opened = account
+                break
+            except text.Locked:
+                continue
+        if opened:
+            print(f"{name}: opens with '{redact.redact(opened, terms, bare_years=True).text}'")
+        else:
+            failed += 1
+            why = "no Keychain entry" if not entries else "no stored password opens it"
+            print(f"{name}: locked, {why}; store one with: {workspace.keychain_hint()}")
+    return 1 if failed else 0
+
+
 def cmd_import(args: argparse.Namespace) -> int:
     """Copy a folder or zip of documents into the workspace: filed returns to prior-returns/, the rest by tax year."""
     home = workspace.outside_git(workspace.home())
@@ -91,6 +129,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("source", help="a folder, or a zip such as a tax preparer's portal export")
     p.add_argument("--dry-run", action="store_true", help="show where each file would go, copy nothing")
     p.set_defaults(func=cmd_import)
+    p = sub.add_parser("unlock", help="check which stored password opens each locked PDF",
+                       description=cmd_unlock.__doc__)
+    p.add_argument("paths", nargs="+", help="documents or folders")
+    p.set_defaults(func=cmd_unlock)
     return ap
 
 

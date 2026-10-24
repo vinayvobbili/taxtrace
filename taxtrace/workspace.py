@@ -38,8 +38,8 @@ def keychain_hint() -> str:
             f"(or -a '<file name>' for one file)")
 
 
-def pdf_passwords(path: Path) -> list[str]:
-    """Passwords to try on a locked PDF, from the macOS Keychain: the file's own entry, then the default one.
+def keychain_entries(path: Path) -> list[tuple[str, str]]:
+    """(account, password) for a locked PDF from the macOS Keychain: the file's own entry, then the default one.
 
     Kept there, never in a file or on a command line, so they can't land in shell history, a repo or a chat. Store
     one with `keychain_hint()`: `-w` last, with no value, makes `security` ask for it without echoing.
@@ -51,8 +51,28 @@ def pdf_passwords(path: Path) -> list[str]:
         r = subprocess.run(["security", "find-generic-password", "-s", KEYCHAIN_SERVICE, "-a", account, "-w"],
                            capture_output=True, text=True)
         if r.returncode == 0:
-            found.append(r.stdout.rstrip("\n"))
+            found.append((account, r.stdout.rstrip("\n")))
     return found
+
+
+def pdf_passwords(path: Path) -> list[str]:
+    return [password for _, password in keychain_entries(path)]
+
+
+def shape(secret: str) -> str:
+    """What a password looks like without what it is: `a` lowercase, `A` uppercase, `9` digit, `_` space, `*` other.
+
+    Enough to spot a capital, a stray space or a digit too many against a rule like "four letters of the last
+    name and five digits, lowercase" (`aaaa99999`), with nothing of the password itself.
+    """
+    def cls(c: str) -> str:
+        if c.isdigit():
+            return "9"
+        if c.isalpha():
+            return "a" if c.islower() else "A"
+        return "_" if c.isspace() else "*"
+
+    return f"{len(secret)} characters: {''.join(cls(c) for c in secret)}"
 
 
 def redact_terms(path: Path | None = None) -> list[str]:

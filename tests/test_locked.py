@@ -46,6 +46,27 @@ def test_wrong_passwords_only_still_say_locked(locked: Path, tmp_path: Path, mon
     assert "doesn't open it" in capsys.readouterr().out
 
 
+def test_shape_shows_classes_never_characters():
+    assert workspace.shape("abcd12345") == "9 characters: aaaa99999"
+    assert workspace.shape("Abcd 1234!") == "10 characters: Aaaa_9999*"
+
+
+def test_unlock_reports_shapes_and_which_entry_opens(locked: Path, tmp_path: Path, monkeypatch, capsys):
+    plain = make_pdf(tmp_path / "docs" / "plain.pdf", PRIOR_RETURN)
+    monkeypatch.setattr(workspace, "keychain_entries", lambda path: [("default", "Wrong 1")])
+    assert cli.main(["unlock", str(locked), str(plain)]) == 1
+    out = capsys.readouterr().out
+    assert "Keychain entry 'default': 7 characters: Aaaaa_9" in out
+    assert "no stored password opens it" in out and "plain.pdf: not locked" in out
+    assert "Wrong" not in out
+
+    monkeypatch.setattr(workspace, "keychain_entries",
+                        lambda path: [("locked_2024_Return.pdf", "stale"), ("default", PASSWORD)])
+    assert cli.main(["unlock", str(locked)]) == 0
+    out = capsys.readouterr().out
+    assert "opens with 'default'" in out and PASSWORD not in out and "stale" not in out
+
+
 def test_keychain_lookup_misses_cleanly(tmp_path: Path, monkeypatch):
     # Never the real default entry: this machine may hold one.
     monkeypatch.setattr(workspace, "KEYCHAIN_DEFAULT", "no-such-account-taxtrace-test")
