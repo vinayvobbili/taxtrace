@@ -80,12 +80,19 @@ def test_an_entry_setup_did_not_move_is_read_the_classic_way(no_real_gate: Path,
 
 
 def test_the_chat_key_comes_through_the_helper(fake_gate: Path, monkeypatch: pytest.MonkeyPatch):
+    real_run = subprocess.run
+
+    def no_such_item(cmd, **kw):  # `security` is macOS only: CI runs on Linux
+        if cmd[0] == "security":
+            return subprocess.CompletedProcess(cmd, 44, "", "")
+        return real_run(cmd, **kw)
+    monkeypatch.setattr(subprocess, "run", no_such_item)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setattr(chat.sys, "platform", "darwin")
     assert chat.api_key("anthropic") == "sk-not-a-real-key"
     monkeypatch.delenv("ANTHROPIC_API_KEY")
     with pytest.raises(chat.Unavailable, match="wasn't approved"):
-        chat.api_key("no-such-item")
+        chat.api_key("no-such-item")  # not moved to the helper: asked the classic way, and there's none
 
 
 def test_entries_move_over_without_the_secret_retyped(fake_gate: Path):
