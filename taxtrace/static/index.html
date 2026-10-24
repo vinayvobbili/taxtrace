@@ -174,6 +174,13 @@ h2::before { content: ""; width: 14px; height: 3px; border-radius: 2px; backgrou
 .meta { font-size: 11.5px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 0 4px; }
 .meta.left { align-self: flex-start; } .meta:empty { display: none; }
 .meta .pill.warn { white-space: normal; border-radius: 10px; font-weight: 550; padding: 4px 10px; }
+.offer { align-self: stretch; padding: 10px 12px; border-radius: 14px; font-size: 12.5px; color: var(--muted); display: flex; flex-direction: column; gap: 8px;
+  border: 1px dashed color-mix(in srgb, var(--cloud) 40%, var(--line)); background: var(--cloud-soft); animation: rise .25s ease-out both; }
+.offer button { align-self: flex-start; border: 0; border-radius: 999px; padding: 7px 14px; font: inherit; font-size: 13px; font-weight: 700; color: #fff;
+  background: linear-gradient(135deg, #6366f1, #a855f7); cursor: pointer; transition: transform .15s; }
+.offer button:hover { transform: translateY(-1px); }
+.offer button:disabled { opacity: .5; cursor: default; transform: none; }
+.offer .as { font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; color: var(--text); opacity: .75; }
 details.sent { font-size: 11.5px; color: var(--muted); align-self: flex-end; max-width: 90%; }
 details.sent summary { cursor: pointer; text-align: right; list-style: none; }
 details.sent summary::before { content: "🔒 "; }
@@ -380,7 +387,8 @@ function hello() {
 function scroll() { const log = $("log"); log.scrollTop = log.scrollHeight; }
 function reset() { if (busy) busy.abort(); history.length = 0; $("log").replaceChildren(hello()); $("who").textContent = "Tax rules, forms, what a document is for"; }
 
-async function ask(question) {
+// masked: ask Claude (and the rest of the order) about a question that holds your values, with them masked
+async function ask(question, masked = false) {
   question = question.trim();
   if (!question || busy) return;
   const log = $("log");
@@ -393,10 +401,10 @@ async function ask(question) {
   const meta = h("div", { class: "meta left" });
   log.append(notes, bubble, meta); scroll();
   busy = new AbortController(); $("send").textContent = "Stop";
-  let text = "";
+  let text = "", offer = null, local = false;
   try {
     const r = await fetch("/api/chat", { method: "POST", signal: busy.signal,
-      headers: { "X-Taxtrace-Token": TOKEN, "Content-Type": "application/json" }, body: JSON.stringify({ messages: history }) });
+      headers: { "X-Taxtrace-Token": TOKEN, "Content-Type": "application/json" }, body: JSON.stringify({ messages: history, masked }) });
     if (!r.ok) throw new Error((await r.json()).error || r.statusText);
     const reader = r.body.getReader(), dec = new TextDecoder();
     let buf = "";
@@ -408,8 +416,10 @@ async function ask(question) {
       while ((nl = buf.indexOf("\n")) >= 0) {
         const ev = JSON.parse(buf.slice(0, nl)); buf = buf.slice(nl + 1);
         if (ev.note) notes.append(h("span", { class: "pill warn" }, ev.note));
+        if (ev.offer) offer = ev.offer;
         if (ev.answering) {
           const a = ev.answering;
+          local = a.local;
           $("who").textContent = `Answering: ${a.label}`;
           meta.append(h("span", { class: "pill " + (a.local ? "mine" : "cloud") }, a.label), h("span", {}, a.model));
           if (a.sent !== undefined) log.insertBefore(h("details", { class: "sent" }, h("summary", {}, `What ${a.label} was sent`),
@@ -425,6 +435,10 @@ async function ask(question) {
     }
     history.push({ role: "assistant", content: text });
     if (!text) bubble.textContent = "(no answer)";
+    if (offer && local) log.append(h("div", { class: "offer" },
+      h("div", { class: "why" }, "The model on this Mac is much smaller than Claude: check its answer against the IRS instructions before acting on it."),
+      h("button", { type: "button", title: `Claude gets: ${offer}`, onclick: e => { e.currentTarget.disabled = true; ask(question, true); } },
+        "✦ Ask Claude, amounts masked"), h("div", { class: "as" }, offer)));
   } catch (e) {
     if (e.name === "AbortError") { bubble.innerHTML = render(text || "(stopped)"); if (text) history.push({ role: "assistant", content: text }); }
     else { bubble.replaceWith(h("div", { class: "msg err" }, e.message)); history.pop(); }

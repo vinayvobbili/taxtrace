@@ -123,7 +123,7 @@ def make_handler(settings: chat.Settings, token: str, port_ref: list[int]):
                     return self._json(HTTPStatus.OK, {"models": chat.status(settings), "workspace": overview()})
                 if method == "POST" and url.path == "/api/chat":
                     messages = chat.clean(body.get("messages"), settings.max_turns)
-                    return self._stream(chat.answer(messages, settings))
+                    return self._stream(chat.answer(messages, settings, masked=body.get("masked") is True))
                 return self._json(HTTPStatus.NOT_FOUND, {"error": "not found"})
             except (ValueError, workspace.InsideGitRepo) as e:
                 return self._json(HTTPStatus.BAD_REQUEST, {"error": str(e)})

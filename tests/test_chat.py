@@ -73,6 +73,11 @@ def test_a_question_with_an_amount_or_a_listed_name_stays_on_this_mac_unmasked(d
     assert sent[-1]["content"].startswith("Is $12,480") and "W-2 Quillfeather.pdf" in system
     assert "never leaves their computer" in system
     assert out[0]["note"].startswith("Your question has an amount")
+    assert out[1] == {"offer": "Is $##,### of interest from my savings account taxable?"}
+    calls.clear()
+    out = list(chat.answer(chat.clean([{"role": "user", "content": "Is $12,480 of interest taxable?"}]), masked=True))
+    assert list(calls) == ["claude"] and calls["claude"][1][-1]["content"] == "Is $##,### of interest taxable?"
+    assert not any(isinstance(p, dict) and "offer" in p for p in out)
     calls.clear()
     out = ask("Did jordan sign the return?")
     assert list(calls) == ["local"] and "redact-terms.txt" in out[0]["note"]

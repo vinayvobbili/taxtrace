@@ -146,17 +146,23 @@ def system_prompt(context: str, masked: bool, today: date | None = None) -> str:
                          context=context.strip())
 
 
-def answer(messages: list[dict], settings: Settings | None = None) -> Iterator[str | dict]:
+def answer(messages: list[dict], settings: Settings | None = None, masked: bool = False) -> Iterator[str | dict]:
     """The reply in pieces as it's written, from the first model in the order that can answer. Dicts along the
     way: {"note"} when a model is skipped and why, {"answering"} once one starts (which, its model, and for a cloud
-    model the masked question it was sent), and {"stats"} at the end."""
+    model the masked question it was sent), and {"stats"} at the end.
+
+    A question holding the user's values goes to the model on this Mac, with {"offer"}: the question as a cloud
+    model would get it. The local model is far smaller, so the page offers to ask again with `masked`: the
+    question then goes down the whole order, its values masked like everything else a cloud model is sent."""
     settings = settings or Settings()
     terms = workspace.redact_terms()
     question = messages[-1]["content"]
-    why_local = private_reason(question, terms)
+    why_local = "" if masked else private_reason(question, terms)
     order = ("local",) if why_local else tuple(b for b in settings.order if b in RUNNERS)
     if why_local:
         yield {"note": why_local}
+        if any(b in CLOUD for b in settings.order):
+            yield {"offer": mask(question, terms)}
     skipped: list[str] = []
     for backend in order:
         cloud = backend in CLOUD
