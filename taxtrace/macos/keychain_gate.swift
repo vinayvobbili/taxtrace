@@ -10,7 +10,11 @@
 // without anyone retyping the secret. Reading the old entry shows its classic prompt one last time. A backup
 // copy is kept until the new entry is saved, so a failure can't lose the secret. Exit 0 done, 2 no such entry,
 // 1 the old entry's read wasn't allowed (its prompt denied or cancelled), 4 the Keychain refused (the message
-// says where the backup is).
+// says where the backup is), 5 only the old entry's owner may remove it: the backup is kept, its account is on
+// stdout, and once `security delete-generic-password` has removed the old entry, `--restore` finishes the move.
+//
+// keychain-gate --restore <service> <account>: save the backup copy as the entry, trusting only this binary, and
+// remove the backup. Exit 0 done, 2 no backup, 4 the Keychain refused.
 import Foundation
 import LocalAuthentication
 import Security
@@ -64,9 +68,34 @@ if args.count == 4 && args[1] == "--adopt" {
     var status = add(backup, account, label, secret)
     guard status == errSecSuccess else { fail("couldn't save a backup copy (\(status)); nothing changed", 4) }
     status = SecItemDelete(entryQuery(service, account) as CFDictionary)
-    guard status == errSecSuccess else { fail("couldn't remove the old entry (\(status)); nothing changed", 4) }
+    if status == errSecInvalidOwnerEdit {  // made by another app, which alone may remove it
+        FileHandle.standardOutput.write(Data(account.utf8))
+        fail("only the old entry's owner may remove it; the secret is in \(backup)", 5)
+    }
+    guard status == errSecSuccess else {
+        SecItemDelete(entryQuery(backup, account) as CFDictionary)
+        fail("couldn't remove the old entry (\(status)); nothing changed", 4)
+    }
     status = add(service, account, label, secret)
     guard status == errSecSuccess else { fail("couldn't save the new entry (\(status)); the secret is in \(backup)", 4) }
+    SecItemDelete(entryQuery(backup, account) as CFDictionary)
+    exit(0)
+}
+
+if args.count == 4 && args[1] == "--restore" {
+    let (service, wanted) = (args[2], args[3])
+    let backup = service + ".taxtrace-backup"
+    var query = entryQuery(backup, wanted)
+    query[kSecMatchLimit as String] = kSecMatchLimitOne
+    query[kSecReturnAttributes as String] = true
+    query[kSecReturnData as String] = true  // the backup trusts this binary: no prompt
+    var found: CFTypeRef?
+    guard SecItemCopyMatching(query as CFDictionary, &found) == errSecSuccess, let saved = found as? [String: Any],
+          let secret = saved[kSecValueData as String] as? Data else { exit(2) }
+    let account = saved[kSecAttrAccount as String] as? String ?? wanted
+    let label = saved[kSecAttrLabel as String] as? String ?? service
+    let status = add(service, account, label, secret)
+    guard status == errSecSuccess else { fail("couldn't save the entry (\(status)); the secret is in \(backup)", 4) }
     SecItemDelete(entryQuery(backup, account) as CFDictionary)
     exit(0)
 }

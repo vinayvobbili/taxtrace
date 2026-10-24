@@ -93,6 +93,13 @@ def adopt(service: str, account: str) -> bool:
     """Store an existing entry again trusting only the helper, without the secret being retyped or passing through
     here. Its classic prompt shows one last time. False if there's no such entry."""
     run = subprocess.run([str(helper_path()), "--adopt", service, account], capture_output=True, text=True)
+    if run.returncode == 5:  # only the entry's owner may remove it: `security`, which made it, does
+        owned = run.stdout or account
+        removed = subprocess.run(["security", "delete-generic-password", "-s", service, "-a", owned],
+                                 capture_output=True, text=True)
+        if removed.returncode:
+            raise GateError(f"{run.stderr.strip()}; security couldn't remove it either ({removed.returncode})")
+        run = subprocess.run([str(helper_path()), "--restore", service, owned], capture_output=True, text=True)
     if run.returncode not in (0, 2):
         raise GateError(run.stderr.strip())
     if run.returncode == 0 and not adopted(service, account):

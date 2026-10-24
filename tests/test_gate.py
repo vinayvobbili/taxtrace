@@ -18,6 +18,14 @@ if [ "$1" = --adopt ]; then
     taxtrace/default) exit 0 ;;
     taxtrace/stuck) echo "couldn't save the new entry; the secret is in taxtrace.taxtrace-backup" >&2; exit 4 ;;
     taxtrace/refused) echo "the old entry's read wasn't allowed (-128); nothing changed" >&2; exit 1 ;;
+    owned/) printf 'me'; echo "only the old entry's owner may remove it; the secret is in owned.taxtrace-backup" >&2
+      exit 5 ;;
+    *) exit 2 ;;
+  esac
+fi
+if [ "$1" = --restore ]; then
+  case "$2/$3" in
+    owned/me) exit 0 ;;
     *) exit 2 ;;
   esac
 fi
@@ -92,6 +100,22 @@ def test_entries_move_over_without_the_secret_retyped(fake_gate: Path):
     with pytest.raises(gate.GateError, match="wasn't allowed"):  # a denied prompt isn't "no such entry"
         gate.adopt("taxtrace", "refused")
     assert not gate.adopted("taxtrace", "refused")
+
+
+def test_an_entry_only_its_owner_may_remove_is_removed_by_security_then_restored(
+        fake_gate: Path, monkeypatch: pytest.MonkeyPatch):
+    real_run = subprocess.run
+    removed = []
+
+    def spy(cmd, **kw):
+        if cmd[0] == "security":
+            removed.append(cmd[1:])
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+        return real_run(cmd, **kw)
+    monkeypatch.setattr(subprocess, "run", spy)
+    assert gate.adopt("owned", "") is True
+    assert removed == [["delete-generic-password", "-s", "owned", "-a", "me"]]  # the account the helper found
+    assert gate.adopted("owned", "")
 
 
 def test_setup_moves_every_entry_over(monkeypatch: pytest.MonkeyPatch, capsys):
