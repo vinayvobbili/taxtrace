@@ -156,6 +156,31 @@ def cmd_ui(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_service(args: argparse.Namespace) -> int:
+    """Keep `taxtrace ui` running: start it at login, restart it if it stops (macOS)."""
+    from . import service
+
+    try:
+        if args.action == "install":
+            url = service.install(args.port, args.models, args.keychain)
+            print(f"taxtrace ui now starts when you log in and restarts if it stops: {url}\n"
+                  f"Workspace: {workspace.home()}. Log: {service.log_path()}. "
+                  "Undo with `taxtrace service uninstall`.")
+        elif args.action == "uninstall":
+            print("Removed: taxtrace ui no longer starts at login." if service.uninstall() else "Not installed.")
+        else:
+            s = service.status()
+            if not s["installed"]:
+                print("Not installed. `taxtrace service install` starts taxtrace ui at login.")
+            else:
+                state = f"running (pid {s['pid']})" if s["running"] else "installed, not running: see the log"
+                print(f"{state}\n{s['url'] or ''}\nLog: {s['log']}")
+    except (service.ServiceError, workspace.InsideGitRepo) as err:
+        print(f"taxtrace: {err}", file=sys.stderr)
+        return 1
+    return 0
+
+
 PATHS_HELP = "documents or folders (default: the whole workspace)"
 
 
@@ -189,6 +214,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--keychain", default="anthropic",
                    help="Keychain item with the Anthropic API key, if ANTHROPIC_API_KEY isn't set (default: anthropic)")
     p.set_defaults(func=cmd_ui)
+    p = sub.add_parser("service", help="keep `taxtrace ui` running: start it at login, restart it if it stops "
+                                       "(macOS)", description=cmd_service.__doc__)
+    p.add_argument("action", choices=["install", "uninstall", "status"])
+    p.add_argument("--port", type=int, default=8766, help="install: port on 127.0.0.1 (default: 8766)")
+    p.add_argument("--models", default="claude,agy,local", help="install: the chat's models, as for `ui`")
+    p.add_argument("--keychain", default="anthropic", help="install: Keychain item with the Anthropic API key")
+    p.set_defaults(func=cmd_service)
     return ap
 
 

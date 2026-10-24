@@ -102,6 +102,26 @@ the model on your Mac answers it, and the page says why. Under each question a c
 page shows exactly what it was sent. The chat reads only the document list and what you type: it can't open
 a document, change a file or file anything.
 
+### Always on (macOS)
+
+An installed app (the page added to your Dock from the browser) only works while the server is running.
+To start it at login and restart it if it stops:
+
+```bash
+taxtrace service install     # same --port, --models and --keychain as `ui`
+taxtrace service status      # running or not, the address, the log
+taxtrace service uninstall
+```
+
+Run `install` from the shell where `TAXTRACE_HOME` is set: a login item doesn't read your shell profile,
+so install writes that workspace path, and a `PATH` that finds `agy` and Homebrew's `ocrmypdf`, into
+`~/Library/LaunchAgents/io.github.taxtrace.ui.plist`. No key or password goes in it; Claude's key is still
+read from the Keychain. The log is `~/Library/Logs/taxtrace-ui.log`.
+
+To install the page as an app, open http://taxtrace.localhost:8766/ in Chrome and click the install icon at
+the right of the address bar (or ⋮ → Cast, save and share → Install page as app). It gets its own window and
+Dock icon. `python scripts/make_icons.py` rebuilds the app's PNG icons after an SVG changes.
+
 ## Development
 
 ```bash

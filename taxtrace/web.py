@@ -23,6 +23,10 @@ from . import __version__, chat, text, workspace
 APP_HOST = "taxtrace.localhost"  # browsers and macOS send every *.localhost name to this machine, never the web
 PORT = 8766  # jobwatch's is 8765
 MAX_BODY = 1_000_000
+# What the page links to besides itself, for the tab and for installing it as an app (see scripts/make_icons.py)
+STATIC = {"icon.svg": "image/svg+xml", "icon-192.png": "image/png", "icon-512.png": "image/png",
+          "icon-maskable-512.png": "image/png", "apple-touch-icon.png": "image/png",
+          "manifest.webmanifest": "application/manifest+json"}
 
 
 def page(token: str) -> bytes:
@@ -107,9 +111,10 @@ def make_handler(settings: chat.Settings, token: str, port_ref: list[int]):
             url = urlparse(self.path)
             if method == "GET" and url.path in ("/", "/index.html"):
                 return self._send(HTTPStatus.OK, page(token), "text/html; charset=utf-8")
-            if method == "GET" and url.path in ("/icon.svg", "/favicon.ico"):  # the tab's icon can't send the token
-                icon = resources.files("taxtrace").joinpath("static/icon.svg").read_bytes()
-                return self._send(HTTPStatus.OK, icon, "image/svg+xml")
+            name = "icon.svg" if url.path == "/favicon.ico" else url.path.lstrip("/")
+            if method == "GET" and name in STATIC:  # icons and the manifest: the browser asks without the token
+                body = resources.files("taxtrace").joinpath(f"static/{name}").read_bytes()
+                return self._send(HTTPStatus.OK, body, STATIC[name])
             if not url.path.startswith("/api/"):
                 return self._json(HTTPStatus.NOT_FOUND, {"error": "not found"})
             if not secrets.compare_digest(self.headers.get("X-Taxtrace-Token", ""), token):

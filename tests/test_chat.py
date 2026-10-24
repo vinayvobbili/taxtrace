@@ -142,7 +142,7 @@ def request(srv, method, path, body=None, host=None, token="t0ken"):
     headers = {"Host": host or f"{web.APP_HOST}:{port}", "X-Taxtrace-Token": token, "Content-Type": "application/json"}
     conn.request(method, path, body=json.dumps(body) if body is not None else None, headers=headers)
     r = conn.getresponse()
-    return r.status, r.read().decode()
+    return r.status, r.read().decode(errors="replace")  # a PNG icon isn't text
 
 
 def test_the_page_answers_its_own_name_only_and_the_api_wants_the_token(server):
@@ -153,6 +153,11 @@ def test_the_page_answers_its_own_name_only_and_the_api_wants_the_token(server):
     assert request(server, "GET", "/", host=f"other.localhost:{port}")[0] == 403
     status, icon = request(server, "GET", "/icon.svg", token="")
     assert status == 200 and icon.startswith("<svg")
+    status, manifest = request(server, "GET", "/manifest.webmanifest", token="")
+    icons = json.loads(manifest)["icons"]
+    assert status == 200 and {"192x192", "512x512"} <= {i["sizes"] for i in icons}
+    for i in icons:  # every icon the manifest lists is served
+        assert request(server, "GET", i["src"], token="")[0] == 200
     assert request(server, "GET", "/api/status", token="wrong")[0] == 403
 
 
