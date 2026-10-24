@@ -192,7 +192,49 @@ def test_cli_writes_the_values_and_prints_none(return_2021: Path, workspace_home
     for secret in ("12,422", "287,450", "Vexley", "Quenby", "10,452"):
         assert secret not in out
     assert "2 assets" in out and "2 activities" in out
+    assert "prior 4.68 years, current 1.00 years" in out  # 48,903 and 10,452 at 10,452 a year
     saved = json.loads((workspace_home / "carryforwards" / "2021 Vexley Return.json").read_text())
     assert saved["year"] == 2021
     assert saved["assets"][0]["accumulated"] == "59355"
     assert saved["unallowed"][1]["unallowed"] == "2366"
+
+
+def test_a_full_year_at_the_rate_and_the_last_year(return_2021: Path):
+    house, roof = read(return_2021).assets
+    assert (house.rate, house.annual, roof.annual) == (Decimal("0.03636"), 10452, 458)
+    assert house.in_service().isoformat() == "2016-07-22"
+    years = prior.roll(house, 2021, 2023)
+    assert [(y.year, y.depreciation, y.accumulated) for y in years] == [(2022, 10452, 69807), (2023, 10452, 80259)]
+    house.prior = house.basis - house.current - 100  # 100 left of the basis at the end of 2021
+    (final,) = prior.roll(house, 2021, 2022)
+    assert (final.depreciation, final.last) == (100, True)
+
+
+# the 2021 schedule as it should follow the 2017 listing: 15,218 through 2017, then 10,452 a year for 2018-2020
+FOLLOWS_2017 = [ln.replace("48,903", "46,574").replace("49,170", "46,841") for ln in SCHEDULE]
+
+
+def test_returns_years_apart_are_checked_against_each_other(tmp_path: Path):
+    listing = read(make_pdf(tmp_path / "2017 Return.pdf", [LISTING]))
+    assert listing.assets[0].rate == Decimal("0.03636")
+    later = read(make_pdf(tmp_path / "2021 Return.pdf", [FOLLOWS_2017]))
+    (check,) = prior.link([later, listing])
+    assert check.ok and "2017's depreciation rolled forward is 2021's prior" in check.what
+    (check,) = prior.link([listing, read(make_pdf(tmp_path / "2021 Other.pdf", [SCHEDULE]))])
+    assert not check.ok
+
+
+def test_cli_projects_the_missing_years(tmp_path: Path, workspace_home: Path, capsys):
+    folder = tmp_path / "returns"
+    make_pdf(folder / "2017 Return.pdf", [LISTING])
+    make_pdf(folder / "2021 Return.pdf", [FOLLOWS_2017])
+    assert cli.main(["prior", str(folder), "--project", "2025"]) == 0
+    out = capsys.readouterr().out
+    assert "across returns: 1 of 1 checks pass" in out
+    assert "projected 2 assets from the 2021 return through 2025" in out and "10,452" not in out
+    saved = json.loads((workspace_home / "carryforwards" / "projected-2025.json").read_text())
+    house = saved["assets"][0]
+    assert (house["from"]["year"], house["annual"], house["placed_in_service"]) == (2021, "10452", "2016-07-22")
+    assert [y["year"] for y in house["years"]] == [2022, 2023, 2024, 2025]
+    assert house["years"][-1]["accumulated"] == str(46574 + 10452 + 4 * 10452)
+    assert cli.main(["prior", str(folder), "--project", "2017"]) == 1

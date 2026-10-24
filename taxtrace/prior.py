@@ -15,7 +15,9 @@ from __future__ import annotations
 
 import re
 from dataclasses import asdict, dataclass, field
-from decimal import Decimal, InvalidOperation
+from datetime import date, datetime
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+from itertools import pairwise
 
 from . import text
 
@@ -51,6 +53,12 @@ def _number(token: str) -> bool:
     return bool(NUMBER.match(token)) and any(c.isdigit() for c in token)
 
 
+def _rate(token: str) -> Decimal:
+    """A depreciation rate as a fraction: the schedule prints ".03636", the older listing "3.636" (percent)."""
+    value = amount(token)
+    return value / 100 if value > 1 else value
+
+
 @dataclass
 class Asset:
     number: str
@@ -64,6 +72,7 @@ class Asset:
     method: str
     convention: str
     life: Decimal
+    rate: Decimal  # of the basis, a full year's share ("0.03636")
     page: int
     quote: str
 
@@ -71,6 +80,20 @@ class Asset:
     def accumulated(self) -> Decimal:
         """Depreciation taken through this year: next year's prior depreciation."""
         return self.prior + self.current
+
+    @property
+    def annual(self) -> Decimal:
+        """A full year's depreciation at this rate, in whole dollars as the preparer rounds it."""
+        return (self.basis * self.rate).quantize(CENT, ROUND_HALF_UP)
+
+    def in_service(self) -> date | None:
+        """The date placed in service, from any of the layouts' spellings ("7/22/16", "07222016")."""
+        for fmt in ("%m/%d/%y", "%m/%d/%Y", "%m%d%Y"):
+            try:
+                return datetime.strptime(self.placed_in_service, fmt).date()
+            except ValueError:
+                continue
+        return None
 
     def key(self) -> tuple:
         return (self.number, self.description, self.placed_in_service, self.cost, self.basis, self.prior,
@@ -188,6 +211,9 @@ def _against_projection(found: Carryforwards, pages: list[tuple[int, str]]) -> N
         if (then := by_key.get(asset.key()[:3])) is not None:
             found.check(f"asset {asset.number}: next year's schedule (page {then.page}) starts from this year's "
                         "accumulated depreciation", abs(then.prior - asset.accumulated) <= CENT, then.page)
+            (next_year,) = roll(asset, found.year, found.year + 1)
+            found.check(f"asset {asset.number}: next year's schedule (page {then.page}) takes a full year at its "
+                        "rate", abs(then.current - next_year.depreciation) <= CENT, then.page)
 
 
 def _year(name: str, pages: list[str]) -> int | None:
@@ -251,7 +277,7 @@ def _schedule(found: Carryforwards, n: int, page: str, group: list[Asset],
             found.ask("This asset has a Section 179, bonus, salvage or basis-reduction amount: check what carries "
                       "forward.", n, line)
         asset = Asset(m.group("no"), m.group("desc"), activity, m.group("acquired"), cost, basis, prior,
-                      amount(current), tokens[at], convention, amount(life), n, line)
+                      amount(current), tokens[at], convention, amount(life), _rate(after[1]), n, line)
         _asset_checks(found, asset)
         if m.group("sold"):
             found.ask("This asset was sold or disposed of: nothing of it carries forward, but the sale belongs on "
@@ -301,7 +327,7 @@ def _listing(found: Carryforwards, n: int, page: str, group: list[Asset],
                       n, line)
         prior, current, accumulated = split
         asset = Asset(m.group("no"), m.group("desc"), "", m.group("acquired"), amount(cost), amount(basis), prior,
-                      current, tokens[at], convention, amount(life), n, line)
+                      current, tokens[at], convention, amount(life), _rate(after[0]), n, line)
         found.check(f"asset {asset.number}: prior plus current is the accumulated depreciation",
                     abs(asset.accumulated - accumulated) <= CENT, n)
         _asset_checks(found, asset)
@@ -407,6 +433,72 @@ def _worksheet_total(found: Carryforwards, n: int, sheet: str, rows: list, total
         found.check(f"Worksheet 5, {activity}: the ratio is its share of the loss", abs(share - ratio) <= RATIO, n)
         found.check(f"Worksheet 5, {activity}: the unallowed loss is its ratio of the total",
                     abs(ratio * unallowed_total - abs(unallowed)) <= CENT, n)
+
+
+@dataclass
+class Year:
+    year: int
+    depreciation: Decimal
+    accumulated: Decimal  # through this year
+    last: bool = False  # the basis runs out this year: the table's final-year amount applies, check it
+
+
+def roll(asset: Asset, start: int, through: int) -> list[Year]:
+    """The asset's depreciation for each year after `start` (the year of its return) through `through`.
+
+    Straight-line property takes the same full-year share every year after the first, until the basis is used up:
+    what next year's schedule will show, so a missing year's return can be filled in, and checked once it arrives.
+    """
+    years, accumulated = [], asset.accumulated
+    for year in range(start + 1, through + 1):
+        take = min(asset.annual, max(asset.basis - accumulated, Decimal(0)))
+        accumulated += take
+        years.append(Year(year, take, accumulated, last=take < asset.annual))
+    return years
+
+
+def link(returns: list[Carryforwards]) -> list[Check]:
+    """Each return's depreciation checked against an earlier one's, rolled forward over the years in between."""
+    dated = sorted((r for r in returns if r.year and r.assets), key=lambda r: r.year)
+    checks = []
+    for earlier, later in pairwise(dated):
+        by_asset = {(a.in_service(), a.cost): a for a in earlier.assets if a.in_service()}
+        for asset in later.assets:
+            if (first := by_asset.get((asset.in_service(), asset.cost))) is None:
+                continue
+            years = roll(first, earlier.year, later.year - 1)
+            expected = years[-1].accumulated if years else first.accumulated
+            ok = abs(expected - asset.prior) <= CENT * max(len(years), 1)
+            checks.append(Check(f"asset {asset.number}: {earlier.year}'s depreciation rolled forward is "
+                                f"{later.year}'s prior depreciation" + ("" if ok else _gap(first, asset, expected)),
+                                ok, asset.page))
+    return checks
+
+
+def _gap(earlier: Asset, later: Asset, expected: Decimal) -> str:
+    """Why a roll-forward missed, in words that carry no amount: the gap in years of depreciation, what changed."""
+    years = (later.prior - expected) / earlier.annual if earlier.annual else Decimal(0)
+    changed = [what for what, a, b in (("basis", earlier.basis, later.basis), ("rate", earlier.rate, later.rate),
+                                        ("cost", earlier.cost, later.cost)) if a != b]
+    return (f" (later's prior is {years:+.2f} years of depreciation from the roll-forward"
+            + (f"; the {' and '.join(changed)} changed between the returns" if changed else "") + ")")
+
+
+def project(found: Carryforwards, through: int) -> list[dict]:
+    """Every asset's depreciation rolled from `found`'s year through `through`, for a year whose return is missing."""
+    if found.year is None:
+        raise ValueError("the return's tax year isn't known, so there is nothing to roll from")
+    rows = []
+    for asset in found.assets:
+        years = roll(asset, found.year, through)
+        rows.append({"asset": asset.number, "description": asset.description, "activity": asset.activity,
+                     "placed_in_service": str(asset.in_service() or asset.placed_in_service),
+                     "basis": str(asset.basis), "annual": str(asset.annual), "method": asset.method,
+                     "from": {"file": found.file, "year": found.year, "page": asset.page, "quote": asset.quote,
+                              "accumulated": str(asset.accumulated)},
+                     "years": [{"year": y.year, "depreciation": str(y.depreciation),
+                                "accumulated": str(y.accumulated), "last": y.last} for y in years]})
+    return rows
 
 
 def verify(found: Carryforwards, pages: list[str]) -> list[str]:

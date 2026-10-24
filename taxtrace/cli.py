@@ -155,6 +155,7 @@ def cmd_prior(args: argparse.Namespace) -> int:
 
     out = home / workspace.CARRYFORWARDS
     failed = 0
+    returns: list[prior.Carryforwards] = []
     for doc in text.documents(paths):
         name = redact.redact(doc.name, terms, bare_years=True).text
         try:
@@ -167,6 +168,7 @@ def cmd_prior(args: argparse.Namespace) -> int:
             print(f"{name}: no depreciation schedule or Form 8582 worksheets")
             continue
         problems = prior.verify(found, pages)
+        returns.append(found)
         out.mkdir(parents=True, exist_ok=True)
         (out / f"{doc.stem}.json").write_text(json.dumps(found.to_json(), indent=2) + "\n")
         bad = found.failed
@@ -186,10 +188,32 @@ def cmd_prior(args: argparse.Namespace) -> int:
             print(f"  question, p{q.page}: {masked(q.text)}" + (f"\n    {masked(q.quote)}" if q.quote else ""))
         if args.layout:
             for a in found.assets:
-                print(f"  p{a.page} asset {a.number}, {a.method} {a.convention} {masked(str(a.life))}: "
+                # in years of depreciation: shows a first partial year or a gap, with no amount
+                years = (f", prior {a.prior / a.annual:.2f} years, current {a.current / a.annual:.2f} years"
+                         if a.annual else "")
+                print(f"  p{a.page} asset {a.number}, {a.method} {a.convention} {masked(str(a.life))}{years}: "
                       f"{masked(a.quote)}")
             for u in found.unallowed:
                 print(f"  p{u.page} unallowed loss: {masked(u.quote)}")
+    if links := prior.link(returns):
+        bad = [c for c in links if not c.ok]
+        failed += bool(bad)
+        print(f"across returns: {len(links) - len(bad)} of {len(links)} checks pass")
+        for c in bad:  # built from years, an asset number and a ratio, never a document's text or amounts
+            print(f"  failed: {c.what}")
+    if args.project:
+        earlier = [r for r in returns if r.year and r.year < args.project and r.assets]
+        if not earlier:
+            print(f"no return before {args.project} with a depreciation schedule to roll forward", file=sys.stderr)
+            return 1
+        latest = max(earlier, key=lambda r: r.year)
+        rows = prior.project(latest, args.project)
+        target = out / f"projected-{args.project}.json"
+        target.write_text(json.dumps({"through": args.project, "projected": True, "assets": rows}, indent=2) + "\n")
+        ending = sum(any(y["last"] for y in r["years"]) for r in rows)
+        print(f"projected {len(rows)} assets from the {latest.year} return through {args.project}: {target.name}"
+              + (f"; {ending} reach the end of their recovery period, check the final year" if ending else "")
+              + f". Confirm against the {args.project - 1} return when it arrives.")
     print(f"wrote to {out}" if out.exists() else "nothing to write")
     return 1 if failed else 0
 
@@ -267,6 +291,8 @@ def build_parser() -> argparse.ArgumentParser:
                        description=cmd_prior.__doc__)
     p.add_argument("paths", nargs="*", help="returns or folders (default: <workspace>/prior-returns)")
     p.add_argument("--layout", action="store_true", help="also print each line a value came from, masked")
+    p.add_argument("--project", type=int, metavar="YEAR",
+                   help="roll the latest return's depreciation forward through YEAR, for returns not in hand yet")
     p.set_defaults(func=cmd_prior)
     p = sub.add_parser("ui", help="open the workspace and a chat in the browser", description=cmd_ui.__doc__)
     p.add_argument("--port", type=int, default=8766, help="port on 127.0.0.1 (default: 8766)")
