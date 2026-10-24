@@ -101,6 +101,18 @@ Nothing is taken on trust:
 - The alternative minimum tax and book copies are skipped. So is next year's projected schedule, which is
   checked to start from this year's accumulated depreciation.
 - A Section 179, bonus or salvage amount, or business use under 100%, is a question for you, not a guess.
+- Returns years apart are checked against each other. An asset's depreciation is rolled forward a full year
+  at a time, and has to match the later return's prior depreciation. A miss says how far off it is in years
+  of depreciation (0.46 years is a first, partial year left out), with no amounts.
+
+```bash
+taxtrace prior --project 2025   # roll the latest schedule forward, for returns not in hand yet
+```
+
+`--project` writes `<workspace>/carryforwards/projected-<year>.json`: each asset's depreciation for every
+year since the latest return, marked as projected until that year's return arrives to confirm it.
+`--layout` also shows each asset's prior and current depreciation in years. That's enough to spot a
+missing or partial year without seeing an amount.
 
 ## Chat
 
