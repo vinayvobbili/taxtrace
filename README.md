@@ -29,6 +29,7 @@ Early. What works today:
 - `taxtrace import`, `outline` and `unlock`: sort a preparer's export into the workspace, list the forms
   in each document, and check passwords kept in the Keychain.
 - `taxtrace prior`: reads a filed return's carryforwards (see [Carryforwards](#carryforwards)).
+- `taxtrace k1`: reads each Schedule K-1 (Form 1065) face, every box and code (see [K-1s](#k-1s)).
 - `taxtrace ui`: the workspace in the browser, with a chat (see [Chat](#chat)).
 
 Planned, in order: Schedule E, the foreign side (interest at Treasury rates, foreign tax
@@ -47,7 +48,12 @@ taxtrace import ~/Downloads/portal-export.zip  # filed returns to prior-returns/
 taxtrace redact ~/TaxData/prior-returns        # writes ~/TaxData/redacted/*.txt
 ```
 
+A path that isn't one from where you are is looked up in the workspace: `taxtrace k1 2025` reads
+`<workspace>/2025`.
+
 `taxtrace outline <files>` lists each page's masked heading: which forms a document holds, in order.
+`taxtrace words <pdf> --page 2 --rows` shows a page's words, masked, with where each one sits (`--x 300:450` and
+`--top 70:240` narrow it to a region): the geometry of a printed form, for writing a reader of it.
 A scanned PDF (pictures of pages, no text) is read through [ocrmypdf](https://ocrmypdf.readthedocs.io)
 on your machine (`brew install ocrmypdf`), once: the searchable copy is kept under the original's sha256
 in `<workspace>/ocr-cache`, so the text values are quoted from never shifts.
@@ -83,6 +89,8 @@ taxtrace keychain setup --account "2024 Return.pdf"  # and a file's own entry
 and moves each entry over to it. macOS asks for the entry the old way one last time, and the secret is never
 retyped or shown. From then on the entry trusts only the helper, and the helper releases it only after macOS's
 own approval: Apple Watch, Touch ID, or the password where neither is set up. Every read is still yours to allow.
+Only the entries `setup` moved go through the helper; any other is read the classic way, with its one prompt. If
+you deny the classic prompt during `setup`, it says so and leaves that entry as it was: run `setup` again.
 taxtrace reads each entry at most once per command, so a folder of returns sharing the `default` password
 costs one prompt. `taxtrace unlock` says which entry opens each locked file, and how each stored password
 is shaped (`aaaa99999`), never what it is.
@@ -125,6 +133,29 @@ taxtrace prior --project 2025   # roll the latest schedule forward, for returns 
 year since the latest return, marked as projected until that year's return arrives to confirm it.
 `--layout` also shows each asset's prior and current depreciation in years. That's enough to spot a
 missing or partial year without seeing an amount.
+
+## K-1s
+
+```bash
+taxtrace k1 2025            # every K-1 face in <workspace>/2025
+taxtrace k1 2025 --layout   # also each value's text, masked, and where it sits
+```
+
+A K-1's face is a printed form: each amount sits in its box under the box's number, with its code beside it, so
+read in order an amount lands next to whatever label is beside it on the page. `k1` reads by position instead. It
+finds Part III's two columns by their first boxes and gives each amount to the nearest box number above it in its
+column. Parts I and II are read by their labels: the EIN, the partnership, the partner (last four digits of the
+TIN), each check mark, profit, loss and capital shares, liabilities, and the capital account. The values go to
+`<workspace>/k1/<document>.json`, each with its page, position and exact text. The terminal gets the boxes and
+codes that hold amounts, with failed checks and questions, never an amount or a name.
+
+- Item L's capital account has to add up: beginning, plus contributions, this year's income and other changes,
+  less withdrawals, is the ending balance. Each share has to be between 0% and 100%, and each amount in a box
+  with codes has to have one.
+- A face printed twice for the same partner counts once. The same amounts for another partner, such as a spouse,
+  are that partner's own K-1.
+- An IRA's K-1 (item I2 checked) is marked as one: its income stays in the account, off the return.
+- An amount on the partnership's statement, a final K-1, or more than one activity (boxes 22, 23) is a question.
 
 ## Chat
 

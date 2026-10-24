@@ -7,6 +7,10 @@ helper, and it reads one only after the person approves, so every read is still 
 
 The helper is built once and kept: an entry trusts the exact binary, so rebuilding it means storing the entries
 again. `setup` rebuilds only when the source changed.
+
+A read goes through the helper only for an entry `setup` moved over to this build of it (`adopted`). Any other
+entry doesn't trust the helper, and reading it through the helper would ask twice: the approval, then the
+classic prompt. Those are read the classic way, with its one prompt.
 """
 
 from __future__ import annotations
@@ -34,8 +38,18 @@ def _stamp() -> Path:
     return helper_path().with_suffix(".sha256")
 
 
+def _adopted_list() -> Path:
+    return helper_path().with_suffix(".adopted")
+
+
 def ready() -> bool:
     return sys.platform == "darwin" and os.access(helper_path(), os.X_OK)
+
+
+def adopted(service: str, account: str) -> bool:
+    """Whether `setup` moved this entry over to the helper as built now: only then do its reads go through it."""
+    listed = _adopted_list()
+    return ready() and listed.exists() and f"{service}\t{account}" in listed.read_text().splitlines()
 
 
 def current() -> bool:
@@ -63,6 +77,7 @@ def build() -> bool:
             raise GateError(f"{Path(cmd[0]).name} failed: {run.stderr.strip()[-400:]}")
     part.replace(out)
     _stamp().write_text(hashlib.sha256(SOURCE.read_bytes()).hexdigest() + "\n")
+    _adopted_list().unlink(missing_ok=True)  # entries trusted the old binary: `setup` moves them over again
     return True
 
 
@@ -80,6 +95,9 @@ def adopt(service: str, account: str) -> bool:
     run = subprocess.run([str(helper_path()), "--adopt", service, account], capture_output=True, text=True)
     if run.returncode not in (0, 2):
         raise GateError(run.stderr.strip())
+    if run.returncode == 0 and not adopted(service, account):
+        with _adopted_list().open("a") as listed:
+            listed.write(f"{service}\t{account}\n")
     return run.returncode == 0
 
 

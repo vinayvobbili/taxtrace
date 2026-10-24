@@ -197,7 +197,7 @@ def api_key(item: str) -> str:
         raise Unavailable("set ANTHROPIC_API_KEY before taxtrace ui")
     from . import gate
 
-    if gate.ready():  # Apple Watch or Touch ID approves the read
+    if gate.adopted(item, ""):  # Apple Watch or Touch ID approves the read
         key = gate.read(item, "", "read the Anthropic API key for the taxtrace chat") or ""
     else:
         r = subprocess.run(["security", "find-generic-password", "-s", item, "-w"], capture_output=True, text=True)

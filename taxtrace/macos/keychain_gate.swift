@@ -9,7 +9,8 @@
 // keychain-gate --adopt <service> <account>: store an existing entry again so it trusts only this binary,
 // without anyone retyping the secret. Reading the old entry shows its classic prompt one last time. A backup
 // copy is kept until the new entry is saved, so a failure can't lose the secret. Exit 0 done, 2 no such entry,
-// 4 the Keychain refused (the message says where the backup is).
+// 1 the old entry's read wasn't allowed (its prompt denied or cancelled), 4 the Keychain refused (the message
+// says where the backup is).
 import Foundation
 import LocalAuthentication
 import Security
@@ -50,8 +51,12 @@ if args.count == 4 && args[1] == "--adopt" {
     query[kSecReturnAttributes as String] = true
     query[kSecReturnData as String] = true
     var found: CFTypeRef?
-    guard SecItemCopyMatching(query as CFDictionary, &found) == errSecSuccess, let old = found as? [String: Any],
-          let secret = old[kSecValueData as String] as? Data else { exit(2) }
+    let read = SecItemCopyMatching(query as CFDictionary, &found)
+    if read == errSecItemNotFound {
+        exit(2)
+    }
+    guard read == errSecSuccess, let old = found as? [String: Any], let secret = old[kSecValueData as String] as? Data
+    else { fail("the old entry's read wasn't allowed (\(read)); nothing changed", 1) }
     let account = old[kSecAttrAccount as String] as? String ?? wanted
     let label = old[kSecAttrLabel as String] as? String ?? service
     let backup = service + ".taxtrace-backup"

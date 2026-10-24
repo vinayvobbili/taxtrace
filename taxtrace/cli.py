@@ -48,12 +48,22 @@ def cmd_redact(args: argparse.Namespace) -> int:
 
 
 def _documents(args: argparse.Namespace) -> list[Path]:
-    """The documents named on the command line, or with none named, every one in the workspace."""
-    return text.documents([Path(p) for p in args.paths] or workspace.sources())
+    """The documents named on the command line, or with none named, every one in the workspace.
+
+    A name that isn't a path from here is looked up in the workspace: `2025` is <workspace>/2025.
+    """
+    home = workspace.home()
+    paths = [path if path.exists() or not (home / path).exists() else home / path for path in map(Path, args.paths)]
+    return text.documents(paths or workspace.sources())
 
 
 def _open(doc: Path) -> list[str]:
     """A document's pages, trying each password the Keychain holds for it when it's locked."""
+    return _unlocked(doc)[0]
+
+
+def _unlocked(doc: Path) -> tuple[list[str], str | None]:
+    """A document's pages and the password that opened them (None: not locked)."""
     def passwords():
         yield None  # most files aren't locked: the Keychain is asked only when one is
         yield from workspace.pdf_passwords(doc)
@@ -61,7 +71,7 @@ def _open(doc: Path) -> list[str]:
     failure = text.Locked("password-protected")
     for password in passwords():
         try:
-            return text.pages(doc, password, ocr_cache=workspace.ocr_cache())
+            return text.pages(doc, password, ocr_cache=workspace.ocr_cache()), password
         except text.Locked as err:
             failure = err  # the last says best why: no password stored, or none that opened it
     raise failure
@@ -82,6 +92,39 @@ def cmd_outline(args: argparse.Namespace) -> int:
             heads = [redact.redact(h, terms).text for h in text.headings(page, args.lines)]
             print(f"  p{n}: {' | '.join(heads) if heads else '(blank)'}")
     return 0
+
+
+def cmd_words(args: argparse.Namespace) -> int:
+    """A page's words with their positions, masked: the geometry of a printed form, without its values or names."""
+    terms = workspace.redact_terms()
+    doc = Path(args.path)
+    _, password = _unlocked(doc)
+    found = sorted((w for w in text.words(doc, args.page, password)
+                    if _within(w["x0"], args.x) and _within(w["top"], args.top)), key=lambda w: (w["top"], w["x0"]))
+    if not args.rows:
+        for w in found:
+            print(f"{w['top']:7.1f} {w['x0']:6.1f}-{w['x1']:<6.1f} {redact.redact(w['text'], terms).text}")
+        return 0
+    rows: list[list[dict]] = []
+    for w in found:  # a row: words whose tops are within 2 points of the row's first
+        if rows and w["top"] - rows[-1][0]["top"] <= 2:
+            rows[-1].append(w)
+        else:
+            rows.append([w])
+    for row in rows:
+        print(f"{row[0]['top']:7.1f} " + " ".join(f"{w['x0']:.0f}:{redact.redact(w['text'], terms).text}"
+                                                for w in sorted(row, key=lambda w: w["x0"])))
+    return 0
+
+
+def _range(spec: str) -> tuple[float, float]:
+    """'300:450' as (300, 450); either end may be left out ('300:' is from 300 on)."""
+    low, _, high = spec.partition(":")
+    return float(low or "-inf"), float(high or "inf")
+
+
+def _within(value: float, bounds: tuple[float, float] | None) -> bool:
+    return bounds is None or bounds[0] <= value <= bounds[1]
 
 
 def cmd_unlock(args: argparse.Namespace) -> int:
@@ -218,6 +261,76 @@ def cmd_prior(args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+def cmd_k1(args: argparse.Namespace) -> int:
+    """Read every Schedule K-1 (Form 1065) face into <workspace>/k1: each box and code, and Parts I and II.
+
+    The values go only to that file. What's printed is masked: which boxes and codes have amounts, the checks that
+    failed and the questions, and with --layout each value's text and where it sits.
+    """
+    from . import k1
+
+    home = workspace.outside_git(workspace.home())
+    terms = workspace.redact_terms()
+
+    def masked(line: str) -> str:
+        return redact.redact(line, terms).text.strip()
+
+    out = home / workspace.K1
+    failed = 0
+    for doc in _documents(args):
+        name = redact.redact(doc.name, terms, bare_years=True).text
+        try:
+            pages, password = _unlocked(doc)
+        except text.UnsupportedDocument as err:
+            print(f"{name}: skipped, {err}")
+            continue
+        faces = [n for n, page in enumerate(pages, 1) if k1.is_face(page)]
+        if not faces or doc.suffix.lower() not in text.PDF_SUFFIXES:
+            continue
+        words = {n: text.words(doc, n, password) for n in faces}
+        found = k1.read(doc.name, words)
+        if not found:
+            continue
+        out.mkdir(parents=True, exist_ok=True)
+        (out / f"{doc.stem}.json").write_text(json.dumps([f.to_json() for f in found], indent=2) + "\n")
+        for f in found:
+            problems = k1.verify(f, words[f.page])
+            bad = f.failed
+            failed += bool(bad or problems)
+            boxes = ", ".join(i.box + (f" {i.code}" if i.code else "") + (" (statement)" if i.statement else "")
+                              for i in f.items)
+            print(f"{name} p{f.page}: {f.year or '?'} K-1 from {masked(f.ein) or 'no EIN found'}, "
+                  f"amounts in {boxes or 'no boxes'}; {len(f.checks) - len(bad)} of {len(f.checks)} checks pass, "
+                  f"{len(f.questions)} questions"
+                  + ("; a retirement plan's (I2): nothing on it goes on the return" if f.retirement_plan else "")
+                  + (f"; a second copy of p{f.copy_of}'s, counted once" if f.copy_of else "")
+                  + ("; final K-1" if f.final else "") + ("; amended" if f.amended else "")
+                  + ("; Schedule K-3 attached" if f.k3_attached else ""))
+            # checks and questions name boxes and lines only, never the document's text: that's in the quotes
+            for c in bad:
+                print(f"  failed: {c.what}" + (f" ({masked(c.quote)})" if c.quote else ""))
+            for p in problems:
+                print(f"  failed: {masked(p)}")
+            for q in f.questions:
+                print(f"  question: {q.text}" + (f" ({masked(q.quote)})" if q.quote else ""))
+            if args.layout:
+                print(f"  partnership {masked(f.partnership)}; entity {masked(f.entity_type)}; "
+                      f"general partner {f.general_partner}, domestic {f.domestic}, publicly traded "
+                      f"{f.publicly_traded}, lower-tier {f.lower_tier}, guarantees {f.guaranteed}, "
+                      f"built-in gain {f.built_in_gain}")
+                for part, rows in (("J", f.shares), ("K1", f.liabilities)):
+                    for key, cols in rows.items():
+                        print(f"  {part} {key}: " + ", ".join(f"{col} {masked(v.quote)}" for col, v in cols.items()))
+                for part, cols in (("L", f.capital), ("N", f.section_704c)):
+                    for key, v in cols.items():
+                        print(f"  {part} {key}: {masked(v.quote)} at {v.top}, {v.x0}")
+                for i in f.items:
+                    print(f"  box {i.box}{' ' + i.code if i.code else ''}: {masked(i.value.quote)} at "
+                          f"{i.value.top}, {i.value.x0}")
+    print(f"wrote to {out}" if out.exists() else "no K-1s found")
+    return 1 if failed else 0
+
+
 def cmd_ui(args: argparse.Namespace) -> int:
     """Open the workspace and a chat in the browser, at http://taxtrace.localhost:8766/."""
     from . import chat, web
@@ -315,6 +428,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("paths", nargs="*", help=PATHS_HELP)
     p.add_argument("--lines", type=int, default=2, help="lines per page (default: 2)")
     p.set_defaults(func=cmd_outline)
+    p = sub.add_parser("words", help="a page's masked words with their positions", description=cmd_words.__doc__)
+    p.add_argument("path", help="a PDF")
+    p.add_argument("--page", type=int, default=1, help="page number (default: 1)")
+    p.add_argument("--x", type=_range, metavar="MIN:MAX", help="only words starting in this range of points")
+    p.add_argument("--top", type=_range, metavar="MIN:MAX", help="only words this far down the page, in points")
+    p.add_argument("--rows", action="store_true", help="one line per row: each word as x:text")
+    p.set_defaults(func=cmd_words)
     p = sub.add_parser("prior", help="read filed returns' carryforwards: depreciation, unallowed passive losses",
                        description=cmd_prior.__doc__)
     p.add_argument("paths", nargs="*", help="returns or folders (default: <workspace>/prior-returns)")
@@ -322,6 +442,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--project", type=int, metavar="YEAR",
                    help="roll the latest return's depreciation forward through YEAR, for returns not in hand yet")
     p.set_defaults(func=cmd_prior)
+    p = sub.add_parser("k1", help="read Schedule K-1 (Form 1065) faces: every box and code, Parts I and II",
+                       description=cmd_k1.__doc__)
+    p.add_argument("paths", nargs="*", help=PATHS_HELP)
+    p.add_argument("--layout", action="store_true", help="also print each value's text and place, masked")
+    p.set_defaults(func=cmd_k1)
     p = sub.add_parser("keychain", help="approve Keychain reads with Apple Watch or Touch ID (macOS)",
                        description=cmd_keychain.__doc__)
     p.add_argument("action", choices=["setup"])

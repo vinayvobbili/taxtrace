@@ -94,6 +94,17 @@ def ocr(path: Path, cache: Path) -> Path:
     return out
 
 
+def words(path: Path, page: int, password: str | None = None) -> list[dict]:
+    """One PDF page's words with where they sit (points from the top left): what a parser of a printed form, whose
+    values aren't in reading order next to their labels, places them by."""
+    import pdfplumber
+
+    with pdfplumber.open(path, password=password or "") as doc:
+        found = doc.pages[page - 1].extract_words(keep_blank_chars=False, use_text_flow=False)
+    return [{"text": w["text"], "x0": round(w["x0"], 1), "x1": round(w["x1"], 1), "top": round(w["top"], 1)}
+            for w in found]
+
+
 def headings(page: str, lines: int = 2) -> list[str]:
     """A page's first non-blank lines, which on a tax form name the form, with column gaps closed up."""
     return [" ".join(ln.split()) for ln in page.splitlines() if ln.strip()][:lines]

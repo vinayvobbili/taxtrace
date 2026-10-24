@@ -118,6 +118,7 @@ class Check:
     what: str
     ok: bool
     page: int
+    quote: str = ""  # the document's own text the check is about, kept apart so `what` holds none
 
 
 @dataclass

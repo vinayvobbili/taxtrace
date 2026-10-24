@@ -17,8 +17,9 @@ OCR_CACHE = "ocr-cache"
 REDACTED = "redacted"
 MANIFEST = "imports.jsonl"
 CARRYFORWARDS = "carryforwards"
+K1 = "k1"
 # taxtrace's own files and folders in the workspace, never read back as documents: its output and its settings
-DERIVED = {OCR_CACHE, REDACTED, MANIFEST, TERMS_FILE, CARRYFORWARDS}
+DERIVED = {OCR_CACHE, REDACTED, MANIFEST, TERMS_FILE, CARRYFORWARDS, K1}
 KEYCHAIN_SERVICE = "taxtrace"
 KEYCHAIN_DEFAULT = "default"  # tried after the file's own entry: one password for every return a preparer sends
 
@@ -70,7 +71,7 @@ def _keychain_password(service: str, account: str) -> str | None:
     (`taxtrace keychain setup`), that prompt takes Apple Watch or Touch ID instead of the typed password."""
     from . import gate
 
-    if gate.ready():
+    if gate.adopted(service, account):  # other entries don't trust the helper: through it they'd ask twice
         found = gate.read(service, account, f"open your tax documents (Keychain entry '{account}')")
         return found.rstrip("\n") if found is not None else None
     r = subprocess.run(["security", "find-generic-password", "-s", service, "-a", account, "-w"],

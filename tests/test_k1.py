@@ -1,0 +1,197 @@
+"""Schedule K-1 faces drawn at the IRS form's own positions, for a made-up partnership. Every value is invented."""
+
+from __future__ import annotations
+
+import json
+from decimal import Decimal
+from pathlib import Path
+
+import pytest
+
+from taxtrace import cli, k1, text
+
+PARTNERSHIP = "Larkspur Ridge Fund LP"
+EIN = "88-1234567"
+# (x, top, text): each phrase is drawn in one piece, as the form prints it
+FACE = [
+    (326, 39, "X"), (336, 40, "Final K-1"), (415, 40, "Amended K-1"),
+    (193, 83, "For calendar year 2025, or tax year"),
+    (48, 145, "Part I Information About the Partnership"), (319, 49, "Part III Partner's Share of Current Year"),
+    (40, 160, "A Partnership's employer identification number"), (146, 169, EIN),
+    (40, 184, "B Partnership's name, address, city, state, and ZIP code"), (40, 193, PARTNERSHIP),
+    (40, 204, "77 Quarrystone Way, Fernmoor, ZZ 00000"),
+    (47, 253, "Part II Information About the Partner"),
+    (41, 268, "E Partner's SSN or TIN"), (141, 277, "XXX-XX-4410"),
+    (40, 339, "G"), (72, 339, "General partner or LLC"), (181, 338, "X"), (194, 339, "Limited partner or other LLC"),
+    (38, 363, "H1"), (59, 362, "X"), (72, 364, "Domestic partner"), (194, 364, "Foreign partner"),
+    (40, 400, "I1 What type of entity is this partner?"), (175, 399, "Individual"),
+    (40, 412, "I2 If this partner is a retirement plan (IRA/SEP/Keogh/etc.), check here"),
+    (41, 424, "J Partner's share of profit, loss, and capital (see instructions):"),
+    (110, 434, "Beginning"), (230, 434, "Ending"),
+    (57, 448, "Profit"), (130, 445, "4.1200000"), (238, 445, "3.9800000"),
+    (57, 460, "Loss"), (130, 457, "4.1200000"), (238, 457, "3.9800000"),
+    (57, 472, "Capital"), (130, 469, "4.1200000"), (238, 469, "3.9800000"),
+    (38, 508, "K1 Partner's share of liabilities:"), (160, 518, "Beginning"), (251, 518, "Ending"),
+    (57, 532, "Nonrecourse"), (190, 529, "1,200"), (280, 529, "1,150"),
+    (57, 548, "Qualified nonrecourse"), (57, 556, "financing"), (180, 555, "14,300"), (262, 555, "13,900"),
+    (57, 568, "Recourse"),
+    (38, 579, "K2 Check this box if item K1 includes liability amounts from lower-tier partnerships"),
+    (38, 591, "K3 Check if any of the above liability is subject to guarantees or other"),
+    (57, 600, "payment obligations by the partner. See instructions"),
+    (41, 616, "L Partner's Capital Account Analysis"),
+    (57, 628, "Beginning capital account"), (270, 625, "18,500"),
+    (57, 640, "Capital contributed during the year"), (290, 637, "0"),
+    (57, 652, "Current year net income (loss)"), (266, 649, "(2,298)"),
+    (57, 664, "Other increase (decrease) (attach explanation)"),
+    (57, 676, "Withdrawals and distributions"), (280, 673, "900"),
+    (57, 688, "Ending capital account"), (270, 685, "15,302"),
+    (40, 700, "M Did the partner contribute property with a built-in gain (loss)?"),
+    (72, 712, "Yes"), (101, 711, "X"), (115, 712, "No"),
+    (40, 724, "N Partner's Share of Net Unrecognized Section 704(c) Gain or (Loss)"),
+    (57, 735, "Beginning"), (57, 747, "Ending"),
+    # Part III, left column
+    (318, 74.5, "1"), (334, 74.5, "Ordinary business income (loss)"), (410, 84.7, "(4,210)"),
+    (318, 98.5, "2"), (334, 98.5, "Net rental real estate income (loss)"), (420, 108.7, "1,875"),
+    (318, 218.5, "5"), (334, 218.5, "Interest income"), (435, 228.7, "37"),
+    (316, 410.5, "9c"), (334, 410.5, "Unrecaptured section 1250 gain"),
+    (316, 530.5, "13"), (334, 530.5, "Other deductions"), (316, 540.7, "AE"), (430, 540.7, "112"),
+    (316, 603, "22"), (334, 603, "More than one activity for at-risk purposes*"),
+    (316, 615, "23"), (334, 615, "More than one activity for passive activity purposes*"),
+    # right column
+    (453, 74.5, "14"), (471, 74.5, "Self-employment earnings (loss)"),
+    (453, 170.5, "16"), (472, 170.5, "Schedule K-3 is attached if"), (472, 180.5, "checked"), (563, 180.3, "4"),
+    (453, 350.5, "19"), (471, 350.5, "Distributions"), (452, 362.7, "A"), (550, 362.7, "900"),
+    (453, 398.5, "20"), (471, 398.5, "Other information"), (452, 410.7, "A"), (560, 410.7, "37"),
+    (452, 422.7, "Z*"), (540, 422.7, "STMT"),
+    (453, 506.5, "21"), (471, 506.5, "Foreign taxes paid or accrued"),
+    (362, 760, "Cat. No. 11394R"), (452, 760, "Schedule K-1 (Form 1065) 2025"),
+]
+SECRETS = ["4,210", "1,875", "18,500", "15,302", "2,298", "14,300", "Larkspur", "Quarrystone", "1234567", "4410"]
+
+
+def draw(path: Path, pages: list[list[tuple[float, float, str]]]) -> Path:
+    from reportlab.lib.pagesizes import letter
+    from reportlab.pdfgen import canvas
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    c = canvas.Canvas(str(path), pagesize=letter)
+    for page in pages:
+        c.setFont("Helvetica", 7)
+        for x, top, phrase in page:
+            c.drawString(x, letter[1] - top - 5.2, phrase)  # a 7-point word's top sits about 5 points over its baseline
+        c.showPage()
+    c.save()
+    return path
+
+
+def edited(face: list, **changes: str) -> list:
+    """The face with some phrases replaced: {old text: new text}."""
+    swap = {old.replace("_", " "): new for old, new in changes.items()}
+    return [(x, top, swap.get(phrase, phrase)) for x, top, phrase in face]
+
+
+@pytest.fixture
+def face_pdf(tmp_path: Path) -> Path:
+    return draw(tmp_path / "2025 K-1 Larkspur.pdf", [[(40, 40, "Schedule K-1 cover letter")], FACE])
+
+
+def read(path: Path) -> list[k1.K1]:
+    pages = text.pages(path)
+    return k1.read(path.name, {n: text.words(path, n) for n, p in enumerate(pages, 1) if k1.is_face(p)})
+
+
+def test_every_box_and_code_is_read_by_where_it_sits(face_pdf: Path):
+    (found,) = read(face_pdf)
+    assert found.page == 2 and found.year == 2025
+    assert [(i.box, i.code, i.value.amount, i.statement) for i in found.items] == [
+        ("1", "", Decimal(-4210), False), ("2", "", Decimal(1875), False), ("5", "", Decimal(37), False),
+        ("13", "AE", Decimal(112), False), ("19", "A", Decimal(900), False), ("20", "A", Decimal(37), False),
+        ("20", "Z", None, True),
+    ]  # box 9c's "1250" is its label, and "(Form 1065) 2025" is the footer: neither is an amount
+    assert found.k3_attached  # box 16's mark, a check mark drawn as ZapfDingbats' "4"
+    assert found.more_than_one_activity == {"22": False, "23": False}
+    assert found.final and not found.amended
+    assert not found.failed
+    assert [q.text for q in found.questions] == [
+        "a final K-1: was the partnership interest sold or the partnership wound up? Its passive losses carried "
+        "over from earlier years may be allowed in full this year.",
+        "box 20 code Z: the amount is on the partnership's attached statement"]
+    assert k1.verify(found, text.words(face_pdf, 2)) == []
+
+
+def test_parts_one_and_two_are_read_by_their_labels(face_pdf: Path):
+    (found,) = read(face_pdf)
+    assert (found.ein, found.partnership, found.partner) == (EIN, PARTNERSHIP, "4410")
+    assert (found.general_partner, found.domestic, found.entity_type) == (False, True, "Individual")
+    assert not found.retirement_plan and not found.lower_tier and not found.guaranteed
+    assert found.built_in_gain is False
+    assert {k: (v["beginning"].amount, v["ending"].amount) for k, v in found.shares.items()} == {
+        "profit": (Decimal("4.12"), Decimal("3.98")), "loss": (Decimal("4.12"), Decimal("3.98")),
+        "capital": (Decimal("4.12"), Decimal("3.98"))}
+    assert {k: (v["beginning"].amount, v["ending"].amount) for k, v in found.liabilities.items() if v} == {
+        "nonrecourse": (Decimal(1200), Decimal(1150)), "qualified_nonrecourse": (Decimal(14300), Decimal(13900))}
+    assert {k: v.amount for k, v in found.capital.items()} == {
+        "beginning": Decimal(18500), "contributed": Decimal(0), "current_year": Decimal(-2298),
+        "withdrawals": Decimal(900), "ending": Decimal(15302)}
+    assert found.section_704c == {}
+
+
+def test_a_capital_account_that_does_not_add_up_fails(tmp_path: Path):
+    path = draw(tmp_path / "k1.pdf", [edited(FACE, **{"15,302": "15,320"})])
+    (found,) = read(path)
+    assert [(c.what, c.quote) for c in found.failed] == [
+        ("item L: the beginning capital account plus this year's changes is the ending", "15302 against 15,320")]
+
+
+def test_a_copy_counts_once_and_another_partners_k1_is_its_own(tmp_path: Path):
+    spouse = edited(FACE, **{"XXX-XX-4410": "XXX-XX-7302"})
+    path = draw(tmp_path / "k1s.pdf", [FACE, FACE, spouse])
+    first, copy, other = read(path)
+    assert (first.copy_of, copy.copy_of, other.copy_of) == (None, 1, None)
+    assert copy.questions == [] and other.partner == "7302"
+
+
+def test_an_ira_k1_is_marked_and_asks_nothing(tmp_path: Path):
+    path = draw(tmp_path / "ira.pdf", [[*edited(FACE, Individual="NOMINEE IRA"), (300, 411, "X")]])
+    (found,) = read(path)
+    assert found.retirement_plan and found.entity_type == "NOMINEE IRA"
+    assert found.questions == []
+
+
+def test_a_page_that_is_not_a_face_is_skipped(tmp_path: Path):
+    words = [{"text": "1", "x0": 318.0, "x1": 322.0, "top": 74.5}]
+    assert k1.face("x.pdf", 1, words) is None
+
+
+def test_cli_writes_the_values_and_prints_none(face_pdf: Path, workspace_home: Path, capsys):
+    assert cli.main(["k1", str(face_pdf), "--layout"]) == 0
+    out = capsys.readouterr().out
+    for secret in SECRETS:
+        assert secret not in out
+    assert "amounts in 1, 2, 5, 13 AE, 19 A, 20 A, 20 Z (statement); 10 of 10 checks pass, 2 questions" in out
+    assert "question: box 20 code Z: the amount is on the partnership's attached statement (****)" in out
+    assert "box 1: (#,###) at" in out
+    saved = json.loads((workspace_home / "k1" / "2025 K-1 Larkspur.json").read_text())
+    assert saved[0]["items"][0] | {"value": None} == {"box": "1", "code": "", "value": None, "statement": False,
+                                                      "label": "Ordinary business income (loss)"}
+    assert saved[0]["capital"]["ending"]["amount"] == "15302"
+
+
+def test_cli_failure_names_the_line_and_masks_the_amounts(tmp_path: Path, capsys):
+    path = draw(tmp_path / "k1.pdf", [edited(FACE, **{"15,302": "15,320"})])
+    assert cli.main(["k1", str(path)]) == 1
+    assert ("failed: item L: the beginning capital account plus this year's changes is the ending "
+            "(##### against ##,###)") in capsys.readouterr().out
+
+
+def test_words_by_row_within_a_region(face_pdf: Path, capsys):
+    assert cli.main(["words", str(face_pdf), "--page", "2", "--x", "300:", "--top", "70:90", "--rows"]) == 0
+    labels, value = capsys.readouterr().out.splitlines()  # the rows of boxes 1 and 14, then box 1's amount
+    assert labels.split()[1:3] == ["318:#", "334:Ordinary"] and "453:## 471:Self-employment" in labels
+    assert value.split()[1:] == ["410:(#,###)"]
+
+
+def test_a_name_that_is_not_a_path_is_looked_up_in_the_workspace(workspace_home: Path, capsys):
+    draw(workspace_home / "2025" / "k1.pdf", [FACE])
+    assert cli.main(["k1", "2025"]) == 0
+    assert "k#.pdf p1: 2025 K-1" in capsys.readouterr().out

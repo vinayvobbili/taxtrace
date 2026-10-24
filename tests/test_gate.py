@@ -17,6 +17,7 @@ if [ "$1" = --adopt ]; then
   case "$2/$3" in
     taxtrace/default) exit 0 ;;
     taxtrace/stuck) echo "couldn't save the new entry; the secret is in taxtrace.taxtrace-backup" >&2; exit 4 ;;
+    taxtrace/refused) echo "the old entry's read wasn't allowed (-128); nothing changed" >&2; exit 1 ;;
     *) exit 2 ;;
   esac
 fi
@@ -34,6 +35,7 @@ def fake_gate(no_real_gate: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     no_real_gate.parent.mkdir(parents=True)
     no_real_gate.write_text(FAKE)
     no_real_gate.chmod(0o755)
+    no_real_gate.with_suffix(".adopted").write_text("taxtrace\tdefault\nanthropic\t\ntaxtrace\tdenied\n")
     monkeypatch.setattr(gate.sys, "platform", "darwin")
     workspace._keychain_password.cache_clear()
     yield no_real_gate
@@ -46,14 +48,27 @@ def test_without_the_helper_nothing_goes_through_it(no_real_gate: Path):
 
 def test_tax_document_passwords_come_through_the_helper(fake_gate: Path, monkeypatch: pytest.MonkeyPatch):
     real_run = subprocess.run
+    classic = []
 
-    def no_security(cmd, **kw):
-        assert cmd[0] != "security", "the classic Keychain prompt was used"
+    def spy(cmd, **kw):
+        if cmd[0] == "security":  # the classic prompt, for an entry setup didn't move over
+            classic.append(cmd[cmd.index("-a") + 1])
+            return subprocess.CompletedProcess(cmd, 44, "", "")  # 44: no such entry
         return real_run(cmd, **kw)
-    monkeypatch.setattr(subprocess, "run", no_security)
+    monkeypatch.setattr(subprocess, "run", spy)
     monkeypatch.setattr(workspace.sys, "platform", "darwin")
     assert workspace.pdf_passwords(Path("2024 Return.pdf")) == ["not-a-real-password"]  # the file's own entry: none
+    assert classic == ["2024 Return.pdf"]  # never the default entry, which goes through the helper only
     assert workspace._keychain_password("taxtrace", "denied") is None
+
+
+def test_an_entry_setup_did_not_move_is_read_the_classic_way(no_real_gate: Path, monkeypatch: pytest.MonkeyPatch):
+    """Through the helper it would ask twice: the approval, then the classic prompt, since it isn't trusted."""
+    no_real_gate.parent.mkdir(parents=True)
+    no_real_gate.write_text("#!/bin/sh\nexit 9\n")
+    no_real_gate.chmod(0o755)
+    monkeypatch.setattr(gate.sys, "platform", "darwin")
+    assert gate.ready() and not gate.adopted("taxtrace", "default")
 
 
 def test_the_chat_key_comes_through_the_helper(fake_gate: Path, monkeypatch: pytest.MonkeyPatch):
@@ -66,10 +81,17 @@ def test_the_chat_key_comes_through_the_helper(fake_gate: Path, monkeypatch: pyt
 
 
 def test_entries_move_over_without_the_secret_retyped(fake_gate: Path):
+    fake_gate.with_suffix(".adopted").unlink()
     assert gate.adopt("taxtrace", "default") is True
+    assert gate.adopted("taxtrace", "default")  # from now on its reads go through the helper
+    assert gate.adopt("taxtrace", "default") is True
+    assert fake_gate.with_suffix(".adopted").read_text() == "taxtrace\tdefault\n"  # listed once
     assert gate.adopt("taxtrace", "no-such-entry") is False
     with pytest.raises(gate.GateError, match="taxtrace-backup"):  # says where the secret is kept
         gate.adopt("taxtrace", "stuck")
+    with pytest.raises(gate.GateError, match="wasn't allowed"):  # a denied prompt isn't "no such entry"
+        gate.adopt("taxtrace", "refused")
+    assert not gate.adopted("taxtrace", "refused")
 
 
 def test_setup_moves_every_entry_over(monkeypatch: pytest.MonkeyPatch, capsys):
@@ -90,7 +112,10 @@ def test_new_entries_are_stored_for_the_helper_once_it_is_built(fake_gate: Path)
 
 @pytest.mark.skipif(sys.platform != "darwin" or not shutil.which("swiftc"), reason="needs macOS and swiftc")
 def test_the_helper_builds_signs_and_refuses_bad_usage(no_real_gate: Path):
+    no_real_gate.parent.mkdir(parents=True)
+    no_real_gate.with_suffix(".adopted").write_text("taxtrace\tdefault\n")
     assert gate.build() is True
+    assert not gate.adopted("taxtrace", "default")  # trusted the old binary: setup moves it over again
     assert gate.current() and gate.build() is False  # built once, kept: entries trust this exact binary
     sign = subprocess.run(["codesign", "-dv", str(no_real_gate)], capture_output=True, text=True)
     assert f"Identifier={gate.IDENTIFIER}" in sign.stderr
