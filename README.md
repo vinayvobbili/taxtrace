@@ -58,12 +58,15 @@ ordinary words (Will, Grace) go in `<workspace>/redact-terms.txt`, one per line.
 
 A password-protected PDF is read with a password kept in the macOS Keychain, never in a file or on a
 command line. One `default` entry covers every return that shares a password; an entry under a file's
-name wins for that file. `security` asks for it without echoing:
+name wins for that file. `security` asks for it without echoing, and `-T ""` trusts no app, so macOS
+asks you (Allow / Deny) each time anything reads it, taxtrace included:
 
 ```bash
-security add-generic-password -s taxtrace -a default -w
-security add-generic-password -s taxtrace -a "2024 Return.pdf" -w   # just this file
+security add-generic-password -s taxtrace -a default -T "" -w
+security add-generic-password -s taxtrace -a "2024 Return.pdf" -T "" -w   # just this file
 ```
+
+Click **Allow**, not **Always Allow**: that would add the reader to the trusted list and end the prompts.
 
 ## Development
 

@@ -35,7 +35,9 @@ def outside_git(path: Path) -> Path:
 
 
 def keychain_hint() -> str:
-    return (f"security add-generic-password -s {KEYCHAIN_SERVICE} -a {KEYCHAIN_DEFAULT} -w "
+    # -T "" trusts no app, so macOS asks the person (Allow / Deny) every time anything reads the entry,
+    # this tool included: nothing running as them can take the password without their click.
+    return (f"security add-generic-password -s {KEYCHAIN_SERVICE} -a {KEYCHAIN_DEFAULT} -T \"\" -w "
             f"(or -a '<file name>' for one file)")
 
 
