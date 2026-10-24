@@ -39,18 +39,25 @@ pip install -e ".[dev]"
 ## Use
 
 ```bash
+taxtrace import ~/Downloads/portal-export.zip  # filed returns to prior-returns/, the rest by tax year
 taxtrace redact ~/TaxData/prior-returns        # writes ~/TaxData/redacted/*.txt
 ```
+
+`import` takes a folder or a zip, such as a tax preparer's portal export with one folder per year. It
+skips identity documents (driver's licenses, Social Security cards, passports) and anything already
+imported, and records every file it places, with its sha256, in `imports.jsonl`.
 
 Your documents and everything derived from them live in a workspace folder, `~/TaxData` or
 `$TAXTRACE_HOME`, which taxtrace refuses to place inside a git repository. Names that are also
 ordinary words (Will, Grace) go in `<workspace>/redact-terms.txt`, one per line.
 
-A password-protected PDF is read with a password kept in the macOS Keychain under the file's name, never
-in a file or on a command line. `security` asks for it without echoing:
+A password-protected PDF is read with a password kept in the macOS Keychain, never in a file or on a
+command line. One `default` entry covers every return that shares a password; an entry under a file's
+name wins for that file. `security` asks for it without echoing:
 
 ```bash
-security add-generic-password -s taxtrace -a "2024 Return.pdf" -w
+security add-generic-password -s taxtrace -a default -w
+security add-generic-password -s taxtrace -a "2024 Return.pdf" -w   # just this file
 ```
 
 ## Development

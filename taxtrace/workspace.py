@@ -13,6 +13,7 @@ from pathlib import Path
 
 TERMS_FILE = "redact-terms.txt"
 KEYCHAIN_SERVICE = "taxtrace"
+KEYCHAIN_DEFAULT = "default"  # tried after the file's own entry: one password for every return a preparer sends
 
 
 def home() -> Path:
@@ -33,20 +34,25 @@ def outside_git(path: Path) -> Path:
 
 
 def keychain_hint() -> str:
-    return f"security add-generic-password -s {KEYCHAIN_SERVICE} -a '<file name>' -w"
+    return (f"security add-generic-password -s {KEYCHAIN_SERVICE} -a {KEYCHAIN_DEFAULT} -w "
+            f"(or -a '<file name>' for one file)")
 
 
-def pdf_password(path: Path) -> str | None:
-    """A locked PDF's password from the macOS Keychain, stored under the file's name.
+def pdf_passwords(path: Path) -> list[str]:
+    """Passwords to try on a locked PDF, from the macOS Keychain: the file's own entry, then the default one.
 
-    Kept there, never in a file or on a command line, so it can't land in shell history, a repo or a chat. Store
+    Kept there, never in a file or on a command line, so they can't land in shell history, a repo or a chat. Store
     one with `keychain_hint()`: `-w` last, with no value, makes `security` ask for it without echoing.
     """
     if sys.platform != "darwin":
-        return None
-    found = subprocess.run(["security", "find-generic-password", "-s", KEYCHAIN_SERVICE, "-a", path.name, "-w"],
+        return []
+    found = []
+    for account in (path.name, KEYCHAIN_DEFAULT):
+        r = subprocess.run(["security", "find-generic-password", "-s", KEYCHAIN_SERVICE, "-a", account, "-w"],
                            capture_output=True, text=True)
-    return found.stdout.rstrip("\n") if found.returncode == 0 else None
+        if r.returncode == 0:
+            found.append(r.stdout.rstrip("\n"))
+    return found
 
 
 def redact_terms(path: Path | None = None) -> list[str]:

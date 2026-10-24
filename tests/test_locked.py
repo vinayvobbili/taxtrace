@@ -25,17 +25,29 @@ def test_a_locked_pdf_says_so(locked: Path):
 
 def test_redact_takes_the_password_from_the_keychain(locked: Path, tmp_path: Path, monkeypatch, capsys):
     out = tmp_path / "redacted"
-    monkeypatch.setattr(workspace, "pdf_password", lambda path: None)
+    monkeypatch.setattr(workspace, "pdf_passwords", lambda path: [])
     assert cli.main(["redact", str(locked), "--out", str(out)]) == 0
     printed = capsys.readouterr().out
-    assert "password-protected" in printed and "security add-generic-password -s taxtrace" in printed
+    assert "password-protected" in printed and "security add-generic-password -s taxtrace -a default" in printed
+    assert "wrote 0 of 1 files" in printed
     assert PASSWORD not in printed and not list(out.iterdir())
 
-    monkeypatch.setattr(workspace, "pdf_password", lambda path: PASSWORD if path == locked else None)
+    # The file's own entry is wrong; the default one opens it.
+    monkeypatch.setattr(workspace, "pdf_passwords", lambda path: ["stale", PASSWORD] if path == locked else [])
     assert cli.main(["redact", str(locked), "--out", str(out)]) == 0
+    assert "wrote 1 of 1 files" in capsys.readouterr().out
     [written] = list(out.iterdir())
     assert "Form 8582 Worksheet 5" in written.read_text()
 
 
-def test_keychain_lookup_misses_cleanly(tmp_path: Path):
-    assert workspace.pdf_password(tmp_path / "no-such-file-taxtrace-test.pdf") is None
+def test_wrong_passwords_only_still_say_locked(locked: Path, tmp_path: Path, monkeypatch, capsys):
+    monkeypatch.setattr(workspace, "pdf_passwords", lambda path: ["stale"])
+    assert cli.main(["redact", str(locked), "--out", str(tmp_path / "r")]) == 0
+    assert "doesn't open it" in capsys.readouterr().out
+
+
+def test_keychain_lookup_misses_cleanly(tmp_path: Path, monkeypatch):
+    # Never the real default entry: this machine may hold one.
+    monkeypatch.setattr(workspace, "KEYCHAIN_DEFAULT", "no-such-account-taxtrace-test")
+    assert workspace.pdf_passwords(tmp_path / "no-such-file-taxtrace-test.pdf") == []
+
