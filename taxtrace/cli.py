@@ -55,10 +55,27 @@ def _open(doc: Path) -> list[str]:
     failure = text.Locked("password-protected")
     for password in passwords():
         try:
-            return text.pages(doc, password)
+            return text.pages(doc, password, ocr_cache=workspace.ocr_cache())
         except text.Locked as err:
             failure = err  # the last says best why: no password stored, or none that opened it
     raise failure
+
+
+def cmd_outline(args: argparse.Namespace) -> int:
+    """Each page's first lines, masked: which forms and worksheets a document holds, and in what order."""
+    terms = workspace.redact_terms()
+    for doc in text.documents([Path(p) for p in args.paths]):
+        name = redact.redact(doc.name, terms, bare_years=True).text
+        try:
+            pages = _open(doc)
+        except text.UnsupportedDocument as err:
+            print(f"{name}: skipped, {err}")
+            continue
+        print(f"{name}: {len(pages)} pages")
+        for n, page in enumerate(pages, 1):
+            heads = [redact.redact(h, terms).text for h in text.headings(page, args.lines)]
+            print(f"  p{n}: {' | '.join(heads) if heads else '(blank)'}")
+    return 0
 
 
 def cmd_unlock(args: argparse.Namespace) -> int:
@@ -133,6 +150,10 @@ def build_parser() -> argparse.ArgumentParser:
                        description=cmd_unlock.__doc__)
     p.add_argument("paths", nargs="+", help="documents or folders")
     p.set_defaults(func=cmd_unlock)
+    p = sub.add_parser("outline", help="list each page's masked heading", description=cmd_outline.__doc__)
+    p.add_argument("paths", nargs="+", help="documents or folders")
+    p.add_argument("--lines", type=int, default=2, help="lines per page (default: 2)")
+    p.set_defaults(func=cmd_outline)
     return ap
 
 

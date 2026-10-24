@@ -43,6 +43,11 @@ taxtrace import ~/Downloads/portal-export.zip  # filed returns to prior-returns/
 taxtrace redact ~/TaxData/prior-returns        # writes ~/TaxData/redacted/*.txt
 ```
 
+`taxtrace outline <files>` lists each page's masked heading: which forms a document holds, in order.
+A scanned PDF (pictures of pages, no text) is read through [ocrmypdf](https://ocrmypdf.readthedocs.io)
+on your machine (`brew install ocrmypdf`), once: the searchable copy is kept under the original's sha256
+in `<workspace>/ocr-cache`, so the text values are quoted from never shifts.
+
 `import` takes a folder or a zip, such as a tax preparer's portal export with one folder per year. It
 skips identity documents (driver's licenses, Social Security cards, passports) and anything already
 imported, and records every file it places, with its sha256, in `imports.jsonl`.

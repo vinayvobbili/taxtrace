@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 
 TERMS_FILE = "redact-terms.txt"
+OCR_CACHE = "ocr-cache"
 KEYCHAIN_SERVICE = "taxtrace"
 KEYCHAIN_DEFAULT = "default"  # tried after the file's own entry: one password for every return a preparer sends
 
@@ -73,6 +74,11 @@ def shape(secret: str) -> str:
         return "_" if c.isspace() else "*"
 
     return f"{len(secret)} characters: {''.join(cls(c) for c in secret)}"
+
+
+def ocr_cache() -> Path:
+    """Searchable copies of scanned PDFs, by sha256: tax data, so in the workspace like the originals."""
+    return outside_git(home() / OCR_CACHE)
 
 
 def redact_terms(path: Path | None = None) -> list[str]:
