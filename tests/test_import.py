@@ -119,8 +119,19 @@ def test_cli_dry_run_copies_nothing(portal_zip: Path, workspace_home: Path, caps
     assert not workspace_home.exists() or not files(workspace_home)
 
 
-def test_cli_rejects_a_plain_file(tmp_path: Path, capsys):
-    not_zip = tmp_path / "x.pdf"
-    not_zip.write_bytes(PDF)
-    assert cli.main(["import", str(not_zip)]) == 1
-    assert "not a folder or a zip" in capsys.readouterr().err
+def test_cli_takes_single_files_into_the_year_given_and_masks_their_names(tmp_path: Path, workspace_home: Path,
+                                                                           capsys):
+    k1 = tmp_path / "Quillfeather Ridge K-1 Package.pdf"
+    k1.write_bytes(PDF + b"k1")
+    k3 = tmp_path / "Quillfeather 2024 Schedule K-3.pdf"  # the year in a name loses to the one given
+    k3.write_bytes(PDF + b"k3")
+    assert cli.main(["import", str(k1), str(k3), "--year", "2025"]) == 0
+    out = capsys.readouterr().out
+    assert files(workspace_home) == {"2025/Quillfeather Ridge K-1 Package.pdf",
+                                     "2025/Quillfeather 2024 Schedule K-3.pdf"}
+    assert "copied 2 of 2 files" in out and "K-1" in out and "Quillfeather" not in out
+
+
+def test_cli_names_a_missing_source(tmp_path: Path, capsys):
+    assert cli.main(["import", str(tmp_path / "gone.pdf")]) == 1
+    assert "no such file or folder" in capsys.readouterr().err

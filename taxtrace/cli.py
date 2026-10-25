@@ -167,15 +167,21 @@ def cmd_unlock(args: argparse.Namespace) -> int:
 
 
 def cmd_import(args: argparse.Namespace) -> int:
-    """Copy a folder or zip of documents into the workspace: filed returns to prior-returns/, the rest by tax year."""
+    """Copy folders, zips or single files of documents into the workspace: filed returns to prior-returns/, the rest
+    by tax year. File names are printed masked, since a name can carry a person's or a partnership's."""
     home = workspace.outside_git(workspace.home())
-    try:
-        placed = importer.import_documents(Path(args.source), home, dry_run=args.dry_run)
-    except ValueError as err:
-        print(err, file=sys.stderr)
+    terms = workspace.redact_terms()
+    if missing := [Path(s).name for s in args.sources if not Path(s).exists()]:
+        for name in missing:
+            print(f"{redact.redact(name, terms, bare_years=True).text}: no such file or folder", file=sys.stderr)
         return 1
+    placed: list[importer.Placement] = []
+    for source in args.sources:
+        placed += importer.import_documents(Path(source), home, dry_run=args.dry_run,
+                                            year=str(args.year) if args.year else None)
     for p in placed:
-        print(f"{p.dest or '-':<45} {p.source}" + ("" if p.dest else f"  ({p.reason})"))
+        dest, source = (redact.redact(s, terms, bare_years=True).text if s else "-" for s in (p.dest, p.source))
+        print(f"{dest:<45} {source}" + ("" if p.dest else f"  ({p.reason})"))
     copied = [p for p in placed if p.dest]
     verb = "would copy" if args.dry_run else "copied"
     print(f"{verb} {len(copied)} of {len(placed)} files into {home}")
@@ -592,7 +598,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_redact)
     p = sub.add_parser("import", help="copy documents into the workspace, sorted by tax year",
                        description=cmd_import.__doc__)
-    p.add_argument("source", help="a folder, or a zip such as a tax preparer's portal export")
+    p.add_argument("sources", nargs="+", metavar="source",
+                   help="a folder, a zip such as a tax preparer's portal export, or a single file")
+    p.add_argument("--year", type=int, help="the tax year of every file that isn't a filed return "
+                                            "(default: read from its folder's name, else its own)")
     p.add_argument("--dry-run", action="store_true", help="show where each file would go, copy nothing")
     p.set_defaults(func=cmd_import)
     p = sub.add_parser("unlock", help="check which stored password opens each locked PDF",

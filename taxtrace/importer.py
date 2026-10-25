@@ -1,6 +1,7 @@
 """Bring a folder or zip of documents into the workspace, sorted by tax year.
 
-Made for what a tax preparer's portal hands back (one folder per year, often zipped), but any folder works:
+Made for what a tax preparer's portal hands back (one folder per year, often zipped), but any folder works, and so
+does a single file, such as a K-1 just downloaded from a partnership's portal:
 
 - a filed return goes to `prior-returns/`, whatever year's folder it sat in;
 - anything else goes to `<year>/`, the year read from its folder's name, else from its own;
@@ -44,7 +45,7 @@ class Placement:
 
 
 def _sources(src: Path) -> Iterator[tuple[str, Callable[[], bytes]]]:
-    """(name, reader) for every file in a folder or zip.
+    """(name, reader) for every file in a folder or zip, or for one file (a K-1 just downloaded).
 
     A folder's own name leads its files' names, since it often says the year ("2025 TAX"). A zip's doesn't: an
     export is named for the day it was made.
@@ -57,8 +58,10 @@ def _sources(src: Path) -> Iterator[tuple[str, Callable[[], bytes]]]:
             for info in sorted(zf.infolist(), key=lambda i: i.filename):
                 if not info.is_dir():
                     yield info.filename, (lambda info=info: zf.read(info))
+    elif src.is_file():
+        yield src.name, src.read_bytes
     else:
-        raise ValueError(f"{src.name}: not a folder or a zip")
+        raise ValueError(f"{src.name}: no such file or folder")
 
 
 def tax_year(name: str) -> str | None:
@@ -70,7 +73,8 @@ def tax_year(name: str) -> str | None:
     return None
 
 
-def destination(name: str) -> tuple[str | None, str]:
+def destination(name: str, year: str | None = None) -> tuple[str | None, str]:
+    """Where a file goes; `year`, when given, is the tax year of everything that isn't a filed return."""
     filename = PurePosixPath(name).name
     if filename in SKIP:
         return None, "system file"
@@ -78,6 +82,8 @@ def destination(name: str) -> tuple[str | None, str]:
         return None, "identity document"
     if RETURN.search(filename):
         return PRIOR_RETURNS, "filed return"
+    if year:
+        return year, "tax year given"
     year = tax_year(name)
     return (year, "tax year") if year else (UNSORTED, "no year in its name")
 
@@ -95,13 +101,13 @@ def _known_hashes(home: Path) -> set[str]:
     return {json.loads(line)["sha256"] for line in manifest.read_text().splitlines() if line.strip()}
 
 
-def import_documents(src: Path, home: Path, dry_run: bool = False) -> list[Placement]:
+def import_documents(src: Path, home: Path, dry_run: bool = False, year: str | None = None) -> list[Placement]:
     known = _known_hashes(home)
     placed: list[Placement] = []
     records: list[dict] = []
     planned: set[Path] = set()  # this run's targets, so a dry run names clashes the way a real one would
     for name, read in _sources(src):
-        folder, reason = destination(name)
+        folder, reason = destination(name, year)
         if folder is None:
             placed.append(Placement(name, None, reason))
             continue
