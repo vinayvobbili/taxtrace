@@ -882,6 +882,13 @@ def cmd_keychain(args: argparse.Namespace) -> int:
     """
     from . import chat, gate
 
+    if args.action == "check":
+        try:
+            print(gate.check(args.attempt), end="")
+        except gate.GateError as err:
+            print(f"taxtrace: {err}", file=sys.stderr)
+            return 1
+        return 0
     if args.action == "read":
         if not args.item or not args.caller:
             print("taxtrace: keychain read takes the item and --for, the tool reading it", file=sys.stderr)
@@ -1037,9 +1044,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_passive)
     p = sub.add_parser("keychain", help="approve Keychain reads with Apple Watch or Touch ID (macOS)",
                        description=cmd_keychain.__doc__)
-    p.add_argument("action", choices=["setup", "status", "read"],
+    p.add_argument("action", choices=["setup", "status", "read", "check"],
                    help="setup: build the helper and move entries over; status: how each entry is read now; "
-                        "read: give another tool an entry setup moved, once approved")
+                        "read: give another tool an entry setup moved, once approved; check: which ways of "
+                        "approving (Touch ID, Apple Watch, password) macOS offers now")
+    p.add_argument("--try", dest="attempt", action="store_true",
+                   help="check: also show one Touch ID / Apple Watch prompt and print what came back")
     p.add_argument("item", nargs="?", help="read: the Keychain item (e.g. anthropic)")
     p.add_argument("--for", dest="caller", metavar="TOOL", help="read: the tool asking, named in the prompt")
     p.add_argument("--keychain", default="anthropic", help="the chat's API key item to include (default: anthropic)")

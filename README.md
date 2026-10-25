@@ -118,6 +118,11 @@ taxtrace keychain read anthropic --for jobwatch   # the secret on stdout, once a
 The prompt names the item and the tool. The secret goes to the program that runs the command, never to a
 terminal, and an entry `setup` didn't move isn't read this way.
 
+When a read asks for the password instead of Apple Watch or Touch ID (a Watch out of range, asleep or locked
+falls back to it), `taxtrace keychain check` says which ways macOS offers right now and why not, and
+`check --try` shows one Watch / Touch ID prompt and prints what came back. Neither rebuilds the helper or touches
+an entry.
+
 Besides PDFs and text files (.txt, .csv), Word documents (.docx: one line per paragraph and per table row) and
 Excel workbooks (.xlsx: a page per sheet, one line per row) are read, with Python's own zip and XML modules. A
 password-protected Office file isn't read: save an unprotected copy into the workspace.

@@ -168,6 +168,19 @@ def test_another_tool_reads_a_moved_entry_through_the_helper(fake_gate: Path, mo
     assert "sk-not-a-real-key" not in capsys.readouterr().out
 
 
+def test_check_says_how_reads_can_be_approved_without_rebuilding_the_helper(monkeypatch: pytest.MonkeyPatch,
+                                                                            capsys):
+    ran = []
+    monkeypatch.setattr(gate.sys, "platform", "darwin")
+    monkeypatch.setattr(gate.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(gate, "build", lambda: pytest.fail("the helper the entries trust was rebuilt"))
+    monkeypatch.setattr(gate.subprocess, "run", lambda cmd, **kw: ran.append(cmd) or subprocess.CompletedProcess(
+        cmd, 0, "Apple Watch: available\n", ""))
+    assert cli.main(["keychain", "check", "--try"]) == 0
+    assert capsys.readouterr().out == "Apple Watch: available\n"
+    assert ran == [["/usr/bin/swift", str(gate.CHECK), "--try"]]
+
+
 def test_a_locked_file_whose_keychain_read_was_refused_says_so(fake_gate: Path, tmp_path: Path, capsys):
     from conftest import PRIOR_RETURN, make_pdf
 

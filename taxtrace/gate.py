@@ -92,6 +92,23 @@ def build() -> bool:
 refused: set[tuple[str, str]] = set()  # entries whose read this run the person didn't approve
 
 
+CHECK = SOURCE.with_name("approval_check.swift")
+
+
+def check(attempt: bool = False) -> str:
+    """Which ways macOS offers to approve a read right now (Touch ID, Apple Watch, the password), each with why
+    not; with `attempt`, the result of one Touch ID / Apple Watch prompt. Run from source by `swift`, so the
+    helper the entries trust isn't rebuilt, and no Keychain entry is touched."""
+    if sys.platform != "darwin":
+        raise GateError("Apple Watch and Touch ID approval is macOS only")
+    if not (swift := shutil.which("swift")):
+        raise GateError("swift not found: install the Xcode command line tools (xcode-select --install)")
+    run = subprocess.run([swift, str(CHECK), *(["--try"] if attempt else [])], capture_output=True, text=True)
+    if run.returncode:
+        raise GateError(f"the approval check failed: {run.stderr.strip()[-400:]}")
+    return run.stdout
+
+
 def read(service: str, account: str, reason: str) -> str | None:
     """The entry's password once the person approves; None if there's no such entry or they didn't approve (noted
     in `refused`, so a locked file can say why it stayed locked)."""
