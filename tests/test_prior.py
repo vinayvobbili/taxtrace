@@ -7,7 +7,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
-from conftest import make_pdf
+from conftest import make_pdf, printed
 
 from taxtrace import cli, prior, text
 
@@ -189,7 +189,7 @@ def test_the_older_layout(tmp_path: Path):
 
 def test_cli_writes_the_values_and_prints_none(return_2021: Path, workspace_home: Path, capsys):
     assert cli.main(["prior", str(return_2021), "--layout"]) == 0
-    out = capsys.readouterr().out
+    out = printed(capsys)
     for secret in ("12,422", "287,450", "Vexley", "Quenby", "10,452"):
         assert secret not in out
     assert "2 assets" in out and "2 activities" in out
@@ -230,7 +230,7 @@ def test_cli_projects_the_missing_years(tmp_path: Path, workspace_home: Path, ca
     make_pdf(folder / "2017 Return.pdf", [LISTING])
     make_pdf(folder / "2021 Return.pdf", [FOLLOWS_2017])
     assert cli.main(["prior", str(folder), "--project", "2025"]) == 0
-    out = capsys.readouterr().out
+    out = printed(capsys)
     assert "across returns: 1 of 1 checks pass" in out
     assert "projected 2 assets from the 2021 return through 2025" in out and "10,452" not in out
     saved = json.loads((workspace_home / "carryforwards" / "projected-2025.json").read_text())
@@ -282,7 +282,7 @@ def test_cli_reads_the_activities(tmp_path: Path, workspace_home: Path, capsys):
     from test_k1 import draw
 
     assert cli.main(["prior", str(draw(tmp_path / "2020 Return.pdf", [ACTIVITIES])), "--layout"]) == 0
-    out = capsys.readouterr().out
+    out = printed(capsys)
     assert "3 passive activities on Worksheets 1 and 3; 6 of 6 checks pass" in out
     assert "p1 Worksheet 3 activity, columns a, d: *********** Homes *** ###. ###." in out and "350" not in out
     saved = json.loads((workspace_home / "carryforwards" / "2020 Return.json").read_text())

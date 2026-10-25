@@ -7,10 +7,11 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from conftest import printed
 
 from taxtrace import cli, k1, text
 
-PARTNERSHIP = "Larkspur Ridge Fund LP"
+PARTNERSHIP ="Larkspur Ridge Fund LP"
 EIN = "88-1234567"
 # (x, top, text): each phrase is drawn in one piece, as the form prints it
 FACE = [
@@ -348,7 +349,7 @@ def test_a_page_that_is_not_a_face_is_skipped(tmp_path: Path):
 
 def test_cli_writes_the_values_and_prints_none(face_pdf: Path, workspace_home: Path, capsys):
     assert cli.main(["k1", str(face_pdf), "--layout"]) == 0
-    out = capsys.readouterr().out
+    out = printed(capsys)
     for secret in SECRETS:
         assert secret not in out
     assert "amounts in 1, 2, 5, 13 AE, 19 A, 20 A, 20 Z (statement); 10 of 10 checks pass, 3 questions" in out

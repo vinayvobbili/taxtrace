@@ -6,6 +6,8 @@ import json
 from decimal import Decimal
 from pathlib import Path
 
+from conftest import printed
+
 from taxtrace import cli, passive
 
 
@@ -77,7 +79,7 @@ def test_cli_prints_no_amounts(workspace_home: Path, capsys):
     (workspace_home / "k1").mkdir()
     (workspace_home / "k1" / "k1.json").write_text(json.dumps([{**LARKSPUR, "final": True}]))
     assert cli.main(["passive"]) == 0
-    out = capsys.readouterr().out
+    out = printed(capsys)
     assert "2025: 3 passive activities, starting from the 2024 return's Form 8582; 1 questions" in out
     assert ": its K-1 (k#.pdf p2), this year a loss, a loss carried in; a final K-1: a full disposition frees" in out
     for secret in ("1575", "2085", "12422", "Larkspur", "LARKSPUR"):

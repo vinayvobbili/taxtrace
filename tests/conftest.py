@@ -2,9 +2,16 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
+
+
+def printed(capsys: pytest.CaptureFixture) -> str:
+    """What a command printed, its temporary folders left out: pytest numbers them (pytest-350), and a check that
+    a made-up amount isn't printed would otherwise find it in a path."""
+    return re.sub(r"\S*/pytest-\d+/\S*", "<tmp>", capsys.readouterr().out)
 
 # A CPA-software-style depreciation report and passive-loss worksheet for a fictional taxpayer.
 TAXPAYER = "Jordan Q. Quillfeather"

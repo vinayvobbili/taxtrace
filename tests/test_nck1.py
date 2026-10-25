@@ -6,6 +6,7 @@ import json
 from decimal import Decimal
 from pathlib import Path
 
+from conftest import printed
 from test_k1 import FACE, PARTNERSHIP, draw, edited
 
 from taxtrace import cli, k1, nck1, text
@@ -84,7 +85,7 @@ def test_cli_ties_an_nc_k1_to_a_federal_one_read_on_an_earlier_run(tmp_path: Pat
     assert cli.main(["k1", str(federal)]) == 0
     capsys.readouterr()
     assert cli.main(["k1", str(state), "--layout"]) == 0
-    out = capsys.readouterr().out
+    out = printed(capsys)
     for secret in SECRETS:
         assert secret not in out
     assert ("NC K-1 (D-403) from ##-#######, amounts on lines 1, 2, 3; 3 of 3 checks pass, 1 questions; "
