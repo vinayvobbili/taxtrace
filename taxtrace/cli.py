@@ -642,6 +642,58 @@ def cmd_rental(args: argparse.Namespace) -> int:
     return 1 if rental.failed else 0
 
 
+def cmd_foreign(args: argparse.Namespace) -> int:
+    """Put a year's foreign side together in dollars into <workspace>/foreign/<year>.json: a property sold abroad
+    (Form 8949) and the tax kept there (Form 1116), from India's returns that `itr` saved.
+
+    Each amount is converted at its own day's rate (FRED's noon buying rate), fetched once into <workspace>/fx: the
+    price at the sale's, the cost at the purchase's. What's printed is masked: what each amount is and the rate's
+    source, the questions, and whether the dollar result is a gain or a loss.
+    """
+    from . import foreign, fx
+
+    home = workspace.outside_git(workspace.home())
+    terms = workspace.redact_terms()
+
+    def masked(line: str) -> str:
+        return redact.redact(line, terms).text.strip()
+
+    year = args.year
+    itrs = [f for path in sorted((home / workspace.FORMS).glob("itr-*.json"))
+            for rows in [json.loads(path.read_text())] for f in (rows if isinstance(rows, list) else [rows])]
+    out = home / workspace.FOREIGN
+    kept = out / f"{year}-confirmed.json"  # what was confirmed on earlier runs stays confirmed
+    confirmed = json.loads(kept.read_text()) if kept.exists() else {}
+    try:
+        confirmed |= dict(map(foreign.confirmation, args.confirm))
+    except ValueError as err:
+        print(err, file=sys.stderr)
+        return 2
+    if args.confirm:
+        out.mkdir(parents=True, exist_ok=True)
+        kept.write_text(json.dumps(confirmed, indent=2) + "\n")
+    found = foreign.build(year, itrs=itrs, rates=fx.Rates("INR", home / workspace.FX), confirmed=confirmed)
+    print(f"{year} foreign side: {len(found.sales)} sale(s), {len(found.taxes)} foreign tax(es)"
+          + ("" if itrs else "; no Indian return read yet (`taxtrace itr`)"))
+    for sale in found.sales:
+        source = redact.redact(sale.file, terms, bare_years=True).text
+        print(f"  Form 8949: {sale.description}, {sale.term}-term, from {source}; a "
+              f"{'gain' if sale.gain >= 0 else 'loss'} in dollars")
+        for c in [sale.proceeds, sale.cost, *sale.improvements, *([sale.expenses] if sale.expenses else [])]:
+            print(f"    {masked(c.what)}: p{c.page}, at {c.rate.source} of {masked(c.rate.day)}")
+    for t in found.taxes:
+        print(f"  Form 1116: {t.country}, {t.category} category, {t.kept.what} at {t.kept.rate.source} of "
+              f"{masked(t.kept.rate.day)}")
+    if confirmed:
+        print("  confirmed: " + ", ".join(k.replace("_", " ") for k in confirmed))
+    for q in found.questions:
+        print(f"  question: {q.text}")
+    out.mkdir(parents=True, exist_ok=True)
+    (out / f"{year}.json").write_text(json.dumps(found.to_json(), indent=2, default=str) + "\n")
+    print(f"wrote to {out / f'{year}.json'}")
+    return 0
+
+
 def cmd_passive(args: argparse.Namespace) -> int:
     """Each passive activity's year into <workspace>/passive/<year>.json, from what `prior` and `k1` saved.
 
@@ -850,6 +902,13 @@ def build_parser() -> argparse.ArgumentParser:
                    help="settle a question only you can answer, kept for later runs: fair_rental_days=365, "
                         "personal_use_days=0, rent_all_year=yes, earlier_policy=AMOUNT (0: none), dues=AMOUNT")
     p.set_defaults(func=cmd_rental)
+    p = sub.add_parser("foreign", help="a year's foreign side in dollars: a property sold abroad, the tax kept there",
+                       description=cmd_foreign.__doc__)
+    p.add_argument("--year", type=int, required=True, help="the tax year")
+    p.add_argument("--confirm", action="append", default=[], metavar="KEY=VALUE",
+                   help="settle a question only you can answer, kept for later runs: owner=self|spouse|joint|other, "
+                        "improvement_dates=YYYY-MM-DD,..., use=investment|personal|rental")
+    p.set_defaults(func=cmd_foreign)
     p = sub.add_parser("passive", help="each passive activity's year, from the saved returns and K-1s",
                        description=cmd_passive.__doc__)
     p.add_argument("--year", type=int, help="the tax year (default: the latest year of the K-1s read)")

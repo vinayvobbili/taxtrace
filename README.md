@@ -301,6 +301,31 @@ year. Questions: an improvement's date (only its financial year is printed, and 
 day's rate), a stamp value above the price received (the US return uses the price), and whether the person owned the
 whole property. Nothing that names the person is kept: no PAN, acknowledgement number or address.
 
+## Foreign side
+
+```bash
+taxtrace foreign --year 2025                        # writes foreign/2025.json
+taxtrace foreign --year 2025 --confirm owner=spouse
+```
+
+`foreign` puts a property sold abroad on Form 8949 in dollars, each amount at its own day's rate: the price at the
+sale's, the cost at the purchase's, an improvement at the day it was paid. A currency that fell against the dollar
+leaves a dollar gain far smaller than the gain taxed abroad (or a loss, which on a personal home isn't deductible).
+The tax the other country kept, the taxes paid less the refund, goes to Form 1116 as passive category, at the rate
+of the day it was withheld (a refund is translated at the rate the tax was).
+
+The rates are public and fetched once into `<workspace>/fx`, each kept with its source:
+
+- a day's rate: the Federal Reserve's noon buying rate (FRED, `DEXINUS` for the rupee), or the last business day's
+  before a weekend or holiday;
+- a year's average, for interest: the IRS's yearly average currency exchange rates;
+- December 31, for Form 8938 and the FBAR: the Treasury's Reporting Rates of Exchange.
+
+What only you know is settled with `--confirm`, kept in `foreign/<year>-confirmed.json`: `owner=self|spouse|joint|other`
+(on a joint return either spouse's sale counts in full), `improvement_dates=YYYY-MM-DD,...` (until then an
+improvement is at its financial year's mean rate) and `use=investment|personal|rental` (asked when the dollar
+result is a loss).
+
 ## Chat
 
 ```bash
