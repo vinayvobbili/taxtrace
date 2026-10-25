@@ -128,6 +128,25 @@ def test_the_keychain_is_asked_once_per_entry_however_many_files_share_it(tmp_pa
     assert sorted(asked) == sorted([f.name for f in files] + ["default"])
 
 
+def test_a_banks_statements_share_its_entry_before_the_default(tmp_path: Path, monkeypatch):
+    asked = []
+
+    def security(cmd, **kw):
+        asked.append(cmd[cmd.index("-a") + 1])
+        found = cmd[-2] == "quillbank"
+        return subprocess.CompletedProcess(cmd, 0 if found else 44, stdout=f"{PASSWORD}\n" if found else "")
+    monkeypatch.setattr(workspace.sys, "platform", "darwin")
+    monkeypatch.setattr(workspace.subprocess, "run", security)
+    workspace._keychain_password.cache_clear()
+    try:
+        for month in ("01", "02"):
+            make_pdf(tmp_path / "docs" / f"quillbank-4410-2026-{month}.pdf", PRIOR_RETURN, password=PASSWORD)
+        assert cli.main(["unlock", str(tmp_path / "docs")]) == 0
+    finally:
+        workspace._keychain_password.cache_clear()
+    assert asked == ["quillbank-4410-2026-01.pdf", "quillbank", "quillbank-4410-2026-02.pdf"]  # never default
+
+
 def test_with_no_paths_named_the_workspace_is_read_without_its_derived_folders(workspace_home: Path, capsys):
     make_pdf(workspace_home / "2023" / "1099-INT.pdf", PRIOR_RETURN)
     for derived in (workspace.OCR_CACHE, workspace.REDACTED):

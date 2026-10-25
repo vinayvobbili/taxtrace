@@ -59,7 +59,9 @@ def keychain_hint() -> str:
 
 
 def keychain_entries(path: Path) -> Iterator[tuple[str, str]]:
-    """(account, password) for a locked PDF from the macOS Keychain: the file's own entry, then the default one.
+    """(account, password) for a locked PDF from the macOS Keychain: the file's own entry, then its issuer's (the
+    name before the first "-": `kotak` for kotak-7016-2026-01.pdf, for a bank whose monthly statements share one
+    password), then the default one.
 
     Lazily, since each read can be an approval: a file its own entry opens never asks for the default one.
     Kept there, never in a file or on a command line, so they can't land in shell history, a repo or a chat. Store
@@ -67,7 +69,8 @@ def keychain_entries(path: Path) -> Iterator[tuple[str, str]]:
     """
     if sys.platform != "darwin":
         return
-    for account in (path.name, KEYCHAIN_DEFAULT):
+    issuer = path.stem.split("-", 1)[0].lower() if "-" in path.stem else ""
+    for account in dict.fromkeys(a for a in (path.name, issuer, KEYCHAIN_DEFAULT) if a):
         if (password := _keychain_password(KEYCHAIN_SERVICE, account)) is not None:
             yield account, password
 
