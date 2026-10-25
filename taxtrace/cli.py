@@ -203,12 +203,14 @@ def cmd_prior(args: argparse.Namespace) -> int:
     for doc in text.documents(paths):
         name = redact.redact(doc.name, terms, bare_years=True).text
         try:
-            pages = _open(doc)
+            pages, password = _unlocked(doc)
         except text.UnsupportedDocument as err:
             print(f"{name}: skipped, {err}")
             continue
-        found = prior.read(doc.name, pages)
-        if not (found.assets or found.unallowed):
+        words = {n: text.words(doc, n, password) for n, page in enumerate(pages, 1) if prior.has_activities(page)} \
+            if doc.suffix.lower() in text.PDF_SUFFIXES else {}
+        found = prior.read(doc.name, pages, words)
+        if not (found.assets or found.unallowed or found.activities):
             print(f"{name}: no depreciation schedule or Form 8582 worksheets")
             continue
         problems = prior.verify(found, pages)
@@ -220,7 +222,8 @@ def cmd_prior(args: argparse.Namespace) -> int:
         asset_pages = sorted({a.page for a in found.assets})
         loss_pages = sorted({u.page for u in found.unallowed})
         print(f"{name}: tax year {found.year or '?'}, {len(found.assets)} assets (p{asset_pages}), "
-              f"{len(found.unallowed)} activities with unallowed losses (p{loss_pages}); "
+              f"{len(found.unallowed)} activities with unallowed losses (p{loss_pages}), "
+              f"{len(found.activities)} passive activities on Worksheets 1 and 3; "
               f"{len(found.checks) - len(bad)} of {len(found.checks)} checks pass, {len(found.questions)} questions"
               + (f"; AMT and book copies skipped (p{found.skipped})" if found.skipped else "")
               + "".join(f"; p{n} is the {y} schedule, skipped" for n, y in found.other_years.items()))
@@ -239,6 +242,10 @@ def cmd_prior(args: argparse.Namespace) -> int:
                       f"{masked(a.quote)}")
             for u in found.unallowed:
                 print(f"  p{u.page} unallowed loss: {masked(u.quote)}")
+            for v in found.activities:
+                used = ", ".join(c for c, x in zip("abcde", (v.net_income, v.net_loss, v.prior_unallowed, v.gain,
+                                                             v.loss), strict=True) if x)
+                print(f"  p{v.page} Worksheet {v.worksheet} activity, columns {used or 'none'}: {masked(v.quote)}")
     if links := prior.link(returns):
         bad = [c for c in links if not c.ok]
         failed += bool(bad)

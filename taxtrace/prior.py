@@ -114,6 +114,23 @@ class Unallowed:
 
 
 @dataclass
+class Activity:
+    """One activity's row on Form 8582 Worksheet 1 (rental real estate with active participation) or Worksheet 3
+    (every other passive activity): this year's net income or loss, the unallowed loss it brought in from earlier
+    years, and the overall gain or loss. Every passive activity is here, not only those with a loss carried on."""
+
+    worksheet: str  # "1" or "3"
+    activity: str
+    net_income: Decimal  # (a)
+    net_loss: Decimal  # (b)
+    prior_unallowed: Decimal  # (c): the year before's Worksheet 5 unallowed loss
+    gain: Decimal  # (d)
+    loss: Decimal  # (e)
+    page: int
+    quote: str  # the row's words, in order
+
+
+@dataclass
 class Check:
     what: str
     ok: bool
@@ -134,6 +151,7 @@ class Carryforwards:
     year: int | None
     assets: list[Asset] = field(default_factory=list)
     unallowed: list[Unallowed] = field(default_factory=list)
+    activities: list[Activity] = field(default_factory=list)  # Worksheets 1 and 3, read by position
     checks: list[Check] = field(default_factory=list)
     questions: list[Question] = field(default_factory=list)
     skipped: list[int] = field(default_factory=list)  # AMT and book copies
@@ -165,8 +183,17 @@ class Carryforwards:
         return out
 
 
-def read(name: str, pages: list[str]) -> Carryforwards:
-    """The carryforwards in one return's pages. `name` is the file name, which usually gives the tax year."""
+def has_activities(page: str) -> bool:
+    """Whether a page has Form 8582's Worksheet 1 or 3, whose rows are read by position (`text.words`)."""
+    return bool(re.search(r"^\s*Worksheet\s+[13]\b", page, re.MULTILINE))
+
+
+def read(name: str, pages: list[str], words: dict[int, list[dict]] | None = None) -> Carryforwards:
+    """The carryforwards in one return's pages. `name` is the file name, which usually gives the tax year.
+
+    With the words of the pages `has_activities` picks (`text.words`, by page number), Worksheets 1 and 3 are read
+    too: every passive activity's year, by the columns each amount sits in.
+    """
     found = Carryforwards(file=name, year=_year(name, pages))
     schedules: list[list[Asset]] = []
     group: list[Asset] = []
@@ -190,6 +217,8 @@ def read(name: str, pages: list[str]) -> Carryforwards:
             group = _listing(found, n, page, group, schedules)
         if any(WORKSHEET.match(line) for line in page.splitlines()):
             _worksheets(found, n, page)
+        if words and n in words:
+            _activities(found, n, words[n])
     if group:  # rows after the last totals line
         schedules.append(group)
         found.check("depreciation rows end with a totals line", False, group[-1].page)
@@ -416,6 +445,68 @@ def _worksheets(found: Carryforwards, n: int, page: str) -> None:
                         len(five) == 1 and abs(five[0].unallowed - abs(unallowed)) <= CENT, n)
 
 
+def _rows(words: list[dict], slack: float = 2.0) -> list[list[dict]]:
+    """Words grouped into the rows they sit on, top to bottom, each row left to right."""
+    rows: list[list[dict]] = []
+    for w in sorted(words, key=lambda w: (w["top"], w["x0"])):
+        if rows and abs(w["top"] - rows[-1][0]["top"]) <= slack:
+            rows[-1].append(w)
+        else:
+            rows.append([w])
+    return [sorted(row, key=lambda w: w["x0"]) for row in rows]
+
+
+def _activities(found: Carryforwards, n: int, words: list[dict]) -> None:
+    """Worksheets 1 and 3 on one page: each row's amounts go to the column whose heading starts left of its end."""
+    rows = _rows(words)
+    starts = [i for i, row in enumerate(rows) if any(
+        w["text"] == "Worksheet" and nxt["text"].isdigit() for w, nxt in pairwise(row))]
+    for k, start in enumerate(starts):
+        sheet = next(nxt["text"] for w, nxt in pairwise(rows[start]) if w["text"] == "Worksheet")
+        if sheet not in ("1", "3"):
+            continue
+        section = rows[start + 1:starts[k + 1] if k + 1 < len(starts) else len(rows)]
+        heads: dict[str, dict] = {}
+        for w in (w for r in section for w in r):
+            if m := re.match(r"^\(([a-e])\)", w["text"]):
+                heads.setdefault(m.group(1), w)
+        if set(heads) != set("abcde"):
+            found.check(f"Worksheet {sheet}: its five columns' headings are on the page", False, n)
+            continue
+        left, below = heads["a"]["x0"], max(h["top"] for h in heads.values())
+        columns = sorted(heads.items(), key=lambda t: t[1]["x0"])
+        total = next((r for r in section if r[0]["text"].startswith("Total")), None)
+        totals: dict[str, Decimal] = {}
+        sums = dict.fromkeys("abcde", Decimal(0))
+        for r in section:
+            if r[0]["top"] <= below + 4 or not any(_number(w["text"]) and w["x1"] > left for w in r):
+                continue
+            got = dict.fromkeys("abcde", Decimal(0))
+            for w in r:
+                if _number(w["text"]) and w["x1"] > left:
+                    column = next((c for c, h in reversed(columns) if h["x0"] < w["x1"] - 2), "a")
+                    got[column] += abs(amount(w["text"]))
+            if total is not None and total[0]["top"] - 1 <= r[0]["top"] <= total[0]["top"] + 12:
+                totals = got  # the totals line, or the row under its label that holds its amounts
+                continue
+            name = " ".join(w["text"] for w in r if w["x1"] <= left)
+            found.activities.append(Activity(sheet, name, got["a"], got["b"], got["c"], got["d"], got["e"], n,
+                                             " ".join(w["text"] for w in r)))
+            found.check(f"Worksheet {sheet}, {name}: net income less net loss and prior years' unallowed loss is "
+                        "the overall gain or loss",
+                        abs(got["a"] - got["b"] - got["c"] - (got["d"] - got["e"])) <= CENT, n)
+            for c in sums:
+                sums[c] += got[c]
+        if not totals:
+            if any(sums.values()):
+                found.check(f"Worksheet {sheet} ends with its total line", False, n)
+            continue
+        for c, value in totals.items():  # the form's total line takes (a) to (c); some printouts add (d) and (e)
+            if (value or sums[c]) and (c in "abc" or totals["d"] or totals["e"]):
+                found.check(f"Worksheet {sheet}: the rows' column ({c}) adds up to the total",
+                            abs(sums[c] - value) <= CENT, n)
+
+
 def _worksheet_total(found: Carryforwards, n: int, sheet: str, rows: list, total: list[Decimal], line: str) -> None:
     if sheet == "6":
         for i, what in enumerate(("loss", "unallowed loss", "allowed loss")):
@@ -509,4 +600,8 @@ def verify(found: Carryforwards, pages: list[str]) -> list[str]:
         for row in rows:
             if not (1 <= row.page <= len(pages)) or row.quote not in pages[row.page - 1].splitlines():
                 problems.append(f"{kind} on page {row.page}: its line isn't on that page")
+    for row in found.activities:  # read by position: its words, in the order the page's line has them
+        if not (1 <= row.page <= len(pages)) or row.quote not in (
+                " ".join(line.split()) for line in pages[row.page - 1].splitlines()):
+            problems.append(f"passive activity on page {row.page}: its row isn't on that page")
     return problems

@@ -42,6 +42,7 @@ FORM_8582_PAGE_2 = [
     "     Worksheet 3 'For Form 8582, Lines 3a, 3b, and 3c (see instructions)",
     "             Name of activity  (a)Net income (b)Net loss (c)Unallowed (d)Gain (e)Loss",
     "     RENTAL PROPERTY                        4,812.    9,977.             14,789.",
+    "     Total. . . . . . . . . . . . . . G     4,812.    9,977.",
     "     Worksheet 5 'Allocation of Unallowed Losses(see instructions)",
     "              Name of activity   and line number to (a)Loss (b)Ratio (c)Unallowed loss",
     "     RENTAL PROPERTY              SCH E P1 22      14,789.    0.840006     12,422.",
@@ -238,3 +239,51 @@ def test_cli_projects_the_missing_years(tmp_path: Path, workspace_home: Path, ca
     assert [y["year"] for y in house["years"]] == [2022, 2023, 2024, 2025]
     assert house["years"][-1]["accumulated"] == str(46574 + 10452 + 4 * 10452)
     assert cli.main(["prior", str(folder), "--project", "2017"]) == 1
+
+
+# Form 8582's page 2 as Drake prints it: (x, top, text), each column's amounts right under its heading
+ACTIVITIES = [
+    (37, 51, "Form 8582 (2020) Page 2"),
+    (37, 75, "Worksheet 1 'For Form 8582, Lines 1a, 1b, and 1c (see instructions)"),
+    (224, 100, "(a)Net income"), (304, 100, "(b)Net loss"), (372, 100, "(c)Unallowed"),
+    (452, 104, "(d)Gain"), (526, 104, "(e)Loss"),
+    (37, 174, "Total. Enter on Form 8582, lines 1a, 1b,"), (37, 182, "and 1c. G"),  # nothing on it: no total
+    (37, 291, "Worksheet 3 'For Form 8582, Lines 3a, 3b, and 3c (see instructions)"),
+    (226, 316, "(a)Net income"), (304, 316, "(b)Net loss"), (372, 316, "(c)Unallowed"),
+    (452, 320, "(d)Gain"), (526, 320, "(e)Loss"), (238, 324, "(line 3a)"), (310, 324, "(line 3b)"),
+    (38, 335, "RENTAL PROPERTY"), (322, 335, "4,120."), (394, 335, "9,880."), (530, 335, "14,000."),
+    (38, 346, "Larkspur Ridge Fund LP"), (322, 346, "1,875."), (536, 346, "1,875."),
+    (38, 357, "Quarrystone Homes LLC"), (274, 357, "350."), (490, 357, "350."),
+    (37, 390, "Total.Enter on Form 8582, lines 3a, 3b,"),
+    (37, 398, "and 3c. G"), (274, 398, "350."), (322, 398, "5,995."), (394, 398, "9,880."),  # (a) to (c) only
+]
+
+
+def test_every_passive_activity_by_the_column_each_amount_sits_in(tmp_path: Path):
+    from test_k1 import draw
+
+    path = draw(tmp_path / "2020 Return.pdf", [ACTIVITIES])
+    pages = text.pages(path)
+    found = prior.read(path.name, pages, {1: text.words(path, 1)})
+    assert [(a.worksheet, a.activity, a.net_income, a.net_loss, a.prior_unallowed, a.gain, a.loss)
+            for a in found.activities] == [
+        ("3", "RENTAL PROPERTY", 0, Decimal(4120), Decimal(9880), 0, Decimal(14000)),
+        ("3", "Larkspur Ridge Fund LP", 0, Decimal(1875), 0, 0, Decimal(1875)),
+        ("3", "Quarrystone Homes LLC", Decimal(350), 0, 0, Decimal(350), 0)]  # income: no loss carried
+    assert found.failed == [] and len(found.checks) == 6  # each row, and the total's (a) to (c)
+    assert prior.verify(found, pages) == []
+    wrong = [(x, top, "5,959." if phrase == "5,995." else phrase) for x, top, phrase in ACTIVITIES]
+    path = draw(tmp_path / "wrong.pdf", [wrong])
+    assert [c.what for c in prior.read(path.name, text.pages(path), {1: text.words(path, 1)}).failed] == [
+        "Worksheet 3: the rows' column (b) adds up to the total"]
+
+
+def test_cli_reads_the_activities(tmp_path: Path, workspace_home: Path, capsys):
+    from test_k1 import draw
+
+    assert cli.main(["prior", str(draw(tmp_path / "2020 Return.pdf", [ACTIVITIES])), "--layout"]) == 0
+    out = capsys.readouterr().out
+    assert "3 passive activities on Worksheets 1 and 3; 6 of 6 checks pass" in out
+    assert "p1 Worksheet 3 activity, columns a, d: *********** Homes *** ###. ###." in out and "350" not in out
+    saved = json.loads((workspace_home / "carryforwards" / "2020 Return.json").read_text())
+    assert saved["activities"][1]["net_loss"] == "1875"

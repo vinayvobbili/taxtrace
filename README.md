@@ -118,6 +118,10 @@ Nothing is taken on trust:
   basis.
 - On Form 8582, each activity's ratio is checked against its share of the loss, its unallowed loss against
   its ratio of the total, and Worksheet 6 against Worksheet 5.
+- Worksheets 1 and 3 list every passive activity, with income as well as loss: its net income, net loss, the
+  unallowed loss it brought in, and the overall gain or loss. A row leaves the columns it doesn't use empty, so
+  each amount is read by where it sits, under its column's heading. Each row has to come to its overall gain or
+  loss, and the rows to the total line.
 - A schedule printed twice is kept once, and a second copy that disagrees is a question.
 - The alternative minimum tax and book copies are skipped. So is next year's projected schedule, which is
   checked to start from this year's accumulated depreciation.
