@@ -25,6 +25,7 @@ classifiers = [
 Homepage = "https://github.com/vinayvobbili/taxtrace"
 Repository = "https://github.com/vinayvobbili/taxtrace"
 Issues = "https://github.com/vinayvobbili/taxtrace/issues"
+Funding = "https://ko-fi.com/vinayvobbili"
 
 [project.optional-dependencies]
 chat = ["anthropic>=0.40"]

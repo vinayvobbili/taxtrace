@@ -8,6 +8,10 @@ manager statements, receipts, foreign bank statements, last year's return) and p
 you type into consumer tax software, an FBAR account list, and a list of questions for you: anything
 it couldn't settle from the documents alone.
 
+If taxtrace helps with your return, a ⭐ on GitHub is how I know: taxtrace sends nothing home, so stars are the
+only count of who uses it. If it saved you a preparer's fee, a [$1 coffee](https://ko-fi.com/vinayvobbili) says so
+too.
+
 Three rules hold everywhere:
 
 1. **Nothing is guessed.** Every value carries the file, the page and the exact text it was read from,
