@@ -99,7 +99,11 @@ def cmd_words(args: argparse.Namespace) -> int:
     """A page's words with their positions, masked: the geometry of a printed form, without its values or names."""
     terms = workspace.redact_terms()
     doc = Path(args.path)
-    _, password = _unlocked(doc)
+    try:
+        _, password = _unlocked(doc)
+    except text.UnsupportedDocument as err:
+        print(f"{redact.redact(doc.name, terms, bare_years=True).text}: {err}", file=sys.stderr)
+        return 1
     found = sorted((w for w in text.words(doc, args.page, password)
                     if _within(w["x0"], args.x) and _within(w["top"], args.top)), key=lambda w: (w["top"], w["x0"]))
     if not args.rows:

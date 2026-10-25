@@ -57,6 +57,12 @@ def test_a_web_page_saved_as_pdf_is_skipped_not_a_crash(tmp_path: Path, capsys):
     assert "not a readable PDF" in capsys.readouterr().out
 
 
+def test_words_on_a_locked_file_says_so_without_a_traceback(locked: Path, monkeypatch, capsys):
+    monkeypatch.setattr(workspace, "pdf_passwords", lambda path: ["stale"])
+    assert cli.main(["words", str(locked)]) == 1
+    assert "the stored password doesn't open it" in capsys.readouterr().err
+
+
 def test_shape_shows_classes_never_characters():
     assert workspace.shape("abcd12345") == "9 characters: aaaa99999"
     assert workspace.shape("Abcd 1234!") == "10 characters: Aaaa_9999*"
