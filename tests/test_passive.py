@@ -59,6 +59,18 @@ def test_copies_ira_k1s_and_other_years_are_left_out_and_odd_deductions_asked():
     assert [q.text.split(":")[0] for q in ledger.questions] == ["box 13 W"]
 
 
+def test_a_fund_merged_into_another_shares_its_k1_and_is_not_freed():
+    merged = {**RETURN_2024, "activities": [activity("LARKSPUR RIDGE HOMES FUND LP", "1875", "300"),
+                                            activity("LARKSPUR RIDGE FUND LP", "0", "120")], "unallowed": []}
+    ledger = passive.build(2025, [merged], [face("Larkspur Ridge Homes Fund, L.P.", ("1", "", "-400"))])
+    survivor, merged_away = ledger.lines
+    assert (survivor.current, survivor.merged_into) == (Decimal(-400), "")
+    assert (merged_away.source, merged_away.current, merged_away.merged_into, merged_away.k1_page) == (
+        "k1", None, "LARKSPUR RIDGE HOMES FUND LP", 2)
+    assert [q.quote for q in ledger.questions] == ["LARKSPUR RIDGE FUND LP"]
+    assert "a merger isn't a disposition" in ledger.questions[0].text
+
+
 def test_cli_prints_no_amounts(workspace_home: Path, capsys):
     (workspace_home / "carryforwards").mkdir(parents=True)
     (workspace_home / "carryforwards" / "2024 Return.json").write_text(json.dumps(RETURN_2024))

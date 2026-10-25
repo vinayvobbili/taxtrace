@@ -43,6 +43,7 @@ class Line:
     k1_page: int | None = None
     worksheet: str = ""  # "1" or "3" on the latest return; "" for a new activity
     left_out: list[str] = field(default_factory=list)  # K-1 boxes with amounts that aren't the activity's
+    merged_into: str = ""  # the activity whose K-1 it now shares (its year is counted there, once)
 
 
 @dataclass
@@ -120,7 +121,7 @@ def build(year: int, returns: list[dict], k1s: list[dict]) -> Ledger:
             if latest["year"] == year - 1:
                 line.carried = carried.get(name, Decimal(0))
             ledger.lines.append(line)
-    taken: set[int] = set()
+    taken: dict[int, Line] = {}
     for line in ledger.lines:
         scores = sorted(((similar(line.activity, f.get("partnership", "")), i) for i, f in enumerate(faces)
                          if i not in taken), reverse=True)
@@ -128,8 +129,18 @@ def build(year: int, returns: list[dict], k1s: list[dict]) -> Ledger:
             if len(scores) > 1 and scores[1][0] == scores[0][0]:
                 ledger.ask("an activity's name matches two K-1s equally: which is it?", line.activity)
                 continue
-            taken.add(scores[0][1])
+            taken[scores[0][1]] = line
             _from_k1(line, faces[scores[0][1]])
+        elif (shared := next((i for i, f in enumerate(faces)
+                              if i in taken and similar(line.activity, f.get("partnership", "")) >= MATCH),
+                             None)) is not None:
+            # two of the latest return's activities, one K-1 now: a fund merged into another
+            survivor = taken[shared]
+            line.source, line.merged_into = "k1", survivor.activity
+            line.ein, line.k1_file, line.k1_page = survivor.ein, survivor.k1_file, survivor.k1_page
+            ledger.ask(f"this activity's name matches the same {year} K-1 as another activity's: likely merged into "
+                       "it, and a merger isn't a disposition, so the loss it carries goes on with the surviving "
+                       "activity instead of being freed", line.activity)
         elif RENTAL.search(line.activity):
             line.source = "schedule e"
         else:

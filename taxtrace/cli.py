@@ -481,7 +481,8 @@ def cmd_passive(args: argparse.Namespace) -> int:
     for line in ledger.lines:
         source = {"k1": f"its K-1 ({masked(line.k1_file)} p{line.k1_page})",
                   "schedule e": "Schedule E (not read yet)"}.get(line.source, "no source this year")
-        current = ("not known yet" if line.current is None else "income" if line.current > 0 else
+        current = (f"counted with {masked(line.merged_into)}" if line.merged_into else
+                   "not known yet" if line.current is None else "income" if line.current > 0 else
                    "a loss" if line.current < 0 else "nothing")
         carried = (f"what it carries in comes from the {year - 1} return" if line.carried is None else
                    "a loss carried in" if line.carried else "no loss carried in")
