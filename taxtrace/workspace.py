@@ -10,6 +10,7 @@ import functools
 import os
 import subprocess
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 TERMS_FILE = "redact-terms.txt"
@@ -53,16 +54,18 @@ def keychain_hint() -> str:
             f"(or -a '<file name>' for one file)")
 
 
-def keychain_entries(path: Path) -> list[tuple[str, str]]:
+def keychain_entries(path: Path) -> Iterator[tuple[str, str]]:
     """(account, password) for a locked PDF from the macOS Keychain: the file's own entry, then the default one.
 
+    Lazily, since each read can be an approval: a file its own entry opens never asks for the default one.
     Kept there, never in a file or on a command line, so they can't land in shell history, a repo or a chat. Store
     one with `keychain_hint()`: `-w` last, with no value, makes `security` ask for it without echoing.
     """
     if sys.platform != "darwin":
-        return []
-    return [(account, password) for account in (path.name, KEYCHAIN_DEFAULT)
-            if (password := _keychain_password(KEYCHAIN_SERVICE, account)) is not None]
+        return
+    for account in (path.name, KEYCHAIN_DEFAULT):
+        if (password := _keychain_password(KEYCHAIN_SERVICE, account)) is not None:
+            yield account, password
 
 
 @functools.cache
@@ -88,8 +91,8 @@ def sources() -> list[Path]:
     return sorted(p for p in root.iterdir() if p.name not in DERIVED and not p.name.startswith("."))
 
 
-def pdf_passwords(path: Path) -> list[str]:
-    return [password for _, password in keychain_entries(path)]
+def pdf_passwords(path: Path) -> Iterator[str]:
+    return (password for _, password in keychain_entries(path))
 
 
 def shape(secret: str) -> str:

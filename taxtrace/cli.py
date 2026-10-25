@@ -144,9 +144,9 @@ def cmd_unlock(args: argparse.Namespace) -> int:
             pass
         except text.UnsupportedDocument:
             continue
-        entries = workspace.keychain_entries(doc)
-        opened = None
-        for account, password in entries:
+        opened, tried = None, False
+        for account, password in workspace.keychain_entries(doc):
+            tried = True
             if account not in shown:
                 shown.add(account)
                 print(f"  Keychain entry '{redact.redact(account, terms, bare_years=True).text}': "
@@ -161,7 +161,7 @@ def cmd_unlock(args: argparse.Namespace) -> int:
             print(f"{name}: opens with '{redact.redact(opened, terms, bare_years=True).text}'")
         else:
             failed += 1
-            why = "no Keychain entry" if not entries else "no stored password opens it"
+            why = "no stored password opens it" if tried else "no Keychain entry"
             print(f"{name}: locked, {why}; store one with: {workspace.keychain_hint()}")
     return 1 if failed else 0
 

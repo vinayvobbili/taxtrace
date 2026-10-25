@@ -65,7 +65,8 @@ def test_tax_document_passwords_come_through_the_helper(fake_gate: Path, monkeyp
         return real_run(cmd, **kw)
     monkeypatch.setattr(subprocess, "run", spy)
     monkeypatch.setattr(workspace.sys, "platform", "darwin")
-    assert workspace.pdf_passwords(Path("2024 Return.pdf")) == ["not-a-real-password"]  # the file's own entry: none
+    # the file's own entry: none
+    assert list(workspace.pdf_passwords(Path("2024 Return.pdf"))) == ["not-a-real-password"]
     assert classic == ["2024 Return.pdf"]  # never the default entry, which goes through the helper only
     assert workspace._keychain_password("taxtrace", "denied") is None
 

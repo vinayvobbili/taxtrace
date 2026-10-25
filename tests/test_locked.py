@@ -71,7 +71,25 @@ def test_unlock_reports_shapes_and_which_entry_opens(locked: Path, tmp_path: Pat
 def test_keychain_lookup_misses_cleanly(tmp_path: Path, monkeypatch):
     # Never the real default entry: this machine may hold one.
     monkeypatch.setattr(workspace, "KEYCHAIN_DEFAULT", "no-such-account-taxtrace-test")
-    assert workspace.pdf_passwords(tmp_path / "no-such-file-taxtrace-test.pdf") == []
+    assert list(workspace.pdf_passwords(tmp_path / "no-such-file-taxtrace-test.pdf")) == []
+
+
+def test_a_file_its_own_entry_opens_never_asks_for_the_default_one(tmp_path: Path, monkeypatch):
+    # The default entry's read is an approval of its own (Watch, Touch ID or the login password): not needed here.
+    asked = []
+
+    def security(cmd, **kw):
+        asked.append(cmd[cmd.index("-a") + 1])
+        return subprocess.CompletedProcess(cmd, 0, stdout=f"{PASSWORD}\n")
+    monkeypatch.setattr(workspace.sys, "platform", "darwin")
+    monkeypatch.setattr(workspace.subprocess, "run", security)
+    workspace._keychain_password.cache_clear()
+    try:
+        own = make_pdf(tmp_path / "docs" / "Fund K-1.pdf", PRIOR_RETURN, password=PASSWORD)
+        assert cli.main(["unlock", str(own)]) == 0
+    finally:
+        workspace._keychain_password.cache_clear()
+    assert asked == ["Fund K-1.pdf"]
 
 
 def test_the_keychain_is_asked_once_per_entry_however_many_files_share_it(tmp_path: Path, monkeypatch):
