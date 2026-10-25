@@ -248,6 +248,17 @@ def test_parts_one_and_two_are_read_by_their_labels(face_pdf: Path):
     assert found.section_704c == {}
 
 
+def test_box_numbers_run_into_their_labels_are_split(tmp_path: Path):
+    glued = {(453, 74.5, "14"): "14Self-employment earnings (loss)", (453, 170.5, "16"): "16Schedule K-3 is attached if"}
+    labels = {(471, 74.5, "Self-employment earnings (loss)"), (472, 170.5, "Schedule K-3 is attached if")}
+    page = [(x, top, glued.get((x, top, t), t)) for x, top, t in FACE if (x, top, t) not in labels]
+    (found,) = read(draw(tmp_path / "k1.pdf", [page]))
+    (plain,) = read(draw(tmp_path / "plain.pdf", [FACE]))
+    assert [(i.box, i.code, i.value.amount) for i in found.items] == [
+        (i.box, i.code, i.value.amount) for i in plain.items]
+    assert found.k3_attached and not found.failed
+
+
 def test_a_partnership_ein_printed_masked_is_still_read(tmp_path: Path):
     (found,) = read(draw(tmp_path / "k1.pdf", [edited(FACE, **{EIN: "XX-XXX4567"})]))
     assert found.ein == "XX-XXX4567"

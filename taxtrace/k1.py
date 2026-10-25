@@ -21,6 +21,7 @@ from decimal import Decimal
 from .prior import CENT, YEAR, Check, Question, _number, amount
 
 BOX = re.compile(r"^(\d{1,2})([abc])?$")
+GLUED = re.compile(r"^(\d{1,2})([A-Z][a-z].*)$")  # "14Self-employment": a box number run into its label
 CODE = re.compile(r"^([A-Z]{1,2})(\*)?$")
 SHARE = re.compile(r"^\d{1,3}\.\d+$")  # "12.3456789", the % sign printed apart
 EIN = re.compile(r"^(?:\d{2}|[X*]{2})-(?:\d{3}|[X*]{3})\d{4}$")  # some partner copies print it XX-XXX1234
@@ -200,6 +201,7 @@ def is_face(page_text: str) -> bool:
 
 def face(name: str, page: int, words: list[dict]) -> K1 | None:
     """One K-1 face, or None if the page isn't one (no "1 Ordinary" and "14 Self-employment" boxes)."""
+    words = _unglued(words)
     left, right = _anchor(words, "1", "Ordinary"), _anchor(words, "14", "Self-employment")
     if left is None or right is None:
         return None
@@ -211,10 +213,23 @@ def face(name: str, page: int, words: list[dict]) -> K1 | None:
     return k1
 
 
+def _unglued(words: list[dict]) -> list[dict]:
+    """Words with a box number run into its label ("14Self-employment", as some preparers' PDFs print them) split
+    in two, the number's width its share of the characters."""
+    out = []
+    for w in words:
+        if m := GLUED.match(w["text"]):
+            cut = w["x0"] + (w["x1"] - w["x0"]) * len(m.group(1)) / len(w["text"])
+            out += [{**w, "text": m.group(1), "x1": cut}, {**w, "text": m.group(2), "x0": cut}]
+        else:
+            out.append(w)
+    return out
+
+
 def _anchor(words: list[dict], number: str, label: str) -> dict | None:
     for w in words:
         if w["text"] == number and any(o["text"].startswith(label) and _same_row(o, w) and
-                                       0 < o["x0"] - w["x1"] < 20 for o in words):
+                                       0 <= o["x0"] - w["x1"] < 20 for o in words):
             return w
     return None
 
