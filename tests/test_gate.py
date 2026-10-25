@@ -152,6 +152,22 @@ def test_status_says_how_each_entry_is_read_without_reading_it(fake_gate: Path, 
     assert "anthropic: Apple Watch or Touch ID; a backup copy is left over, setup clears it" in out
 
 
+def test_another_tool_reads_a_moved_entry_through_the_helper(fake_gate: Path, monkeypatch: pytest.MonkeyPatch,
+                                                             capsys):
+    reasons = []
+    real_read = gate.read
+    monkeypatch.setattr(gate, "read", lambda s, a, reason: reasons.append(reason) or real_read(s, a, reason))
+    assert cli.main(["keychain", "read", "anthropic", "--for", "jobwatch"]) == 0
+    assert capsys.readouterr().out == "sk-not-a-real-key"  # as is, for the calling process
+    assert reasons == ["read the Keychain item anthropic for jobwatch"]
+    # an entry setup didn't move isn't read here: that would bring back the classic prompt
+    assert cli.main(["keychain", "read", "jobwatch-imap", "--for", "jobwatch"]) == 1
+    assert cli.main(["keychain", "read", "anthropic"]) == 2  # the prompt must say who asks
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+    assert cli.main(["keychain", "read", "anthropic", "--for", "jobwatch"]) == 2
+    assert "sk-not-a-real-key" not in capsys.readouterr().out
+
+
 def test_a_locked_file_whose_keychain_read_was_refused_says_so(fake_gate: Path, tmp_path: Path, capsys):
     from conftest import PRIOR_RETURN, make_pdf
 

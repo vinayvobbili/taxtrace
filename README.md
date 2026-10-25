@@ -108,6 +108,16 @@ taxtrace reads each entry at most once per command, so a folder of returns shari
 costs one prompt. `taxtrace unlock` says which entry opens each locked file, and how each stored password
 is shaped (`aaaa99999`), never what it is.
 
+Another tool can read an entry `setup` moved, such as an API key it shares with the chat, without the entry
+trusting that tool too:
+
+```bash
+taxtrace keychain read anthropic --for jobwatch   # the secret on stdout, once approved
+```
+
+The prompt names the item and the tool. The secret goes to the program that runs the command, never to a
+terminal, and an entry `setup` didn't move isn't read this way.
+
 Besides PDFs and text files (.txt, .csv), Word documents (.docx: one line per paragraph and per table row) and
 Excel workbooks (.xlsx: a page per sheet, one line per row) are read, with Python's own zip and XML modules. A
 password-protected Office file isn't read: save an unprotected copy into the workspace.

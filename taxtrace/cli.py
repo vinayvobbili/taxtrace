@@ -874,9 +874,37 @@ def cmd_service(args: argparse.Namespace) -> int:
 
 
 def cmd_keychain(args: argparse.Namespace) -> int:
-    """Approve Keychain reads with Apple Watch or Touch ID instead of typing the login password (macOS)."""
+    """Approve Keychain reads with Apple Watch or Touch ID instead of typing the login password (macOS).
+
+    `read ITEM --for TOOL` lets another tool read an entry that setup moved over, such as an API key: the person
+    approves with Apple Watch or Touch ID (the prompt names the item and the tool), and the secret goes to stdout for
+    the calling process, never to a terminal. The entry still trusts only the helper.
+    """
     from . import chat, gate
 
+    if args.action == "read":
+        if not args.item or not args.caller:
+            print("taxtrace: keychain read takes the item and --for, the tool reading it", file=sys.stderr)
+            return 2
+        if sys.stdout.isatty():
+            print("taxtrace: keychain read gives the secret to the program that runs it, not to a terminal",
+                  file=sys.stderr)
+            return 2
+        account = args.account[0] if args.account else ""
+        if not gate.adopted(args.item, account):
+            print(f"taxtrace: {args.item} isn't read with Apple Watch or Touch ID: run taxtrace keychain setup "
+                  f"--keychain {args.item}", file=sys.stderr)
+            return 1
+        try:
+            secret = gate.read(args.item, account, f"read the Keychain item {args.item} for {args.caller}")
+        except gate.GateError as err:
+            print(f"taxtrace: {err}", file=sys.stderr)
+            return 1
+        if secret is None:
+            print(f"taxtrace: the read of {args.item} wasn't approved", file=sys.stderr)
+            return 1
+        sys.stdout.write(secret)
+        return 0
     if args.action == "status":  # asks the Keychain for attributes only: no prompt, no secret
         built = "built, current" if gate.current() else "built, out of date: run setup" if gate.ready() else "not built"
         print(f"helper: {built}")
@@ -1009,8 +1037,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_passive)
     p = sub.add_parser("keychain", help="approve Keychain reads with Apple Watch or Touch ID (macOS)",
                        description=cmd_keychain.__doc__)
-    p.add_argument("action", choices=["setup", "status"],
-                   help="setup: build the helper and move entries over; status: how each entry is read now")
+    p.add_argument("action", choices=["setup", "status", "read"],
+                   help="setup: build the helper and move entries over; status: how each entry is read now; "
+                        "read: give another tool an entry setup moved, once approved")
+    p.add_argument("item", nargs="?", help="read: the Keychain item (e.g. anthropic)")
+    p.add_argument("--for", dest="caller", metavar="TOOL", help="read: the tool asking, named in the prompt")
     p.add_argument("--keychain", default="anthropic", help="the chat's API key item to include (default: anthropic)")
     p.add_argument("--account", action="append", default=[], metavar="FILE NAME",
                    help="also move a file's own entry (repeatable); the default entry is always moved")
