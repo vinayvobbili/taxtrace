@@ -455,10 +455,14 @@ def _statement_questions(k1: K1) -> None:
 
 # "LINE 20, CODE Z ...", "LINE 20Z ...", "Line 20, AF ...", "Box 19C: ...", "Line 13 - Other Deductions"
 REF = re.compile(r"^\s*(?i:line|box)\s+(\d{1,2})\s*(?:[,:-]\s*)?(?:(?i:code)\s+)?([A-Z]{1,2})?\b\s*[:-]?\s*")
-ANYWHERE = re.compile(r"(?i:line)\s+(\d{1,2}),?\s+(?i:code)\s+([A-Z]{1,2})\b")  # "Schedule K-1, Line 20, Code Z"
+# "Schedule K-1, Line 20, Code Z", "SCHEDULE K-1 BUSINESS INTEREST EXPENSE, BOX 20, CODE N"
+ANYWHERE = re.compile(r"(?i:line|box)\s+(\d{1,2}),?\s+(?i:code)\s+([A-Z]{1,2})\b")
+# a statement's own title with no box in it ("SCHEDULE K-1 WITHDRAWALS AND DISTRIBUTIONS"): it ends the box above
+TITLE = re.compile(r"^\s*SCHEDULE K-1\b")
 ROW_CODE = re.compile(r"^\s*([A-Z]{1,2})(?:-\s|\s{2,})\s*")  # a table row: "C    Meals (general)", "AE- DEDUCTIONS"
-# the amount ending a line: set apart by a column gap, or a "$" or "(" (never "Line 1", an EIN, or a %)
-TRAILING = re.compile(r"(?:^\s*|\s{2,}|\s(?=-?\$|\())(-?\$?-?\(?\$?[\d,]*\d(?:\.\d+)?\)?)\s*$")
+# the amount ending a line: set apart by a column gap, or a "$" or "(" (never "Line 1", an EIN, or a %); some
+# preparers print whole dollars with a period after them ("1,234.")
+TRAILING = re.compile(r"(?:^\s*|\s{2,}|\s(?=-?\$|\())(-?\$?-?\(?\$?[\d,]*\d(?:\.\d+)?\)?)\.?\s*$")
 COLUMN_HEADS = re.compile(r"^\s*(?:Code\s+)?Description\s+Amount\s*$|^\s*Explanation\s*$", re.IGNORECASE)
 SHORT = 30  # characters: a label wrapped onto the lines around its amount is short
 # an underlined heading, as layout text draws it: "S_e_c_t_i_o_n_" (an underlined amount, "____5_", isn't one)
@@ -508,6 +512,9 @@ def statements(texts: list[str], first: int, last: int) -> list[StatementItem]:
             if not ref and not ends and (mid := ANYWHERE.search(line)):
                 box, code, section, reconciling = mid.group(1), mid.group(2), line.strip(), False
                 continue
+            if not ref and not ends and TITLE.match(line):
+                box, code, section, reconciling = "", "", line.strip(), False
+                continue
             if RECONCILE.search(line):
                 box, code, section, reconciling = "", "", line.strip(), True
                 continue
@@ -527,8 +534,11 @@ def statements(texts: list[str], first: int, last: int) -> list[StatementItem]:
             if not box or not (ends := TRAILING.search(rest)):
                 continue
             description = rest[:ends.start()].strip(" .:-")
+            if description.lower().startswith("total"):
+                continue
             around = [lines[i].strip() for i in (n - 1, n + 1) if 0 <= i < len(lines)]
-            text_only = [a for a in around if a and not TRAILING.search(a)]
+            # rule lines (underlines drawn in characters) are no part of a label
+            text_only = [a for a in around if a and not TRAILING.search(a) and any(c.isalnum() for c in a)]
             if not description:  # a lone amount: its label wraps around it
                 description = " ".join(text_only)
             elif len(text_only) == 2 and all(len(a) <= SHORT for a in text_only):  # a label in three lines

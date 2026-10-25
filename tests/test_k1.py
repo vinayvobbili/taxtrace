@@ -124,6 +124,27 @@ FUND_STATEMENT = [
     "Box 20, CODE AG GROSS RECEIPTS FOR SECTION 448(C)",
     "CURRENT YEAR GROSS PROCEEDS                                  $77",
 ]
+# a third preparer's: each statement titled "SCHEDULE K-1 ..., BOX nn, CODE X", whole dollars printed "1,234."
+TITLED_STATEMENT = [
+    "SCHEDULE K-1  NONDEDUCTIBLE EXPENSES, BOX 18, CODE C",
+    "DESCRIPTION                   PARTNER FILING INSTRUCTIONS        AMOUNT",
+    "EXCLUDED MEALS AND            NONDEDUCTIBLE PORTION",
+    "ENTERTAINMENT EXPENSES                                             9.",
+    "                                                               ---------",
+    "TOTAL TO SCHEDULE K-1, BOX 18, CODE C                              9.",
+    "                                                               =========",
+    "SCHEDULE K-1  BUSINESS INTEREST EXPENSE, BOX 20, CODE N",
+    "BUSINESS INTEREST EXPENSE - SEE PARTNERS INSTRUCTIONS",
+    "(INCLUDED IN RENTAL REAL ESTATE",
+    "INCOME (LOSS))                                                 2,250.",
+    "TOTAL TO SCHEDULE K-1, BOX 20, CODE N                          2,250.",
+    "SCHEDULE K-1  SECTION 199A INFORMATION, BOX 20, CODE Z",
+    "RENT - APARTMENTS",
+    "   RENTAL INCOME (LOSS)                                         1,875.",
+    "   W-2 WAGES                                                      310.",
+    "SCHEDULE K-1  WITHDRAWALS AND DISTRIBUTIONS",
+    "CASH DISTRIBUTION                                               48,000.",
+]
 SECRETS = ["4,210", "1,875", "18,500", "15,302", "2,298", "14,300", "Larkspur", "Quarrystone", "1234567", "4410"]
 
 
@@ -221,6 +242,14 @@ def test_statement_amounts_in_a_funds_layout(tmp_path: Path):
         "box 20 code Z: an aggregated group's qbi is its businesses' added up",
         "box 20 code Z: an aggregated group's wages is its businesses' added up"]
     assert found.failed == []
+
+
+def test_statement_amounts_under_titles_that_name_the_box(tmp_path: Path):
+    (found,) = read(draw(tmp_path / "k1.pdf", [FACE, TITLED_STATEMENT]))
+    assert [(s.box, s.code, s.amount) for s in found.statement] == [
+        ("18", "C", Decimal(9)), ("20", "N", Decimal(2250)), ("20", "Z", Decimal(1875)), ("20", "Z", Decimal(310))]
+    assert [s.kind for s in found.statement if s.code == "Z"] == ["", "wages"]
+    # the totals repeat the items; a distribution under a title naming no box belongs to no box
 
 
 def test_an_aggregated_total_that_is_not_its_businesses_fails(tmp_path: Path):
