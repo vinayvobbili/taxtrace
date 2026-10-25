@@ -89,11 +89,17 @@ def build() -> bool:
     return True
 
 
+refused: set[tuple[str, str]] = set()  # entries whose read this run the person didn't approve
+
+
 def read(service: str, account: str, reason: str) -> str | None:
-    """The entry's password once the person approves; None if there's no such entry or they didn't approve."""
+    """The entry's password once the person approves; None if there's no such entry or they didn't approve (noted
+    in `refused`, so a locked file can say why it stayed locked)."""
     run = subprocess.run([str(helper_path()), service, account, reason], capture_output=True, text=True)
     if run.returncode == 3:
         raise GateError(run.stderr.strip())
+    if run.returncode == 1:
+        refused.add((service, account))
     return run.stdout if run.returncode == 0 else None
 
 

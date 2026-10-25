@@ -114,20 +114,33 @@ if SecItemCopyMatching(query as CFDictionary, &found) != errSecSuccess {
     exit(2)  // a missing entry costs no approval
 }
 
-let context = LAContext()
+func approve(_ policy: LAPolicy) -> (Bool, LAError.Code?) {
+    let done = DispatchSemaphore(value: 0)
+    var result: (Bool, LAError.Code?) = (false, nil)
+    LAContext().evaluatePolicy(policy, localizedReason: reason) { ok, error in
+        result = (ok, (error as? LAError)?.code)
+        done.signal()
+    }
+    done.wait()
+    return result
+}
+
 var policy = LAPolicy.deviceOwnerAuthenticationWithBiometricsOrCompanion  // Touch ID or a paired Apple Watch
 var unavailable: NSError?
-if !context.canEvaluatePolicy(policy, error: &unavailable) {
+if !LAContext().canEvaluatePolicy(policy, error: &unavailable) {
     policy = .deviceOwnerAuthentication  // neither set up: the login password
 }
-let done = DispatchSemaphore(value: 0)
-var approved = false
-context.evaluatePolicy(policy, localizedReason: reason) { ok, _ in
-    approved = ok
-    done.signal()
+var (approved, failure) = approve(policy)
+// "Use Password" comes back to the asker to handle, and a Watch asleep (Sleep Focus) or locked fails at once: either
+// way the login password is asked for. Only the person cancelling is a refusal.
+let refusals: [LAError.Code] = [.userCancel, .appCancel, .systemCancel]
+if !approved, policy != .deviceOwnerAuthentication, let code = failure, !refusals.contains(code) {
+    (approved, failure) = approve(.deviceOwnerAuthentication)
 }
-done.wait()
-guard approved else { exit(1) }
+guard approved else {
+    FileHandle.standardError.write(Data("not approved (\(failure.map { "\($0.rawValue)" } ?? "?"))\n".utf8))
+    exit(1)
+}
 
 query.removeValue(forKey: kSecReturnAttributes as String)
 query[kSecReturnData as String] = true

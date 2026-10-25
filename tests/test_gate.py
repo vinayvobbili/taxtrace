@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from taxtrace import chat, cli, gate, workspace
+from taxtrace import chat, cli, gate, text, workspace
 
 # Stands in for the Swift helper: entry `taxtrace/default` and the chat's key exist; "denied" isn't approved.
 FAKE = """#!/bin/sh
@@ -32,7 +32,7 @@ fi
 case "$1/$2" in
   taxtrace/default) printf 'not-a-real-password' ;;
   anthropic/) printf 'sk-not-a-real-key' ;;
-  taxtrace/denied) exit 1 ;;
+  taxtrace/denied|taxtrace/denied.pdf) exit 1 ;;
   *) exit 2 ;;
 esac
 """
@@ -150,6 +150,20 @@ def test_status_says_how_each_entry_is_read_without_reading_it(fake_gate: Path, 
     assert "Return.pdf: the classic prompt (password, then Allow): run setup to move it" in out
     assert "K-1.pdf: Apple Watch or Touch ID\n" in out and "Quillfeather" not in out  # listed without being named
     assert "anthropic: Apple Watch or Touch ID; a backup copy is left over, setup clears it" in out
+
+
+def test_a_locked_file_whose_keychain_read_was_refused_says_so(fake_gate: Path, tmp_path: Path, capsys):
+    from conftest import PRIOR_RETURN, make_pdf
+
+    listed = fake_gate.with_suffix(".adopted")
+    listed.write_text(listed.read_text() + "taxtrace\tdenied.pdf\n")
+    locked = make_pdf(tmp_path / "denied.pdf", PRIOR_RETURN, password="anything")  # its own entry isn't approved
+    gate.refused.clear()
+    try:
+        with pytest.raises(text.Locked, match="wasn't approved"):
+            cli._unlocked(locked)
+    finally:
+        gate.refused.clear()
 
 
 def test_new_entries_are_stored_for_the_helper_once_it_is_built(fake_gate: Path):

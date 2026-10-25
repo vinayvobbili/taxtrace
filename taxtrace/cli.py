@@ -75,6 +75,10 @@ def _unlocked(doc: Path) -> tuple[list[str], str | None]:
             return text.pages(doc, password, ocr_cache=workspace.ocr_cache()), password
         except text.Locked as err:
             failure = err  # the last says best why: no password stored, or none that opened it
+    from . import gate
+
+    if {(workspace.KEYCHAIN_SERVICE, a) for a in (doc.name, workspace.KEYCHAIN_DEFAULT)} & gate.refused:
+        raise text.Locked(f"{failure}; the Keychain read wasn't approved (Apple Watch, Touch ID or password)")
     raise failure
 
 
