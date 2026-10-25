@@ -57,6 +57,13 @@ def test_without_ocrmypdf_a_scan_says_how_to_read_it(tmp_path: Path, monkeypatch
     assert text.pages(scan) == [""]  # no cache given: the text layer, empty as it is
 
 
+def test_without_ocrmypdf_a_typed_document_with_a_blank_page_still_reads(tmp_path: Path, monkeypatch):
+    mixed = make_pdf(tmp_path / "policy.pdf", [["Policy conditions"], PRIOR_RETURN[0]])
+    monkeypatch.setattr(shutil, "which", lambda name: None)
+    found = text.pages(mixed, ocr_cache=tmp_path / "ocr-cache")
+    assert len(found) == 2 and "Form 4562" in found[1]
+
+
 @pytest.mark.skipif(shutil.which("ocrmypdf") is None, reason="ocrmypdf isn't installed")
 def test_a_scan_is_read_through_ocr_once(tmp_path: Path):
     scan = make_scan(tmp_path / "scan.pdf", ["Form 8582 Passive Activity Loss Limitations", "Worksheet 5"])

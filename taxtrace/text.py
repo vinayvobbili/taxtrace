@@ -48,7 +48,13 @@ def pages(path: Path, password: str | None = None, ocr_cache: Path | None = None
         found = _pdf_pages(path, password)
         # A locked file can't go through ocrmypdf; its text layer is what there is.
         if ocr_cache is not None and password is None and needs_ocr(found):
-            found = _pdf_pages(ocr(path, ocr_cache), None)
+            try:
+                found = _pdf_pages(ocr(path, ocr_cache), None)
+            except UnsupportedDocument:
+                # without ocrmypdf (or when it fails) a document with some text still reads; one blank page
+                # among typed ones shouldn't cost the rest
+                if not has_text(found):
+                    raise
         return found
     if suffix in TEXT_SUFFIXES:
         return [path.read_text(errors="replace")]
@@ -148,6 +154,10 @@ def _x_density(page) -> float:
 
 def needs_ocr(found: list[str]) -> bool:
     return any(len(page.strip()) < OCR_MIN_CHARS for page in found)
+
+
+def has_text(found: list[str]) -> bool:
+    return any(len(page.strip()) >= OCR_MIN_CHARS for page in found)
 
 
 def ocr(path: Path, cache: Path) -> Path:
