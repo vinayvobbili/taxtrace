@@ -41,6 +41,8 @@ Early. What works today:
 - `taxtrace rental`: puts the rental's Schedule E together, line by line (see [Schedule E](#schedule-e)).
 - `taxtrace itr`: reads India's income tax return (ITR-2): a property sale, the interest, the tax India kept (see
   [India's return](#indias-return)).
+- `taxtrace bank`: reads a foreign bank's statement of account: interest, a tax refund, balances (see
+  [Bank statements](#bank-statements)).
 - `taxtrace ui`: the workspace in the browser, with a chat (see [Chat](#chat)).
 
 Planned, in order: the foreign side (interest at Treasury rates, foreign tax
@@ -300,6 +302,24 @@ fees, the TDS schedules match Part B-TTI, each sale's balance and gain add up, a
 year. Questions: an improvement's date (only its financial year is printed, and each converts to dollars at its own
 day's rate), a stamp value above the price received (the US return uses the price), and whether the person owned the
 whole property. Nothing that names the person is kept: no PAN, acknowledgement number or address.
+
+## Bank statements
+
+```bash
+taxtrace bank 2025           # writes forms/bank-<last four digits>-<period start>.json
+taxtrace bank --rows 2025    # also each row's date, kind and description, masked
+```
+
+An Indian branch's statement of account is a table: the date, the amount under Withdrawal or Deposit, the balance
+("Cr." or "Dr."), then a description that can run onto several lines. `bank` places each word by where it sits: an
+amount belongs to the column whose heading it starts under, and a description line goes with the dated row nearest
+it (a description of several lines is centred on its row). Each row gets a kind: interest (its description names the
+period it pays for), a tax refund, TDS withheld on interest, or a TDS refund. These give Schedule B and Form 1116 the
+interest, Form 8938 and the FBAR the balances, and a cross-check that India's refund arrived.
+
+The checks: each balance is the one before plus the deposit or less the withdrawal, and the rows add up to the
+statement's grand totals. A statement runs on India's year (April to March), so a calendar year usually needs two.
+Of the account number only its last four digits are kept, and nothing that names the holders.
 
 ## Foreign side
 

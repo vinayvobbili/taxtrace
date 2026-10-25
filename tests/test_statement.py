@@ -1,0 +1,78 @@
+"""A made-up Indian bank's statement of account: an invented branch, holder, account and amounts."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from conftest import printed
+from test_k1 import draw
+
+from taxtrace import cli, statement, text
+
+HEAD = [
+    (30, 40, "Kesavapuram Co-operative Bank, Tirumalagiri Branch"),
+    (30, 54, "Account Holder : Mrudula Kanchibhotla"),
+    (30, 68, "Statement of Account No : 000123459876"),
+    (30, 82, "Acct Currency : INR"),
+    (30, 96, "Statement for Period : 01-04-2025 to 31-03-2026"),
+    (30, 120, "Date"), (84, 120, "Withdrawal"), (146, 120, "Deposit"), (208, 120, "Balance"),
+    (270,120, "Particulars"),
+]
+ROWS = [
+    (30, 140, "15-05-2025"), (84, 140, "590.00"), (208, 140, "102410.00"), (248,140, "Cr."),
+    (270,140, "SMS CHARGES FY:2025-2026"),
+    (30, 160, "30-06-2025"), (146, 160, "812.00"), (208, 160, "103222.00"), (248,160, "Cr."),
+    (270,160, "Int.Pd From :01-04-2025 to 30-06-2025"),
+    # a description of two lines, centred on its row: one line above the date, one below
+    (270,174, "NEFT IN::CMS9988/ITD"),
+    (30, 180, "02-12-2025"), (146, 180, "4970.00"), (208, 180, "108192.00"), (248,180, "Cr."),
+    (270,186, "REFUND 2025-26 TAX"),
+    (30, 206, "31-12-2025"), (84, 206, "81.20"), (208, 206, "108110.80"), (248,206, "Cr."),
+    (270,206, "TDS ON INTEREST"),
+    (30, 226, "Grand Total"), (84, 226, "671.2"), (146, 226, "5782.0"),
+    (30, 236, "Printed on 05-04-2026"), (270,236, "Page 1 of 1"),
+]
+PAGE = HEAD + ROWS
+SECRETS = ["Mrudula", "Kanchibhotla", "000123459876", "9876", "102410.00", "4970.00", "108110.80", "9988"]
+
+
+def read(path: Path) -> statement.Statement:
+    pages = text.pages(path)
+    assert statement.is_statement(pages[0])
+    return statement.read(path.name, pages, {1: text.words(path, 1, None)})
+
+
+def test_each_row_its_column_its_kind_and_its_whole_description(tmp_path: Path):
+    found = read(draw(tmp_path / "statement.pdf", [PAGE]))
+    assert (found.account, found.currency, found.start, found.end) == ("9876", "INR", "01-04-2025", "31-03-2026")
+    assert [(r.on, str(r.withdrawal), str(r.deposit), str(r.balance), r.kind) for r in found.rows] == [
+        ("15-05-2025", "590.00", "0", "102410.00", ""),
+        ("30-06-2025", "0", "812.00", "103222.00", "interest"),
+        ("02-12-2025", "0", "4970.00", "108192.00", "tax refund"),
+        ("31-12-2025", "81.20", "0", "108110.80", "tds"),  # TDS on interest is withheld, not interest
+    ]
+    assert found.rows[2].description == "NEFT IN::CMS9988/ITD REFUND 2025-26 TAX"
+    assert "Page" not in found.rows[-1].description
+    assert found.failed == [] and len(found.checks) == 4 and found.questions == []
+
+
+def test_a_balance_that_doesnt_follow_fails(tmp_path: Path):
+    page = [(x, top, "108191.00" if phrase == "108192.00" else phrase) for x, top, phrase in PAGE]
+    found = read(draw(tmp_path / "statement.pdf", [page]))
+    assert [c.what for c in found.failed] == ["the balance on 02-12-2025 follows from the one before",
+                                              "the balance on 31-12-2025 follows from the one before"]
+
+
+def test_cli_saves_the_statement_and_prints_it_masked(tmp_path: Path, workspace_home: Path, capsys):
+    path = draw(tmp_path / "Statement Kanchibhotla.pdf", [PAGE])
+    assert cli.main(["bank", "--rows", str(path)]) == 0
+    out = printed(capsys)
+    for secret in SECRETS:
+        assert secret not in out
+    assert ("account ending #### in INR, 01-04-2025 to 31-03-2026; 4 rows (1 interest, 1 tax refund, 1 tds, "
+            "0 tds refund); 4 of 4 checks pass") in out
+    assert "  02-12-2025 deposit tax refund: " in out
+    (saved,) = json.loads((workspace_home / "forms" / "bank-9876-20250401.json").read_text())
+    assert (saved["form"], saved["account"], len(saved["rows"])) == ("BANK", "9876", 4)
+    assert "000123459876" not in json.dumps(saved) and "Account Holder" not in json.dumps(saved)

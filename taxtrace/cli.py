@@ -585,6 +585,57 @@ def cmd_itr(args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+def cmd_bank(args: argparse.Namespace) -> int:
+    """Read foreign banks' statements of account into <workspace>/forms: each transaction, which rows are interest,
+    a tax refund or TDS, for Schedule B, Form 1116, Form 8938 and the FBAR.
+
+    The values go only to that folder, as bank-<last four digits>-<period start>.json. What's printed is masked: the
+    period, how many rows of each kind, the checks that failed and the questions.
+    """
+    from . import statement
+
+    home = workspace.outside_git(workspace.home())
+    terms = workspace.redact_terms()
+
+    def masked(line: str) -> str:
+        return redact.redact(line, terms).text.strip()
+
+    out, written, failed = home / workspace.FORMS, 0, 0
+    for doc in _documents(args):
+        name = redact.redact(doc.name, terms, bare_years=True).text
+        if doc.suffix.lower() not in text.PDF_SUFFIXES:
+            continue
+        try:
+            pages, password = _unlocked(doc)
+        except text.UnsupportedDocument as err:
+            print(f"{name}: skipped, {err}")
+            continue
+        tables = [n for n, page in enumerate(pages, 1) if statement.is_statement(page)]
+        if not tables:
+            continue
+        found = statement.read(doc.name, pages, {n: text.words(doc, n, password) for n in tables})
+        failed += bool(found.failed)
+        kinds = {k: sum(r.kind == k for r in found.rows) for k in ("interest", "tax refund", "tds", "tds refund")}
+        print(f"{name}: account ending {masked(found.account) or '?'} in {found.currency or '?'}, "
+              f"{found.start or '?'} to {found.end or '?'}; {len(found.rows)} rows ("
+              + ", ".join(f"{v} {k}" for k, v in kinds.items()) + f"); {len(found.checks) - len(found.failed)} of "
+              f"{len(found.checks)} checks pass")
+        if args.rows:
+            for r in found.rows:
+                print(f"  {r.on} {'deposit' if r.deposit else 'withdrawal'} {r.kind or '-'}: {masked(r.description)}")
+        for c in found.failed:
+            print(f"  failed: {c.what}" + (f" ({masked(c.quote)})" if c.quote else ""))
+        for q in found.questions:
+            print(f"  question: {q.text}")
+        out.mkdir(parents=True, exist_ok=True)
+        start = "".join(reversed(found.start.split("-"))) if found.start else doc.stem
+        (out / f"bank-{found.account or 'x'}-{start}.json").write_text(
+            json.dumps([found.to_json()], indent=2, default=str) + "\n")
+        written += 1
+    print(f"wrote to {out}" if written else "no statements of account found")
+    return 1 if failed else 0
+
+
 def cmd_rental(args: argparse.Namespace) -> int:
     """Put the rental's Schedule E (Part I) for a year together into <workspace>/schedule-e/<year>.json.
 
@@ -910,6 +961,11 @@ def build_parser() -> argparse.ArgumentParser:
                        description=cmd_itr.__doc__)
     p.add_argument("paths", nargs="*", help=PATHS_HELP)
     p.set_defaults(func=cmd_itr)
+    p = sub.add_parser("bank", help="read foreign banks' statements of account: interest, refunds, balances",
+                       description=cmd_bank.__doc__)
+    p.add_argument("paths", nargs="*", help=PATHS_HELP)
+    p.add_argument("--rows", action="store_true", help="also print each row's date, kind and description, masked")
+    p.set_defaults(func=cmd_bank)
     p = sub.add_parser("rental", help="put a year's Schedule E for the rental together, line by line",
                        description=cmd_rental.__doc__)
     p.add_argument("paths", nargs="*", help="documents or folders with the answers and policies "
