@@ -43,6 +43,10 @@ def test_years_stay_only_where_they_cant_be_an_amount():
     assert redact("Quillfeather_2025", bare_years=True).text == "************_2025"
 
 
+def test_a_file_name_keeps_its_type():
+    assert redact("Brambleworth rents 2025.xlsx", bare_years=True).text == "************ rents 2025.xlsx"
+
+
 def test_terms_mask_names_that_are_also_words():
     r = redact("Paid to Will Banks for roof repair", terms=["Will Banks"])
     assert r.text == "Paid to **** ***** for roof repair"

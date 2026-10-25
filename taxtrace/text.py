@@ -13,11 +13,20 @@ from __future__ import annotations
 import hashlib
 import shutil
 import subprocess
+import zipfile
+from collections.abc import Iterator
 from pathlib import Path
+from xml.etree import ElementTree
 
 TEXT_SUFFIXES = {".txt", ".csv", ".tsv"}
 PDF_SUFFIXES = {".pdf"}
-SUPPORTED = TEXT_SUFFIXES | PDF_SUFFIXES
+OFFICE_SUFFIXES = {".docx", ".xlsx"}  # zip files of XML, read with the standard library
+SUPPORTED = TEXT_SUFFIXES | PDF_SUFFIXES | OFFICE_SUFFIXES
+WORD = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+SHEET = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+RELS = "{http://schemas.openxmlformats.org/package/2006/relationships}"
+REL_ID = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id"
+CELL = " | "  # between a table's or a sheet's cells
 # A page with less text than this is a picture of a page (or blank, which OCR leaves blank).
 OCR_MIN_CHARS = 20
 
@@ -40,7 +49,71 @@ def pages(path: Path, password: str | None = None, ocr_cache: Path | None = None
         return found
     if suffix in TEXT_SUFFIXES:
         return [path.read_text(errors="replace")]
+    if suffix in OFFICE_SUFFIXES:
+        try:
+            with zipfile.ZipFile(path) as z:
+                return [_docx(z)] if suffix == ".docx" else _xlsx(z)
+        except (zipfile.BadZipFile, KeyError, ElementTree.ParseError):
+            # a password-protected Office file isn't a zip at all, but an encrypted container
+            raise UnsupportedDocument(f"{suffix}: not a readable file (damaged, or password-protected)") from None
     raise UnsupportedDocument(f"{path.suffix or 'no extension'}: not readable yet")
+
+
+def _docx(z: zipfile.ZipFile) -> str:
+    """A Word document's text, one line per paragraph and per table row (its cells apart), as one page."""
+    body = ElementTree.fromstring(z.read("word/document.xml")).find(f"{WORD}body")
+    return "\n".join(_blocks(body)) if body is not None else ""
+
+
+def _blocks(parent: ElementTree.Element) -> Iterator[str]:
+    for child in parent:
+        if child.tag == f"{WORD}p":
+            yield _paragraph(child)
+        elif child.tag == f"{WORD}tbl":
+            for row in child.iter(f"{WORD}tr"):
+                yield CELL.join(" ".join(map(_paragraph, cell.iter(f"{WORD}p"))) for cell in row.findall(f"{WORD}tc"))
+        elif child.tag == f"{WORD}sdt" and (content := child.find(f"{WORD}sdtContent")) is not None:
+            yield from _blocks(content)  # a form's fill-in field: the answer is inside
+
+
+def _paragraph(p: ElementTree.Element) -> str:
+    return "".join((e.text or "") if e.tag == f"{WORD}t" else "\t" for e in p.iter()
+                   if e.tag in (f"{WORD}t", f"{WORD}tab"))
+
+
+def _xlsx(z: zipfile.ZipFile) -> list[str]:
+    """A workbook's sheets, one page each: its name, then one line per row with the cells apart, as stored."""
+    names = set(z.namelist())
+    shared = [] if "xl/sharedStrings.xml" not in names else [
+        "".join(t.text or "" for t in si.iter(f"{SHEET}t"))
+        for si in ElementTree.fromstring(z.read("xl/sharedStrings.xml")).findall(f"{SHEET}si")]
+    targets = {r.get("Id"): r.get("Target", "") for r in
+               ElementTree.fromstring(z.read("xl/_rels/workbook.xml.rels")).findall(f"{RELS}Relationship")}
+    found = []
+    for sheet in ElementTree.fromstring(z.read("xl/workbook.xml")).iter(f"{SHEET}sheet"):
+        target = targets.get(sheet.get(REL_ID), "")
+        rows = []
+        for row in ElementTree.fromstring(z.read(target.lstrip("/") if target.startswith("/") else f"xl/{target}")
+                                          ).iter(f"{SHEET}row"):
+            cells: dict[int, str] = {}
+            for c in row.findall(f"{SHEET}c"):
+                kind, v = c.get("t"), c.find(f"{SHEET}v")
+                value = ("".join(t.text or "" for t in c.iter(f"{SHEET}t")) if kind == "inlineStr"
+                         else "" if v is None or v.text is None else shared[int(v.text)] if kind == "s" else v.text)
+                cells[_column(c.get("r", ""), len(cells))] = value
+            if any(cells.values()):
+                rows.append(CELL.join(cells.get(n, "") for n in range(max(cells) + 1)).rstrip(" |"))
+        found.append("\n".join([f"[{sheet.get('name', '')}]", *rows]))
+    return found
+
+
+def _column(ref: str, default: int) -> int:
+    """'C7' as 2: a cell's column from its reference, or the next column when it has none."""
+    letters = "".join(ch for ch in ref if ch.isalpha())
+    n = 0
+    for ch in letters.upper():
+        n = n * 26 + ord(ch) - ord("A") + 1
+    return n - 1 if letters else default
 
 
 def _pdf_pages(path: Path, password: str | None) -> list[str]:

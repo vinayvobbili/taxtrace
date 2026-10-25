@@ -47,3 +47,17 @@ ssn
 st
 tds
 ytd
+# file types, so a masked file name still says what kind of file it is
+csv
+doc
+docx
+heic
+jpeg
+jpg
+json
+png
+tsv
+txt
+xls
+xlsx
+zip

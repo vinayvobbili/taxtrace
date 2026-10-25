@@ -454,6 +454,64 @@ def cmd_k1(args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+def cmd_1098(args: argparse.Namespace) -> int:
+    """Read every Form 1098 (Mortgage Interest Statement) into <workspace>/forms: each box, the lender and the year.
+
+    The values go only to that folder. What's printed is masked: which boxes have amounts, the checks that failed
+    and the questions (box 10's other amount, a refund of interest, which property), and with --layout each value's
+    text and where it sits.
+    """
+    from . import f1098, k1
+
+    home = workspace.outside_git(workspace.home())
+    terms = workspace.redact_terms()
+
+    def masked(line: str) -> str:
+        return redact.redact(line, terms).text.strip()
+
+    out, written, failed = home / workspace.FORMS, 0, 0
+    for doc in _documents(args):
+        name = redact.redact(doc.name, terms, bare_years=True).text
+        try:
+            pages, password = _unlocked(doc)
+        except text.UnsupportedDocument as err:
+            print(f"{name}: skipped, {err}")
+            continue
+        forms = [n for n, page in enumerate(pages, 1) if f1098.is_form(page)]
+        if not forms or doc.suffix.lower() not in text.PDF_SUFFIXES:
+            continue
+        words = {n: text.words(doc, n, password) for n in forms}
+        found = f1098.read(doc.name, words)
+        for f in found:
+            problems = k1.verify(f, words[f.page])
+            failed += bool(f.failed or problems)
+            print(f"{name} p{f.page}: {f.year or '?'} Form 1098 from {masked(f.lender_tin) or 'no lender TIN found'}"
+                  f", amounts in boxes {', '.join(f.amounts) or 'none'}; {len(f.checks) - len(f.failed)} of "
+                  f"{len(f.checks)} checks pass, {len(f.questions)} questions"
+                  + ("; corrected" if f.corrected else "")
+                  + (f"; a second copy of p{f.copy_of}'s, counted once" if f.copy_of else ""))
+            print(f"  property: {masked(f.address) if f.address else 'none in box 8'}"
+                  + ("; box 7: the borrower's own address" if f.same_address else ""))
+            for c in f.failed:
+                print(f"  failed: {c.what}" + (f" ({masked(c.quote)})" if c.quote else ""))
+            for p in problems:
+                print(f"  failed: {masked(p)}")
+            for q in f.questions:
+                print(f"  question: {q.text}" + (f" ({masked(q.quote)})" if q.quote else ""))
+            if args.layout:
+                print(f"  lender {masked(f.lender)}; account {masked(f.account)}; borrower's TIN ending "
+                      f"{masked(f.payer) or '?'}; origination {masked(f.origination) or 'none'}, acquisition "
+                      f"{masked(f.acquisition) or 'none'}; properties {f.properties or 'not printed'}")
+                for box, v in f.amounts.items():
+                    print(f"  box {box}: {masked(v.quote)} at {v.top}, {v.x0}")
+        if found:
+            out.mkdir(parents=True, exist_ok=True)
+            (out / f"{doc.stem}.json").write_text(json.dumps([f.to_json() for f in found], indent=2) + "\n")
+            written += 1
+    print(f"wrote to {out}" if written else "no 1098s found")
+    return 1 if failed else 0
+
+
 def cmd_passive(args: argparse.Namespace) -> int:
     """Each passive activity's year into <workspace>/passive/<year>.json, from what `prior` and `k1` saved.
 
@@ -644,6 +702,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("paths", nargs="*", help=PATHS_HELP)
     p.add_argument("--layout", action="store_true", help="also print each value's text and place, masked")
     p.set_defaults(func=cmd_k1)
+    p = sub.add_parser("1098", help="read Form 1098 mortgage interest statements: each box, the lender and the year",
+                       description=cmd_1098.__doc__)
+    p.add_argument("paths", nargs="*", help=PATHS_HELP)
+    p.add_argument("--layout", action="store_true", help="also print each value's text and place, masked")
+    p.set_defaults(func=cmd_1098)
     p = sub.add_parser("passive", help="each passive activity's year, from the saved returns and K-1s",
                        description=cmd_passive.__doc__)
     p.add_argument("--year", type=int, help="the tax year (default: the latest year of the K-1s read)")

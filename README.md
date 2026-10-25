@@ -37,6 +37,7 @@ Early. What works today:
   K-3, and North Carolina's D-403 NC K-1 (see [K-1s](#k-1s)).
 - `taxtrace passive`: each passive activity's year and the loss it carries in (see
   [Passive activities](#passive-activities)).
+- `taxtrace 1098`: reads each Form 1098 mortgage interest statement (see [Form 1098](#form-1098)).
 - `taxtrace ui`: the workspace in the browser, with a chat (see [Chat](#chat)).
 
 Planned, in order: Schedule E, the foreign side (interest at Treasury rates, foreign tax
@@ -101,6 +102,10 @@ you deny the classic prompt during `setup`, it says so and leaves that entry as 
 taxtrace reads each entry at most once per command, so a folder of returns sharing the `default` password
 costs one prompt. `taxtrace unlock` says which entry opens each locked file, and how each stored password
 is shaped (`aaaa99999`), never what it is.
+
+Besides PDFs and text files (.txt, .csv), Word documents (.docx: one line per paragraph and per table row) and
+Excel workbooks (.xlsx: a page per sheet, one line per row) are read, with Python's own zip and XML modules. A
+password-protected Office file isn't read: save an unprotected copy into the workspace.
 
 `redact`, `outline` and `unlock` with no paths read the whole workspace, leaving out what taxtrace wrote
 there itself (`redacted/`, `ocr-cache/`).
@@ -221,6 +226,26 @@ masked name, where its year comes from and whether it's income or a loss, never 
   question: the years between changed it.
 - The rental's year comes from Schedule E, and a box 13 deduction whose code doesn't settle whether it's the
   activity's is a question.
+
+## Form 1098
+
+```bash
+taxtrace 1098 2025            # every Form 1098 in <workspace>/2025
+taxtrace 1098 2025 --layout   # also each value's text, masked, and where it sits
+```
+
+A lender's 1098 is a printed form too. Each box is found by its number and the first words of its label, matched
+with the spaces taken out, since a lender's print can split a word ("M ortgage"). Its value is what sits under the
+label, from the box's number to the next box's label beside it or below it. The lender's TIN, the borrower's (last
+four digits only), the account number and the calendar year are read by their labels. The values go to
+`<workspace>/forms/<document>.json`; the terminal gets which boxes hold amounts, the checks and the questions.
+
+- Box 1 has to be there, and has to be under 15% of box 2's principal: more is a misread, not a mortgage.
+- Box 10 (other) isn't interest. What the lender prints beside it (often taxes or insurance paid from escrow)
+  decides where it goes, so it's a question, as are a refund of interest (box 4), insurance premiums (box 5),
+  points (box 6), more than one property (box 9) and a corrected form.
+- Box 8's address, or box 7's mark, says which property the interest is for: a rental's goes on Schedule E line 12,
+  a home's on Schedule A. A 1098 with neither is a question.
 
 ## Chat
 
