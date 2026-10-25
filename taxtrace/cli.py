@@ -63,11 +63,13 @@ def _open(doc: Path) -> list[str]:
     return _unlocked(doc)[0]
 
 
-def _unlocked(doc: Path) -> tuple[list[str], str | None]:
-    """A document's pages and the password that opened them (None: not locked)."""
+def _unlocked(doc: Path, keychain: bool = True) -> tuple[list[str], str | None]:
+    """A document's pages and the password that opened them (None: not locked). With `keychain` off, a locked
+    document is skipped (raises `text.Locked`) without asking for its stored password."""
     def passwords():
         yield None  # most files aren't locked: the Keychain is asked only when one is
-        yield from workspace.pdf_passwords(doc)
+        if keychain:
+            yield from workspace.pdf_passwords(doc)
 
     failure = text.Locked("password-protected")
     for password in passwords():
@@ -224,7 +226,7 @@ def cmd_prior(args: argparse.Namespace) -> int:
         words = {n: text.words(doc, n, password) for n, page in enumerate(pages, 1) if prior.has_activities(page)} \
             if doc.suffix.lower() in text.PDF_SUFFIXES else {}
         found = prior.read(doc.name, pages, words)
-        if not (found.assets or found.unallowed or found.activities):
+        if not (found.assets or found.unallowed or found.activities or found.rentals):
             print(f"{name}: no depreciation schedule or Form 8582 worksheets")
             continue
         problems = prior.verify(found, pages)
@@ -240,7 +242,11 @@ def cmd_prior(args: argparse.Namespace) -> int:
               f"{len(found.activities)} passive activities on Worksheets 1 and 3; "
               f"{len(found.checks) - len(bad)} of {len(found.checks)} checks pass, {len(found.questions)} questions"
               + (f"; AMT and book copies skipped (p{found.skipped})" if found.skipped else "")
-              + "".join(f"; p{n} is the {y} schedule, skipped" for n, y in found.other_years.items()))
+              + "".join(f"; p{n} is the {y} schedule, skipped" for n, y in found.other_years.items())
+              + "".join(f"; Schedule E p{r.lines[3].page if 3 in r.lines else '?'}: lines "
+                        f"{', '.join(map(str, sorted(r.lines))) or 'none'}" + (f", line 19's {len(r.other)} items"
+                                                                              if r.other else "")
+                        for r in found.rentals))
         for c in bad:
             print(f"  failed, p{c.page}: {masked(c.what)}")
         for p in problems:
@@ -512,6 +518,63 @@ def cmd_1098(args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+def cmd_rental(args: argparse.Namespace) -> int:
+    """Put the rental's Schedule E (Part I) for a year together into <workspace>/schedule-e/<year>.json.
+
+    It reads the answers to the preparer's questions and the insurance declarations among the documents given
+    (default: <workspace>/<year>), skipping locked ones without asking the Keychain, and takes what `1098`, `prior`
+    and `prior --project` saved: the property's 1098, the latest filed Schedule E and the depreciation rolled
+    forward. What's printed is masked: where each line comes from, the checks and the questions.
+    """
+    from . import answers, policy, schedule_e
+
+    home = workspace.outside_git(workspace.home())
+    terms = workspace.redact_terms()
+
+    def masked(line: str) -> str:
+        return redact.redact(line, terms).text.strip()
+
+    year = args.year
+    docs = text.documents([Path(p) if Path(p).exists() else home / p for p in args.paths] or [home / str(year)])
+    found_answers, policies = [], []
+    for doc in docs:
+        try:
+            pages, _ = _unlocked(doc, keychain=False)
+        except text.UnsupportedDocument:
+            continue  # a locked K-1 or statement: neither answers nor declarations are kept locked
+        found_answers += answers.read(doc.name, pages)
+        if doc.suffix.lower() in text.PDF_SUFFIXES:
+            policies += policy.read(doc.name, pages)
+    filed = []
+    for path in sorted((home / workspace.CARRYFORWARDS).glob("*.json")):
+        row = json.loads(path.read_text())
+        if isinstance(row, dict) and (row.get("year") or year) < year:
+            filed += [schedule_e.load(r) for r in row.get("rentals", [])]
+    last = max(filed, key=lambda r: r.year or 0, default=None)
+    forms = [f for path in sorted((home / workspace.FORMS).glob("*.json")) for f in json.loads(path.read_text())]
+    projected_path = home / workspace.CARRYFORWARDS / f"projected-{year}.json"
+    projected = json.loads(projected_path.read_text()) if projected_path.exists() else None
+    rental = schedule_e.build(year, last=last, answers=found_answers, forms=forms, policies=policies,
+                              projected=projected)
+    print(f"{year} Schedule E for {masked(rental.address) or 'an unknown property'}"
+          + (f", against {last.year}'s filed return" if last else "") + ":")
+    for n, line in sorted(rental.lines.items()):
+        print(f"  line {n} {schedule_e.LINES[n].lower()}: {line.source}, "
+              f"{redact.redact(line.file, terms, bare_years=True).text} p{line.page}")
+    if last:
+        print(f"  {last.year}: lines {', '.join(map(str, sorted(last.lines)))}"
+              + (f"; line 19: {', '.join(masked(o.what) for o in last.other)}" if last.other else ""))
+    for c in rental.failed:
+        print(f"  failed: {c.what}" + (f" ({masked(c.quote)})" if c.quote else ""))
+    for q in rental.questions:
+        print(f"  question: {q.text}" + (f" ({masked(q.quote)})" if q.quote else ""))
+    out = home / workspace.SCHEDULE_E
+    out.mkdir(parents=True, exist_ok=True)
+    (out / f"{year}.json").write_text(json.dumps(rental.to_json(), indent=2) + "\n")
+    print(f"wrote to {out / f'{year}.json'}")
+    return 1 if rental.failed else 0
+
+
 def cmd_passive(args: argparse.Namespace) -> int:
     """Each passive activity's year into <workspace>/passive/<year>.json, from what `prior` and `k1` saved.
 
@@ -707,6 +770,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("paths", nargs="*", help=PATHS_HELP)
     p.add_argument("--layout", action="store_true", help="also print each value's text and place, masked")
     p.set_defaults(func=cmd_1098)
+    p = sub.add_parser("rental", help="put a year's Schedule E for the rental together, line by line",
+                       description=cmd_rental.__doc__)
+    p.add_argument("paths", nargs="*", help="documents or folders with the answers and policies "
+                                            "(default: <workspace>/<year>)")
+    p.add_argument("--year", type=int, required=True, help="the tax year")
+    p.set_defaults(func=cmd_rental)
     p = sub.add_parser("passive", help="each passive activity's year, from the saved returns and K-1s",
                        description=cmd_passive.__doc__)
     p.add_argument("--year", type=int, help="the tax year (default: the latest year of the K-1s read)")

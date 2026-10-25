@@ -156,6 +156,7 @@ class Carryforwards:
     questions: list[Question] = field(default_factory=list)
     skipped: list[int] = field(default_factory=list)  # AMT and book copies
     other_years: dict[int, int] = field(default_factory=dict)  # page: the year of a schedule for another year
+    rentals: list = field(default_factory=list)  # the filed Schedule E's properties (`schedule_e.Rental`)
 
     def check(self, what: str, ok: bool, page: int) -> None:
         self.checks.append(Check(what, ok, page))
@@ -224,6 +225,12 @@ def read(name: str, pages: list[str], words: dict[int, list[dict]] | None = None
         found.check("depreciation rows end with a totals line", False, group[-1].page)
     _keep_one_copy(found, schedules)
     _against_projection(found, next_year)
+    from . import schedule_e  # it builds on this module's checks and amounts
+
+    found.rentals = schedule_e.filed(name, pages, found.year)
+    for rental in found.rentals:
+        for c in rental.checks:
+            found.check(f"Schedule E: {c.what}", c.ok, c.page)
     if found.year is None and (found.assets or found.unallowed):
         found.ask("Which tax year is this return? Its file name doesn't say.", 1, "")
     return found

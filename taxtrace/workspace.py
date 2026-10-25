@@ -21,8 +21,9 @@ CARRYFORWARDS = "carryforwards"
 K1 = "k1"
 PASSIVE = "passive"
 FORMS = "forms"  # information returns read off their forms: 1098s
+SCHEDULE_E = "schedule-e"
 # taxtrace's own files and folders in the workspace, never read back as documents: its output and its settings
-DERIVED = {OCR_CACHE, REDACTED, MANIFEST, TERMS_FILE, CARRYFORWARDS, K1, PASSIVE, FORMS}
+DERIVED = {OCR_CACHE, REDACTED, MANIFEST, TERMS_FILE, CARRYFORWARDS, K1, PASSIVE, FORMS, SCHEDULE_E}
 KEYCHAIN_SERVICE = "taxtrace"
 KEYCHAIN_DEFAULT = "default"  # tried after the file's own entry: one password for every return a preparer sends
 

@@ -11,6 +11,7 @@ sha256: OCR isn't byte-for-byte repeatable, and a quote must keep matching the t
 from __future__ import annotations
 
 import hashlib
+import logging
 import shutil
 import subprocess
 import zipfile
@@ -29,6 +30,8 @@ REL_ID = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}i
 CELL = " | "  # between a table's or a sheet's cells
 # A page with less text than this is a picture of a page (or blank, which OCR leaves blank).
 OCR_MIN_CHARS = 20
+# pdfminer warns about each font a PDF describes loosely ("Could not get FontBBox"), and the text still reads
+logging.getLogger("pdfminer").setLevel(logging.ERROR)
 
 
 class UnsupportedDocument(ValueError):

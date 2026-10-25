@@ -38,9 +38,10 @@ Early. What works today:
 - `taxtrace passive`: each passive activity's year and the loss it carries in (see
   [Passive activities](#passive-activities)).
 - `taxtrace 1098`: reads each Form 1098 mortgage interest statement (see [Form 1098](#form-1098)).
+- `taxtrace rental`: puts the rental's Schedule E together, line by line (see [Schedule E](#schedule-e)).
 - `taxtrace ui`: the workspace in the browser, with a chat (see [Chat](#chat)).
 
-Planned, in order: Schedule E, the foreign side (interest at Treasury rates, foreign tax
+Planned, in order: the foreign side (interest at Treasury rates, foreign tax
 credit, FBAR, Form 8938 check), the entry sheet, and a year-over-year check.
 
 ## Install
@@ -246,6 +247,29 @@ four digits only), the account number and the calendar year are read by their la
   points (box 6), more than one property (box 9) and a corrected form.
 - Box 8's address, or box 7's mark, says which property the interest is for: a rental's goes on Schedule E line 12,
   a home's on Schedule A. A 1098 with neither is a question.
+
+## Schedule E
+
+```bash
+taxtrace prior                 # also reads the filed returns' Schedule E: the property, lines 3 to 20, line 19's list
+taxtrace 1098 2025
+taxtrace rental --year 2025    # reads the answers and policies in <workspace>/2025, writes schedule-e/2025.json
+```
+
+`rental` puts one property's Part I together from what's been read, each line with where it came from:
+
+- Rents and expenses from the answers typed into the preparer's questions ("Rental income = $1,200/month",
+  "Repairs = $400/year"), under a rental heading. A month's amount is taken twelve times, and that's a question.
+- Mortgage interest (line 12) from the 1098 whose box 8 is the property's address, and its box 10, when the lender's
+  description says taxes or insurance paid from escrow, on line 16 or 9.
+- Insurance (line 9) from the landlord policy's declarations page for the property: its annual premium. A policy new
+  this year is a question: an earlier one's premium paid this year counts too.
+- Depreciation (line 18) from the schedule rolled forward by `prior --project`, a question until that year's return
+  confirms it.
+
+A document goes with the property when its address has the same house number and street. A line the latest filed
+Schedule E had that this year has nothing for (association dues on line 19) is a question, as are the fair rental
+and personal use days. Locked documents are skipped without a Keychain prompt: answers and policies aren't locked.
 
 ## Chat
 
