@@ -547,10 +547,14 @@ def cmd_keychain(args: argparse.Namespace) -> int:
     if args.action == "status":  # asks the Keychain for attributes only: no prompt, no secret
         built = "built, current" if gate.current() else "built, out of date: run setup" if gate.ready() else "not built"
         print(f"helper: {built}")
-        entries = [(workspace.KEYCHAIN_SERVICE, account) for account in [workspace.KEYCHAIN_DEFAULT, *args.account]]
+        accounts = [workspace.KEYCHAIN_DEFAULT, *args.account, *gate.adopted_accounts(workspace.KEYCHAIN_SERVICE)]
+        entries = [(workspace.KEYCHAIN_SERVICE, account) for account in dict.fromkeys(accounts)]
         entries.append((args.keychain, ""))
         for service, account in entries:
-            shown = f"{service}/{account}" if account else service
+            # a file's own entry is named for the file, so masked like any file name
+            name = account if account == workspace.KEYCHAIN_DEFAULT else redact.redact(
+                account, workspace.redact_terms(), bare_years=True).text
+            shown = f"{service}/{name}" if account else service
             if not chat.keychain_has(service):
                 state = "no such entry"
             elif gate.adopted(service, account):

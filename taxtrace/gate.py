@@ -52,6 +52,14 @@ def adopted(service: str, account: str) -> bool:
     return ready() and listed.exists() and f"{service}\t{account}" in listed.read_text().splitlines()
 
 
+def adopted_accounts(service: str) -> list[str]:
+    """The accounts of `service` that `setup` moved over, in the order it moved them."""
+    listed = _adopted_list()
+    if not listed.exists():
+        return []
+    return [line.split("\t", 1)[1] for line in listed.read_text().splitlines() if line.startswith(f"{service}\t")]
+
+
 def current() -> bool:
     """Whether the built helper is from today's source."""
     stamp = _stamp()

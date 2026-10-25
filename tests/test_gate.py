@@ -142,10 +142,13 @@ def test_status_says_how_each_entry_is_read_without_reading_it(fake_gate: Path, 
                                                                capsys):
     present = ("taxtrace", "anthropic", "anthropic.taxtrace-backup")
     monkeypatch.setattr(chat, "keychain_has", lambda item: item in present)
+    listed = fake_gate.with_suffix(".adopted")
+    listed.write_text(listed.read_text() + "taxtrace\tQuillfeather K-1.pdf\n")  # moved by an earlier setup
     assert cli.main(["keychain", "status", "--account", "2024 Return.pdf"]) == 0
     out = capsys.readouterr().out
     assert "taxtrace/default: Apple Watch or Touch ID\n" in out
-    assert "taxtrace/2024 Return.pdf: the classic prompt (password, then Allow): run setup to move it" in out
+    assert "Return.pdf: the classic prompt (password, then Allow): run setup to move it" in out
+    assert "K-1.pdf: Apple Watch or Touch ID\n" in out and "Quillfeather" not in out  # listed without being named
     assert "anthropic: Apple Watch or Touch ID; a backup copy is left over, setup clears it" in out
 
 
