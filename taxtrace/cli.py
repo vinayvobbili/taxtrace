@@ -518,6 +518,59 @@ def cmd_1098(args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+def cmd_itr(args: argparse.Namespace) -> int:
+    """Read India's income tax returns (ITR-2) into <workspace>/forms: a sale of property in India, the interest
+    India saw, and the tax India kept after the refund, for Form 8949 and Form 1116.
+
+    The values go only to that folder, as itr-<assessment year>.json. What's printed is masked: which rows were
+    found, the checks that failed and the questions.
+    """
+    from . import itr
+
+    home = workspace.outside_git(workspace.home())
+    terms = workspace.redact_terms()
+
+    def masked(line: str) -> str:
+        return redact.redact(line, terms).text.strip()
+
+    out, written, failed = home / workspace.FORMS, 0, 0
+    for doc in _documents(args):
+        name = redact.redact(doc.name, terms, bare_years=True).text
+        try:
+            pages, _ = _unlocked(doc)
+        except text.UnsupportedDocument as err:
+            print(f"{name}: skipped, {err}")
+            continue
+        if not itr.is_return(pages):
+            continue
+        found = itr.read(doc.name, pages)
+        failed += bool(found.failed)
+        fy = found.financial_year
+        print(f"{name}: {found.version or 'ITR'} for assessment year {found.year or '?'}"
+              + (f" (India's year {fy[0]:%m/%Y} to {fy[1]:%m/%Y})" if fy else "")
+              + f", {found.status or 'residential status not found'}, filed {masked(found.filed) or '?'}; "
+              f"{len(found.checks) - len(found.failed)} of {len(found.checks)} checks pass, "
+              f"{len(found.questions)} questions")
+        print(f"  tax rows: {', '.join(k.replace('_', ' ') for k in found.tax) or 'none'}")
+        print(f"  interest rows: {', '.join(found.interest) or 'none'}")
+        for sale in found.sales:
+            print(f"  sale: {sale.term}-term, acquired {masked(sale.acquired)}, sold {masked(sale.sold)}; rows: "
+                  f"{', '.join(k.replace('_', ' ') for k in sale.amounts)}; {len(sale.improvements)} improvements"
+                  + ("; an exemption" if sale.exemption and sale.exemption.amount else "")
+                  + ("; gain found" if sale.gain else "; no gain row"))
+        for c in found.failed:
+            print(f"  failed: {c.what}" + (f" ({masked(c.quote)})" if c.quote else ""))
+        for q in found.questions:
+            print(f"  question: {q.text}" + (f" ({masked(q.quote)})" if q.quote else ""))
+        out.mkdir(parents=True, exist_ok=True)
+        # a list, like every file in forms/, which `rental` reads all of and picks its forms from by "form"
+        (out / f"itr-{found.year or doc.stem}.json").write_text(json.dumps([found.to_json()], indent=2,
+                                                                           default=str) + "\n")
+        written += 1
+    print(f"wrote to {out}" if written else "no Indian returns found")
+    return 1 if failed else 0
+
+
 def cmd_rental(args: argparse.Namespace) -> int:
     """Put the rental's Schedule E (Part I) for a year together into <workspace>/schedule-e/<year>.json.
 
@@ -551,7 +604,8 @@ def cmd_rental(args: argparse.Namespace) -> int:
         if isinstance(row, dict) and (row.get("year") or year) < year:
             filed += [schedule_e.load(r) for r in row.get("rentals", [])]
     last = max(filed, key=lambda r: r.year or 0, default=None)
-    forms = [f for path in sorted((home / workspace.FORMS).glob("*.json")) for f in json.loads(path.read_text())]
+    forms = [f for path in sorted((home / workspace.FORMS).glob("*.json"))
+             for rows in [json.loads(path.read_text())] for f in (rows if isinstance(rows, list) else [rows])]
     projected_path = home / workspace.CARRYFORWARDS / f"projected-{year}.json"
     projected = json.loads(projected_path.read_text()) if projected_path.exists() else None
     out = home / workspace.SCHEDULE_E
@@ -783,6 +837,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("paths", nargs="*", help=PATHS_HELP)
     p.add_argument("--layout", action="store_true", help="also print each value's text and place, masked")
     p.set_defaults(func=cmd_1098)
+    p = sub.add_parser("itr", help="read India's income tax returns: a property sale, interest, the tax India kept",
+                       description=cmd_itr.__doc__)
+    p.add_argument("paths", nargs="*", help=PATHS_HELP)
+    p.set_defaults(func=cmd_itr)
     p = sub.add_parser("rental", help="put a year's Schedule E for the rental together, line by line",
                        description=cmd_rental.__doc__)
     p.add_argument("paths", nargs="*", help="documents or folders with the answers and policies "

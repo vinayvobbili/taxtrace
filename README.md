@@ -39,6 +39,8 @@ Early. What works today:
   [Passive activities](#passive-activities)).
 - `taxtrace 1098`: reads each Form 1098 mortgage interest statement (see [Form 1098](#form-1098)).
 - `taxtrace rental`: puts the rental's Schedule E together, line by line (see [Schedule E](#schedule-e)).
+- `taxtrace itr`: reads India's income tax return (ITR-2): a property sale, the interest, the tax India kept (see
+  [India's return](#indias-return)).
 - `taxtrace ui`: the workspace in the browser, with a chat (see [Chat](#chat)).
 
 Planned, in order: the foreign side (interest at Treasury rates, foreign tax
@@ -274,6 +276,30 @@ year for a policy before the one read, `0` for none) and `dues=AMOUNT` (associat
 A document goes with the property when its address has the same house number and street. A line the latest filed
 Schedule E had that this year has nothing for (association dues on line 19) is a question, as are the fair rental
 and personal use days. Locked documents are skipped without a Keychain prompt: answers and policies aren't locked.
+
+## India's return
+
+```bash
+taxtrace itr 2025    # writes forms/itr-<assessment year>.json
+```
+
+A US person who sells property in India files India's ITR-2 as a non-resident: the buyer withholds TDS at
+registration and the return settles it, often with a refund. `itr` reads the printed return row by row (amounts in
+Indian grouping, 12,34,567):
+
+- Schedule CG, each property: the purchase and sale dates, the consideration received, the stamp value, the cost,
+  the improvements (with the financial year of each), transfer expenses, exemptions and the gain.
+- Schedule OS: the interest, and how much of it is savings-account interest.
+- Part B-TTI: the tax, the aggregate liability, the taxes paid (advance tax, TDS, TCS, self-assessment) and the
+  refund. What India kept, the taxes paid less the refund, is what Form 1116 can credit.
+
+India's year runs April to March (assessment year 2025-26 is April 2024 to March 2025), so a sale's own date says
+which US year it belongs to. The checks: the taxes paid add up, the refund is the taxes paid less the aggregate
+liability (to the nearest ten rupees, as India rounds it), the aggregate is the net liability plus interest and
+fees, the TDS schedules match Part B-TTI, each sale's balance and gain add up, and the sale falls in the return's
+year. Questions: an improvement's date (only its financial year is printed, and each converts to dollars at its own
+day's rate), a stamp value above the price received (the US return uses the price), and whether the person owned the
+whole property. Nothing that names the person is kept: no PAN, acknowledgement number or address.
 
 ## Chat
 
