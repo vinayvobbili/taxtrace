@@ -29,7 +29,8 @@ Early. What works today:
 - `taxtrace import`, `outline` and `unlock`: sort a preparer's export into the workspace, list the forms
   in each document, and check passwords kept in the Keychain.
 - `taxtrace prior`: reads a filed return's carryforwards (see [Carryforwards](#carryforwards)).
-- `taxtrace k1`: reads each Schedule K-1 (Form 1065) face, every box and code (see [K-1s](#k-1s)).
+- `taxtrace k1`: reads each Schedule K-1 (Form 1065) face, every box and code, its statements, and North
+  Carolina's D-403 NC K-1 (see [K-1s](#k-1s)).
 - `taxtrace ui`: the workspace in the browser, with a chat (see [Chat](#chat)).
 
 Planned, in order: Schedule E, the foreign side (interest at Treasury rates, foreign tax
@@ -164,6 +165,18 @@ codes that hold amounts, with failed checks and questions, never an amount or a 
   PTP income) and the trade or business it's for. An aggregated group's totals are kept but marked as the group's,
   so they're never added in a second time, and each one has to be its businesses' amounts added up.
 - A final K-1, or more than one activity (boxes 22, 23), is a question.
+
+North Carolina's partner K-1 (Form D-403 NC K-1) is read the same way, by where things sit. Each of its eleven
+lines has its amount just above the line's label, and the partnership's FEIN, the partner's number (only its last
+four digits are kept) and the three Yes/No answers are read by their labels. It goes to the same folder, with where
+the D-400 takes each line.
+
+- Line 1 has to be the same partnership's federal K-1, Part III lines 1 to 11 added up, as the form says. The
+  federal K-1 can be read in the same run or an earlier one; if none has been read, that's a question.
+- Lines 6 to 9 are for nonresident partners and 10 and 11 for taxed partnerships: an amount there on a K-1 whose
+  answers say it isn't one fails.
+- Additions and deductions (lines 2, 3) and credits (line 4) are a question: the form doesn't say which Schedule S
+  or D-400TC line each belongs on.
 
 ## Chat
 
