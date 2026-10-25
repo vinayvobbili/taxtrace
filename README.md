@@ -343,8 +343,22 @@ The rates are public and fetched once into `<workspace>/fx`, each kept with its 
 
 What only you know is settled with `--confirm`, kept in `foreign/<year>-confirmed.json`: `owner=self|spouse|joint|other`
 (on a joint return either spouse's sale counts in full), `improvement_dates=YYYY-MM-DD,...` (until then an
-improvement is at its financial year's mean rate; `average` keeps that rate when the dates aren't known) and `use=investment|personal|rental` (asked when the dollar
-result is a loss).
+improvement is at its financial year's mean rate; `average` keeps that rate when the dates aren't known),
+`use=investment|personal|rental` (asked when the dollar result is a loss) and `filing=joint|single|separate|head`
+(for Form 8938's thresholds).
+
+With the bank statements `bank` saved, `foreign` also gives each account's year:
+
+- the interest credited in the calendar year, at the IRS's yearly average (Schedule B; passive income on Form 1116),
+  and the TDS withheld on it at each day's rate (a tax Form 1116 credits);
+- the highest balance and the balance on December 31, at the Treasury's December 31 rate, and from all accounts
+  together whether the FBAR (over $10,000 at any time) and Form 8938 (by filing status, for someone living in the US)
+  are due. A home held directly isn't a Form 8938 asset; the account its price was paid into is;
+- India's refund found among the deposits: what arrived beyond it is India's interest on the refund, Schedule B
+  income in the year it arrived.
+
+India's statements run April to March, so a calendar year needs two. Until both are read, the days not covered are
+asked for, and the FBAR and Form 8938 stay unsettled unless what's covered already crosses a threshold.
 
 ## Chat
 

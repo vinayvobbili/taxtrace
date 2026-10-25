@@ -10,11 +10,15 @@ from pathlib import Path
 import pytest
 from conftest import make_pdf, printed
 from test_itr import RETURN, SECRETS
+from test_k1 import draw
+from test_statement import PAGE, statement_page
+from test_statement import SECRETS as STATEMENT_SECRETS
 
 from taxtrace import cli, foreign, fx
 
 FRED_CSV = "observation_date,DEXINUS\n2006-05-17,45.1000\n2006-05-18,45.2000\n2006-05-19,\n" \
-           "2014-04-01,60.0000\n2015-03-31,62.0000\n2025-02-07,87.4000\n2025-02-10,87.5000\n2025-02-11,87.6000\n"
+           "2014-04-01,60.0000\n2015-03-31,62.0000\n2025-02-07,87.4000\n2025-02-10,87.5000\n2025-02-11,87.6000\n" \
+           "2025-12-31,90.2000\n"
 IRS_HTML = """<table><thead><tr><th scope="col">Country</th><th scope="col">Currency</th><th>2025</th>
 <th>2024</th></tr></thead><tbody><tr><td><strong>India</strong></td><td>Rupee</td><td>87.011</td><td>83.512</td></tr>
 <tr><td>Iceland</td><td>Krona</td><td>137.2</td><td>138.0</td></tr></tbody></table>"""
@@ -90,3 +94,50 @@ def test_cli_puts_the_sale_and_indias_tax_in_dollars(tmp_path: Path, workspace_h
     assert cli.main(["foreign", "--year", "2025", "--confirm", "improvement_dates=average"]) == 0
     saved = json.loads((workspace_home / "foreign" / "2025.json").read_text())
     assert saved["questions"] == [] and saved["sales"][0]["improvements"][0]["dollars"] == "3934.43"
+
+
+def test_bank_statements_give_the_interest_the_refund_and_whether_to_report(tmp_path: Path, workspace_home: Path,
+                                                                           capsys, monkeypatch):
+    monkeypatch.setattr(fx, "_get", fake_get([]))
+    assert cli.main(["itr", str(make_pdf(tmp_path / "itr2.pdf", RETURN))]) == 0
+    # India's refund of 4,97,420 arrives with 14,920 of interest on it
+    swap = {"4970.00": "512340.00", "108192.00": "615562.00", "108110.80": "615480.80", "5782.0": "513152.0"}
+    later = [(x, top, swap.get(phrase, phrase)) for x, top, phrase in PAGE]
+    assert cli.main(["bank", str(draw(tmp_path / "later.pdf", [later]))]) == 0
+    capsys.readouterr()
+    assert cli.main(["foreign", "--year", "2025"]) == 0
+    saved = json.loads((workspace_home / "foreign" / "2025.json").read_text())
+    (account,) = saved["accounts"]
+    assert (account["covered"], account["missing"]) == (["2025-04-01..2025-12-31"], ["2025-01-01..2025-03-31"])
+    assert (account["interest"]["amount"], account["interest"]["dollars"]) == ("812.00", "9.33")  # at 87.011
+    (refund,) = saved["refunds"]
+    assert (refund["arrived"], refund["interest"]["amount"], refund["interest"]["dollars"]) == (
+        "2025-12-02", "14920.00", "171.47")
+    assert saved["interest"] == "180.80"
+    assert [(t["kept"]["what"], t["kept"]["dollars"]) for t in saved["taxes"]][1:] == [("TDS on interest", "0.90")]
+    # without January to March, the highest balance isn't known yet, nor how the return files
+    assert saved["reporting"] == {"fbar": None, "form_8938": None}
+    asked = [q["text"] for q in saved["questions"]]
+    assert any(t.startswith("account 1: its statements don't cover 2025-01-01 to 2025-03-31") for t in asked)
+    assert any(t.startswith("how you file") for t in asked)
+
+    earlier = statement_page("01-04-2024 to 31-03-2025", [
+        ("11-02-2025", "", "3880000.00", "3980000.00", "RTGS IN HOUSE SALE"),
+        ("20-03-2025", "3877000.00", "", "103000.00", "SWIFT OUT OWN ACCOUNT"),
+    ])
+    assert cli.main(["bank", str(draw(tmp_path / "earlier.pdf", [earlier]))]) == 0
+    capsys.readouterr()
+    assert cli.main(["foreign", "--year", "2025", "--confirm", "filing=joint"]) == 0
+    out = printed(capsys)
+    for secret in [*STATEMENT_SECRETS, "3980000", "615480"]:
+        assert secret not in out
+    assert "  account 1: India, ending #### in INR, covers 2025-01-01 to 2025-12-31; interest at IRS yearly" in out
+    assert "  India's refund: arrived 2025-12-02, with interest on it (Schedule B) at IRS yearly" in out
+    assert "  FBAR: due\n  Form 8938: not due\n" in out
+    saved = json.loads((workspace_home / "foreign" / "2025.json").read_text())
+    (account,) = saved["accounts"]
+    assert account["missing"] == [] and saved["reporting"] == {"fbar": True, "form_8938": False}
+    # the sale's price, at the Treasury's December 31 rate (89.411); December 31's is the last row's
+    assert (account["highest"]["amount"], account["highest"]["dollars"]) == ("3980000.00", "44513.54")
+    assert (account["december_31"]["amount"], account["december_31"]["dollars"]) == ("615480.80", "6883.73")
+    assert not any(q["text"].startswith(("account", "how you file")) for q in saved["questions"])

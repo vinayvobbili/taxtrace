@@ -34,6 +34,21 @@ ROWS = [
     (30, 236, "Printed on 05-04-2026"), (270,236, "Page 1 of 1"),
 ]
 PAGE = HEAD + ROWS
+
+
+def statement_page(period: str, rows: list[tuple[str, str, str, str, str]]) -> list:
+    """A statement for `period` ("01-04-2024 to 31-03-2025") of one-line rows: (date, withdrawal, deposit, balance,
+    description), an empty withdrawal or deposit left blank."""
+    head = [(x, top, f"Statement for Period : {period}" if phrase.startswith("Statement for") else phrase)
+            for x, top, phrase in HEAD]
+    words = []
+    for i, (on, out, dep, balance, description) in enumerate(rows):
+        top = 140 + 20 * i
+        words += [(30, top, on), (84, top, out), (146, top, dep), (208, top, balance), (248, top, "Cr."),
+                  (270, top, description)]
+    return head + [w for w in words if w[2]]
+
+
 SECRETS = ["Mrudula", "Kanchibhotla", "000123459876", "9876", "102410.00", "4970.00", "108110.80", "9988"]
 
 
