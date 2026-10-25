@@ -82,3 +82,11 @@ def test_outline_lists_masked_page_headings(prior_return: Path, capsys):
     assert "p1: ****** Q. ************ ###-##-#### | Form 4562 Depreciation and Amortization Report ####\n" in out
     assert "p2: Form 8582 Worksheet 5 - Allocation of Unallowed Losses | Name of activity" in out
     assert "Quillfeather" not in out
+
+
+def test_list_prints_masked_names_by_folder_without_opening(workspace_home: Path, capsys, monkeypatch):
+    make_pdf(workspace_home / "2025" / "Quillfeather 2025 W2.pdf", PRIOR_RETURN)
+    monkeypatch.setattr(cli, "_open", lambda doc: pytest.fail("list opened a document"))
+    assert cli.main(["list"]) == 0
+    out = capsys.readouterr().out
+    assert "2025/************ 2025 W#.pdf\n" in out and "Quillfeather" not in out

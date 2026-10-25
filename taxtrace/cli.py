@@ -84,6 +84,20 @@ def _unlocked(doc: Path, keychain: bool = True) -> tuple[list[str], str | None]:
     raise failure
 
 
+def cmd_list(args: argparse.Namespace) -> int:
+    """The documents' names, masked, by folder: what's there to read, without opening anything (no Keychain ask)."""
+    terms = workspace.redact_terms()
+    home = workspace.home()
+    for doc in _documents(args):
+        try:
+            where = doc.parent.relative_to(home).as_posix()
+        except ValueError:
+            where = ""
+        name = redact.redact(doc.name, terms, bare_years=True).text
+        print(f"{where + '/' if where and where != '.' else ''}{name}")
+    return 0
+
+
 def cmd_outline(args: argparse.Namespace) -> int:
     """Each page's first lines, masked: which forms and worksheets a document holds, and in what order."""
     terms = workspace.redact_terms()
@@ -861,6 +875,9 @@ def build_parser() -> argparse.ArgumentParser:
                        description=cmd_unlock.__doc__)
     p.add_argument("paths", nargs="*", help=PATHS_HELP)
     p.set_defaults(func=cmd_unlock)
+    p = sub.add_parser("list", help="the documents' names, masked, without opening them", description=cmd_list.__doc__)
+    p.add_argument("paths", nargs="*", help=PATHS_HELP)
+    p.set_defaults(func=cmd_list)
     p = sub.add_parser("outline", help="list each page's masked heading", description=cmd_outline.__doc__)
     p.add_argument("paths", nargs="*", help=PATHS_HELP)
     p.add_argument("--lines", type=int, default=2, help="lines per page (default: 2)")
