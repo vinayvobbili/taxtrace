@@ -18,8 +18,9 @@ REDACTED = "redacted"
 MANIFEST = "imports.jsonl"
 CARRYFORWARDS = "carryforwards"
 K1 = "k1"
+PASSIVE = "passive"
 # taxtrace's own files and folders in the workspace, never read back as documents: its output and its settings
-DERIVED = {OCR_CACHE, REDACTED, MANIFEST, TERMS_FILE, CARRYFORWARDS, K1}
+DERIVED = {OCR_CACHE, REDACTED, MANIFEST, TERMS_FILE, CARRYFORWARDS, K1, PASSIVE}
 KEYCHAIN_SERVICE = "taxtrace"
 KEYCHAIN_DEFAULT = "default"  # tried after the file's own entry: one password for every return a preparer sends
 

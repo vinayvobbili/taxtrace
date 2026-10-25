@@ -440,6 +440,55 @@ def cmd_k1(args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+def cmd_passive(args: argparse.Namespace) -> int:
+    """Each passive activity's year into <workspace>/passive/<year>.json, from what `prior` and `k1` saved.
+
+    Each activity on the latest return's Form 8582 worksheets is matched to this year's K-1 from its partnership:
+    this year's passive income or loss, and the loss it carries in. No document is opened. What's printed is masked:
+    each activity's name, where its year comes from, whether it's income or a loss, and the questions.
+    """
+    from . import passive
+
+    home = workspace.outside_git(workspace.home())
+    terms = workspace.redact_terms()
+
+    def masked(line: str) -> str:
+        return redact.redact(line, terms).text.strip()
+
+    def saved(folder: str) -> list:
+        return [json.loads(p.read_text()) for p in sorted((home / folder).glob("*.json"))] \
+            if (home / folder).is_dir() else []
+
+    returns = [r for r in saved(workspace.CARRYFORWARDS) if "file" in r]  # not a projection
+    k1s = [row for rows in saved(workspace.K1) for row in rows]
+    year = args.year or max((f["year"] for f in k1s if "form" not in f and f.get("year")), default=None)
+    if year is None:
+        print("no K-1 has been read yet: run `taxtrace k1` first", file=sys.stderr)
+        return 1
+    ledger = passive.build(year, returns, k1s)
+    out = home / workspace.PASSIVE
+    out.mkdir(parents=True, exist_ok=True)
+    (out / f"{year}.json").write_text(json.dumps(ledger.to_json(), indent=2) + "\n")
+    print(f"{year}: {len(ledger.lines)} passive activities"
+          + (f", starting from the {ledger.latest} return's Form 8582" if ledger.latest else "")
+          + f"; {len(ledger.questions)} questions")
+    for line in ledger.lines:
+        source = {"k1": f"its K-1 ({masked(line.k1_file)} p{line.k1_page})",
+                  "schedule e": "Schedule E (not read yet)"}.get(line.source, "no source this year")
+        current = ("not known yet" if line.current is None else "income" if line.current > 0 else
+                   "a loss" if line.current < 0 else "nothing")
+        carried = (f"what it carries in comes from the {year - 1} return" if line.carried is None else
+                   "a loss carried in" if line.carried else "no loss carried in")
+        print(f"  {masked(line.activity) or 'an unnamed activity'}"
+              + (f" (Worksheet {line.worksheet})" if line.worksheet else " (new)")
+              + f": {source}, this year {current}, {carried}"
+              + ("; a final K-1: a full disposition frees what it carries" if line.final else ""))
+    for q in ledger.questions:
+        print(f"  question: {q.text}" + (f" ({masked(q.quote)})" if q.quote else ""))
+    print(f"wrote to {out / f'{year}.json'}")
+    return 0
+
+
 def cmd_ui(args: argparse.Namespace) -> int:
     """Open the workspace and a chat in the browser, at http://taxtrace.localhost:8766/."""
     from . import chat, web
@@ -573,6 +622,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("paths", nargs="*", help=PATHS_HELP)
     p.add_argument("--layout", action="store_true", help="also print each value's text and place, masked")
     p.set_defaults(func=cmd_k1)
+    p = sub.add_parser("passive", help="each passive activity's year, from the saved returns and K-1s",
+                       description=cmd_passive.__doc__)
+    p.add_argument("--year", type=int, help="the tax year (default: the latest year of the K-1s read)")
+    p.set_defaults(func=cmd_passive)
     p = sub.add_parser("keychain", help="approve Keychain reads with Apple Watch or Touch ID (macOS)",
                        description=cmd_keychain.__doc__)
     p.add_argument("action", choices=["setup", "status"],

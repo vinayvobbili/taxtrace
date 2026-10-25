@@ -31,6 +31,8 @@ Early. What works today:
 - `taxtrace prior`: reads a filed return's carryforwards (see [Carryforwards](#carryforwards)).
 - `taxtrace k1`: reads each Schedule K-1 (Form 1065) face, every box and code, its statements, the Schedule
   K-3, and North Carolina's D-403 NC K-1 (see [K-1s](#k-1s)).
+- `taxtrace passive`: each passive activity's year and the loss it carries in (see
+  [Passive activities](#passive-activities)).
 - `taxtrace ui`: the workspace in the browser, with a chat (see [Chat](#chat)).
 
 Planned, in order: Schedule E, the foreign side (interest at Treasury rates, foreign tax
@@ -193,6 +195,28 @@ Part III's foreign taxes are noted.
   a K-1 whose box 16 says a K-3 is attached has to have one read, now or on an earlier run.
 - The terminal says whether any of Part II is foreign source and in which categories. Foreign taxes are a question
   for now: their table isn't read yet.
+
+## Passive activities
+
+```bash
+taxtrace passive            # the latest year of the K-1s read
+taxtrace passive --year 2025
+```
+
+Form 8582 limits passive losses, and what it doesn't allow carries to the next year activity by activity. `passive`
+starts from the latest return's worksheets as `prior` saved them (every activity on Worksheets 1 and 3, and what
+each carries on from Worksheet 5) and goes on with this year's K-1s as `k1` saved them. It opens no document. Each
+activity is matched to its partnership's K-1 by the words of its name, and its year is the K-1's boxes 1, 2, 3
+and 10, less box 12. Interest, dividends and portfolio deductions aren't the activity's. A K-1 no activity matches
+is a new activity. The ledger goes to `<workspace>/passive/<year>.json`; the terminal gets each activity's
+masked name, where its year comes from and whether it's income or a loss, never an amount.
+
+- An activity with no K-1 this year is a question: sold, ended, or missing from the folder? A full disposition (a
+  final K-1) frees the loss it carries.
+- When the latest return isn't last year's, what each activity carries in is left unknown, and the gap is a
+  question: the years between changed it.
+- The rental's year comes from Schedule E, and a box 13 deduction whose code doesn't settle whether it's the
+  activity's is a question.
 
 ## Chat
 
