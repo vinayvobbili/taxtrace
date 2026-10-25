@@ -323,7 +323,7 @@ The rates are public and fetched once into `<workspace>/fx`, each kept with its 
 
 What only you know is settled with `--confirm`, kept in `foreign/<year>-confirmed.json`: `owner=self|spouse|joint|other`
 (on a joint return either spouse's sale counts in full), `improvement_dates=YYYY-MM-DD,...` (until then an
-improvement is at its financial year's mean rate) and `use=investment|personal|rental` (asked when the dollar
+improvement is at its financial year's mean rate; `average` keeps that rate when the dates aren't known) and `use=investment|personal|rental` (asked when the dollar
 result is a loss).
 
 ## Chat

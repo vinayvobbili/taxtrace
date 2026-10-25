@@ -27,9 +27,11 @@ OWNERS = ("self", "spouse", "joint", "other")  # "joint": the two spouses; "othe
 USES = ("investment", "personal", "rental")
 CONFIRMS = {
     "owner": OWNERS,
-    "improvement_dates": "dates",  # the day each improvement in Schedule CG was paid, in order, comma-separated
+    "improvement_dates": "dates",  # the day each improvement in Schedule CG was paid, in order, comma-separated,
+    # or "average": the dates aren't known, and each financial year's mean rate stands
     "use": USES,  # how the property was used, which matters when the dollar result is a loss
 }
+AVERAGE = "average"
 
 
 @dataclass
@@ -97,6 +99,8 @@ def confirmation(spec: str) -> tuple[str, str]:
     if not sep or key not in CONFIRMS:
         raise ValueError(f"--confirm takes one of {', '.join(CONFIRMS)}, as KEY=VALUE")
     if CONFIRMS[key] == "dates":
+        if value.lower() == AVERAGE:
+            return key, AVERAGE
         try:
             days = [str(date.fromisoformat(d.strip())) for d in value.split(",") if d.strip()]
         except ValueError:
@@ -158,7 +162,8 @@ def _sale(found: Foreign, ret: dict, n: int, row: dict, rates: Rates, confirmed:
                 gain_abroad=Decimal(row["gain"]["amount"]) if row.get("gain") else None, file=ret["file"])
     if a.get("transfer_expenses") and Decimal(a["transfer_expenses"]["amount"]):
         sale.expenses = convert("transfer expenses", a["transfer_expenses"], on_sale)
-    paid = [d for d in confirmed.get("improvement_dates", "").split(",") if d]
+    averaged = confirmed.get("improvement_dates") == AVERAGE
+    paid = [] if averaged else [d for d in confirmed.get("improvement_dates", "").split(",") if d]
     for i, imp in enumerate(row.get("improvements", [])):
         if i < len(paid):
             rate = rates.daily(date.fromisoformat(paid[i]))
@@ -166,7 +171,7 @@ def _sale(found: Foreign, ret: dict, n: int, row: dict, rates: Rates, confirmed:
             start = int(imp["year"][:4])
             rate = rates.average(date(start, 4, 1), date(start + 1, 3, 31))
         sale.improvements.append(convert(f"improvement ({imp['year']})", imp["amount"], rate))
-    if len(paid) < len(sale.improvements):
+    if len(paid) < len(sale.improvements) and not averaged:
         found.ask(f"sale {n}: the date each improvement was paid; until then it's at its financial year's mean rate "
                   "(`--confirm improvement_dates=YYYY-MM-DD,...`)", row["page"])
     owner = confirmed.get("owner")

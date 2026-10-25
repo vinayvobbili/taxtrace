@@ -54,6 +54,7 @@ def test_a_confirmation_must_be_one_the_foreign_side_takes():
     assert foreign.confirmation("owner=Spouse") == ("owner", "spouse")
     assert foreign.confirmation("improvement-dates=2014-09-15, 2015-01-02") == (
         "improvement_dates", "2014-09-15,2015-01-02")
+    assert foreign.confirmation("improvement_dates=Average") == ("improvement_dates", "average")
     for bad in ("owner=cousin", "improvement_dates=15/09/2014", "rate=88"):
         with pytest.raises(ValueError):
             foreign.confirmation(bad)
@@ -85,3 +86,7 @@ def test_cli_puts_the_sale_and_indias_tax_in_dollars(tmp_path: Path, workspace_h
     assert saved["questions"] == [] and saved["sales"][0]["improvements"][0]["dollars"] == "4000.00"
     assert cli.main(["foreign", "--year", "2025"]) == 0  # kept for later runs
     assert "confirmed: owner, improvement dates" in capsys.readouterr().out
+    # dates not known: the financial year's mean rate stands, and the question is settled
+    assert cli.main(["foreign", "--year", "2025", "--confirm", "improvement_dates=average"]) == 0
+    saved = json.loads((workspace_home / "foreign" / "2025.json").read_text())
+    assert saved["questions"] == [] and saved["sales"][0]["improvements"][0]["dollars"] == "3934.43"
