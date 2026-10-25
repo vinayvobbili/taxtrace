@@ -280,7 +280,8 @@ def test_cli_writes_the_values_and_prints_none(face_pdf: Path, workspace_home: P
     out = capsys.readouterr().out
     for secret in SECRETS:
         assert secret not in out
-    assert "amounts in 1, 2, 5, 13 AE, 19 A, 20 A, 20 Z (statement); 10 of 10 checks pass, 2 questions" in out
+    assert "amounts in 1, 2, 5, 13 AE, 19 A, 20 A, 20 Z (statement); 10 of 10 checks pass, 3 questions" in out
+    assert "question: box 16: a Schedule K-3 is attached, and none from this partnership" in out  # none read
     assert "question: box 20 code Z: the amount is on the partnership's statement, and no statement page" in out
     assert "box 1: (#,###) at" in out
     saved = json.loads((workspace_home / "k1" / "2025 K-1 Larkspur.json").read_text())

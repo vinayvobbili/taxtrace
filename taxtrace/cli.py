@@ -262,30 +262,24 @@ def cmd_prior(args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
-def _federal_k1s(out: Path, found: list, read_now: set[str]) -> dict[tuple[str, str], list[tuple[str, Decimal]]]:
-    """Each federal K-1's boxes and amounts by its (EIN, partner): those read now, and those an earlier run wrote."""
-    pool = {(f.ein, f.partner): [(i.box, i.value.amount) for i in f.items if i.value.amount is not None]
-            for f in found if f.copy_of is None and not f.retirement_plan}
+def _saved(out: Path, read_now: set[str]) -> list[dict]:
+    """What earlier runs of `k1` wrote for the documents this one didn't read (by their file names' stems)."""
+    rows: list[dict] = []
     for path in sorted(out.glob("*.json")) if out.is_dir() else []:
-        if path.stem in read_now:
-            continue
-        for row in json.loads(path.read_text()):
-            if "form" not in row and row.get("copy_of") is None and not row.get("retirement_plan"):
-                pool.setdefault((row["ein"], row["partner"]), [
-                    (i["box"], Decimal(i["value"]["amount"])) for i in row["items"]
-                    if i["value"]["amount"] is not None])
-    return pool
+        if path.stem not in read_now:
+            rows += json.loads(path.read_text())
+    return rows
 
 
 def cmd_k1(args: argparse.Namespace) -> int:
     """Read every Schedule K-1 (Form 1065) face into <workspace>/k1: each box and code, and Parts I and II.
 
-    North Carolina's D-403 NC K-1s are read too, and each one's line 1 is checked against the same partnership's
-    federal K-1, read now or on an earlier run. The values go only to that folder. What's printed is masked: which
-    boxes, codes and lines have amounts, the checks that failed and the questions, and with --layout each value's
-    text and where it sits.
+    North Carolina's D-403 NC K-1s and the Schedule K-3s are read too. Each NC K-1's line 1 is checked against the
+    same partnership's federal K-1, and each K-1 that says a K-3 is attached has to have one, read now or on an
+    earlier run. The values go only to that folder. What's printed is masked: which boxes, codes and lines have
+    amounts, the checks that failed and the questions, and with --layout each value's text and where it sits.
     """
-    from . import k1, nck1
+    from . import k1, k3, nck1
 
     home = workspace.outside_git(workspace.home())
     terms = workspace.redact_terms()
@@ -293,11 +287,21 @@ def cmd_k1(args: argparse.Namespace) -> int:
     def masked(line: str) -> str:
         return redact.redact(line, terms).text.strip()
 
+    def report(head: str, bad: list, problems: list[str], questions: list, extra: tuple[str, ...] = ()) -> int:
+        # checks and questions name boxes and lines only, never the document's text: that's in the quotes
+        print(head)
+        for line in extra:
+            print(f"  {line}")
+        for c in bad:
+            print(f"  failed: {c.what}" + (f" ({masked(c.quote)})" if c.quote else ""))
+        for p in problems:
+            print(f"  failed: {masked(p)}")
+        for q in questions:
+            print(f"  question: {q.text}" + (f" ({masked(q.quote)})" if q.quote else ""))
+        return bool(bad or problems)
+
     out = home / workspace.K1
-    failed = 0
-    federal: list[k1.K1] = []
-    state: list[tuple[str, Path, list[nck1.NCK1], dict[int, list[dict]]]] = []
-    written: dict[str, list[dict]] = {}  # each document's K-1s, by its file name's stem
+    read_now = []  # (masked name, path, page texts, words by page, federal K-1s, NC K-1s, K-3s)
     for doc in _documents(args):
         name = redact.redact(doc.name, terms, bare_years=True).text
         try:
@@ -307,45 +311,66 @@ def cmd_k1(args: argparse.Namespace) -> int:
             continue
         faces = [n for n, page in enumerate(pages, 1) if k1.is_face(page)]
         forms = [n for n, page in enumerate(pages, 1) if nck1.is_form(page)]
-        if not (faces or forms) or doc.suffix.lower() not in text.PDF_SUFFIXES:
+        schedules = [n for n, page in enumerate(pages, 1) if k3.is_page(page) and n not in faces]
+        if not (faces or forms or schedules) or doc.suffix.lower() not in text.PDF_SUFFIXES:
             continue
-        words = {n: text.words(doc, n, password) for n in faces + forms}
-        if forms and (ncs := nck1.read(doc.name, {n: words[n] for n in forms})):
-            state.append((name, doc, ncs, words))
-        found = k1.read(doc.name, {n: words[n] for n in faces}, pages) if faces else []
-        if not found:
-            continue
-        federal += found
-        written[doc.stem] = [f.to_json() for f in found]
+        words = {n: text.words(doc, n, password) for n in sorted({*faces, *forms, *schedules})}
+        read_now.append((name, doc, pages, words,
+                         k1.read(doc.name, {n: words[n] for n in faces}, pages) if faces else [],
+                         nck1.read(doc.name, {n: words[n] for n in forms}) if forms else [],
+                         k3.read(doc.name, {n: words[n] for n in schedules}, pages) if schedules else []))
+    saved = _saved(out, {doc.stem for _, doc, *_ in read_now})
+    federal = {(f.ein, f.partner): [(i.box, i.value.amount) for i in f.items if i.value.amount is not None]
+               for *_, found, _, _ in read_now for f in found if f.copy_of is None and not f.retirement_plan}
+    for row in saved:
+        if "form" not in row and row.get("copy_of") is None and not row.get("retirement_plan"):
+            federal.setdefault((row["ein"], row["partner"]), [
+                (i["box"], Decimal(i["value"]["amount"])) for i in row["items"] if i["value"]["amount"] is not None])
+    attached = {(s.ein, s.partner) for *_, threes in read_now for s in threes} | {
+        (row["ein"], row["partner"]) for row in saved if row.get("form") == "K-3"}
+    for *_, found, ncs, threes in read_now:
+        for s in threes:
+            if amounts := federal.get((s.ein, s.partner)):
+                k3.tie(s, amounts)
+            else:
+                s.ask("no federal K-1 from this partnership for this partner has been read: run `taxtrace k1` on it "
+                      "too, and Part II's interest, dividends and gains are checked against its boxes")
         for f in found:
-            problems = k1.verify(f, words[f.page], pages)
-            bad = f.failed
-            failed += bool(bad or problems)
+            if f.k3_attached and f.copy_of is None and not f.retirement_plan and (f.ein, f.partner) not in attached:
+                f.ask("box 16: a Schedule K-3 is attached, and none from this partnership for this partner has been "
+                      "read: run `taxtrace k1` on it too")
+        for nc in ncs:
+            if nc.copy_of is not None:
+                continue
+            if amounts := federal.get((nc.ein, nc.partner)):
+                nck1.tie(nc, amounts)
+            else:
+                nc.ask("no federal K-1 from this partnership for this partner has been read: run `taxtrace k1` "
+                       "on it too, and line 1 is checked against it")
+    failed = 0
+    for name, _, pages, words, found, ncs, threes in read_now:
+        for f in found:
             boxes = ", ".join(i.box + (f" {i.code}" if i.code else "") + (" (statement)" if i.statement else "")
                               for i in f.items)
-            print(f"{name} p{f.page}: {f.year or '?'} K-1 from {masked(f.ein) or 'no EIN found'}, "
-                  f"amounts in {boxes or 'no boxes'}; {len(f.checks) - len(bad)} of {len(f.checks)} checks pass, "
-                  f"{len(f.questions)} questions"
-                  + ("; a retirement plan's (I2): nothing on it goes on the return" if f.retirement_plan else "")
-                  + (f"; a second copy of p{f.copy_of}'s, counted once" if f.copy_of else "")
-                  + ("; final K-1" if f.final else "") + ("; amended" if f.amended else "")
-                  + ("; Schedule K-3 attached" if f.k3_attached else ""))
+            extra: tuple[str, ...] = ()
             if f.statement:
                 counts: dict[str, int] = {}
                 for s in f.statement:
                     key = s.box + (f" {s.code}" if s.code else "")
                     counts[key] = counts.get(key, 0) + 1
                 totals = sum(bool(s.aggregate) for s in f.statement)
-                print("  statement amounts: " + ", ".join(f"{k} ×{n}" if n > 1 else k for k, n in counts.items())
-                      + (f"; {totals} of them an aggregated group's totals, which repeat its businesses' amounts"
-                         if totals else ""))
-            # checks and questions name boxes and lines only, never the document's text: that's in the quotes
-            for c in bad:
-                print(f"  failed: {c.what}" + (f" ({masked(c.quote)})" if c.quote else ""))
-            for p in problems:
-                print(f"  failed: {masked(p)}")
-            for q in f.questions:
-                print(f"  question: {q.text}" + (f" ({masked(q.quote)})" if q.quote else ""))
+                extra = ("statement amounts: " + ", ".join(f"{k} ×{n}" if n > 1 else k for k, n in counts.items())
+                         + (f"; {totals} of them an aggregated group's totals, which repeat its businesses' amounts"
+                            if totals else ""),)
+            failed += report(
+                f"{name} p{f.page}: {f.year or '?'} K-1 from {masked(f.ein) or 'no EIN found'}, "
+                f"amounts in {boxes or 'no boxes'}; {len(f.checks) - len(f.failed)} of {len(f.checks)} checks pass, "
+                f"{len(f.questions)} questions"
+                + ("; a retirement plan's (I2): nothing on it goes on the return" if f.retirement_plan else "")
+                + (f"; a second copy of p{f.copy_of}'s, counted once" if f.copy_of else "")
+                + ("; final K-1" if f.final else "") + ("; amended" if f.amended else "")
+                + ("; Schedule K-3 attached" if f.k3_attached else ""),
+                f.failed, k1.verify(f, words[f.page], pages), f.questions, extra)
             if args.layout:
                 print(f"  partnership {masked(f.partnership)}; entity {masked(f.entity_type)}; "
                       f"general partner {f.general_partner}, domestic {f.domestic}, publicly traded "
@@ -366,35 +391,41 @@ def cmd_k1(args: argparse.Namespace) -> int:
                              else f" [{s.kind or 'other'} of {masked(s.business)}]" if s.business else "")
                     print(f"  p{s.page} statement {s.box}{' ' + s.code if s.code else ''} "
                           f"{masked(s.description)!r}{whose}: {masked(s.quote)}")
-    pool = _federal_k1s(out, federal, set(written))
-    for name, doc, ncs, words in state:
         for nc in ncs:
-            if nc.copy_of is None:
-                if amounts := pool.get((nc.ein, nc.partner)):
-                    nck1.tie(nc, amounts)
-                else:
-                    nc.ask("no federal K-1 from this partnership for this partner has been read: run `taxtrace k1` "
-                           "on it too, and line 1 is checked against it")
-            problems = k1.verify(nc, words[nc.page])
-            failed += bool(nc.failed or problems)
             answers = {"resident": nc.resident, "taxed partnership": nc.taxed_partnership,
                        "disregarded entity": nc.disregarded_entity}
-            print(f"{name} p{nc.page}: {nc.year or '?'} NC K-1 (D-403) from {masked(nc.ein) or 'no FEIN found'}, "
-                  f"amounts on lines {', '.join(str(n) for n, v in sorted(nc.lines.items()) if v.amount) or 'none'}; "
-                  f"{len(nc.checks) - len(nc.failed)} of {len(nc.checks)} checks pass, {len(nc.questions)} questions; "
-                  + ", ".join(f"{k} {'?' if v is None else 'yes' if v else 'no'}" for k, v in answers.items())
-                  + (f"; a second copy of p{nc.copy_of}'s, counted once" if nc.copy_of else ""))
-            for c in nc.failed:
-                print(f"  failed: {c.what}" + (f" ({masked(c.quote)})" if c.quote else ""))
-            for p in problems:
-                print(f"  failed: {masked(p)}")
-            for q in nc.questions:
-                print(f"  question: {q.text}" + (f" ({masked(q.quote)})" if q.quote else ""))
+            failed += report(
+                f"{name} p{nc.page}: {nc.year or '?'} NC K-1 (D-403) from {masked(nc.ein) or 'no FEIN found'}, "
+                f"amounts on lines {', '.join(str(n) for n, v in sorted(nc.lines.items()) if v.amount) or 'none'}; "
+                f"{len(nc.checks) - len(nc.failed)} of {len(nc.checks)} checks pass, {len(nc.questions)} questions; "
+                + ", ".join(f"{k} {'?' if v is None else 'yes' if v else 'no'}" for k, v in answers.items())
+                + (f"; a second copy of p{nc.copy_of}'s, counted once" if nc.copy_of else ""),
+                nc.failed, k1.verify(nc, words[nc.page]), nc.questions)
             if args.layout:
                 print(f"  partnership {masked(nc.partnership)}")
                 for n, v in sorted(nc.lines.items()):
                     print(f"  line {n}: {masked(v.quote)} at {v.top}, {v.x0}")
-        written.setdefault(doc.stem, []).extend(nc.to_json() for nc in ncs)
+        for s in threes:
+            lines = sorted({c.line for c in s.cells})
+            foreign = s.foreign_columns()
+            failed += report(
+                f"{name} p{s.page}: {s.year or '?'} Schedule K-3 from {masked(s.ein) or 'no EIN found'}, parts that "
+                f"apply {', '.join(p for p, yes in s.parts.items() if yes) or 'none marked'}; Part II amounts on lines "
+                f"{', '.join(map(str, lines)) or 'none'}; {len(s.checks) - len(s.failed)} of {len(s.checks)} checks "
+                f"pass, {len(s.questions)} questions",
+                s.failed, k3.verify(s, words), s.questions,
+                ("foreign source: " + (f"amounts in columns {', '.join(f'({c})' for c in sorted(foreign))}"
+                                       if foreign else "none, all of Part II is U.S. source")
+                 + f"; foreign taxes: {len(s.foreign_taxes) or 'none'}",))
+            if args.layout:
+                for c in s.cells:
+                    print(f"  p{c.value.page} line {c.line}{' ' + c.row if c.row else ''}"
+                          f"{' ' + masked(c.country) if c.country else ''} ({c.column}): {masked(c.value.quote)} at "
+                          f"{c.value.top}, {c.value.x0}")
+    written: dict[str, list[dict]] = {}  # each document's forms, by its file name's stem
+    for _, doc, _, _, found, ncs, threes in read_now:
+        if rows := [f.to_json() for f in [*found, *ncs, *threes]]:
+            written[doc.stem] = rows
     for stem, rows in written.items():
         out.mkdir(parents=True, exist_ok=True)
         (out / f"{stem}.json").write_text(json.dumps(rows, indent=2) + "\n")

@@ -29,8 +29,8 @@ Early. What works today:
 - `taxtrace import`, `outline` and `unlock`: sort a preparer's export into the workspace, list the forms
   in each document, and check passwords kept in the Keychain.
 - `taxtrace prior`: reads a filed return's carryforwards (see [Carryforwards](#carryforwards)).
-- `taxtrace k1`: reads each Schedule K-1 (Form 1065) face, every box and code, its statements, and North
-  Carolina's D-403 NC K-1 (see [K-1s](#k-1s)).
+- `taxtrace k1`: reads each Schedule K-1 (Form 1065) face, every box and code, its statements, the Schedule
+  K-3, and North Carolina's D-403 NC K-1 (see [K-1s](#k-1s)).
 - `taxtrace ui`: the workspace in the browser, with a chat (see [Chat](#chat)).
 
 Planned, in order: Schedule E, the foreign side (interest at Treasury rates, foreign tax
@@ -177,6 +177,18 @@ the D-400 takes each line.
   answers say it isn't one fails.
 - Additions and deductions (lines 2, 3) and credits (line 4) are a question: the form doesn't say which Schedule S
   or D-400TC line each belongs on.
+
+A Schedule K-3 (the partner's international items) is read for Form 1116: box E's marks for which parts apply,
+and every amount in Part II (gross income and deductions by source and category), each with its line, its
+country row and country code, and its column, from (a) U.S. source through the foreign categories to the total.
+Part III's foreign taxes are noted.
+
+- Each row's columns have to add up to its total, and each total line to the lines its label names ("combine
+  lines 1 through 23", "subtract line 54 from line 24").
+- Part II's interest, dividends, gains and section 1231 lines have to match the same partnership's K-1 boxes, and
+  a K-1 whose box 16 says a K-3 is attached has to have one read, now or on an earlier run.
+- The terminal says whether any of Part II is foreign source and in which categories. Foreign taxes are a question
+  for now: their table isn't read yet.
 
 ## Chat
 
