@@ -249,7 +249,8 @@ def test_parts_one_and_two_are_read_by_their_labels(face_pdf: Path):
 
 
 def test_box_numbers_run_into_their_labels_are_split(tmp_path: Path):
-    glued = {(453, 74.5, "14"): "14Self-employment earnings (loss)", (453, 170.5, "16"): "16Schedule K-3 is attached if"}
+    glued = {(453, 74.5, "14"): "14Self-employment earnings (loss)",
+             (453, 170.5, "16"): "16Schedule K-3 is attached if"}
     labels = {(471, 74.5, "Self-employment earnings (loss)"), (472, 170.5, "Schedule K-3 is attached if")}
     page = [(x, top, glued.get((x, top, t), t)) for x, top, t in FACE if (x, top, t) not in labels]
     (found,) = read(draw(tmp_path / "k1.pdf", [page]))
@@ -262,6 +263,13 @@ def test_box_numbers_run_into_their_labels_are_split(tmp_path: Path):
 def test_a_partnership_ein_printed_masked_is_still_read(tmp_path: Path):
     (found,) = read(draw(tmp_path / "k1.pdf", [edited(FACE, **{EIN: "XX-XXX4567"})]))
     assert found.ein == "XX-XXX4567"
+
+
+def test_a_partnership_name_a_blank_line_below_its_label_is_read(tmp_path: Path):
+    page = [(x, top + (13 if t in (PARTNERSHIP, "77 Quarrystone Way, Fernmoor, ZZ 00000") else 0), t)
+            for x, top, t in FACE]
+    (found,) = read(draw(tmp_path / "k1.pdf", [page]))
+    assert found.partnership == PARTNERSHIP
 
 
 def test_a_capital_account_that_does_not_add_up_fails(tmp_path: Path):

@@ -132,6 +132,13 @@ def test_cli_takes_single_files_into_the_year_given_and_masks_their_names(tmp_pa
     assert "copied 2 of 2 files" in out and "K-1" in out and "Quillfeather" not in out
 
 
+def test_a_web_page_saved_as_pdf_is_not_imported(tmp_path: Path, workspace_home: Path):
+    page = tmp_path / "2025 K-1 Package.pdf"
+    page.write_bytes(b"<!DOCTYPE html><html></html>")
+    [placed] = importer.import_documents(page, workspace_home)
+    assert placed.dest is None and placed.reason.startswith("not a PDF")
+
+
 def test_cli_names_a_missing_source(tmp_path: Path, capsys):
     assert cli.main(["import", str(tmp_path / "gone.pdf")]) == 1
     assert "no such file or folder" in capsys.readouterr().err

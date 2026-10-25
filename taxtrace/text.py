@@ -54,7 +54,7 @@ def _pdf_pages(path: Path, password: str | None) -> list[str]:
     except PdfminerException as err:
         # pdfplumber wraps pdfminer's error as the first argument.
         if not (err.args and isinstance(err.args[0], PDFPasswordIncorrect)):
-            raise
+            raise UnsupportedDocument("not a readable PDF (a web page saved as .pdf, or a damaged file)") from None
         raise Locked("password-protected" if password is None else "the stored password doesn't open it") from None
 
 

@@ -112,6 +112,9 @@ def import_documents(src: Path, home: Path, dry_run: bool = False, year: str | N
             placed.append(Placement(name, None, reason))
             continue
         data = read()
+        if PurePosixPath(name).suffix.lower() == ".pdf" and not data.startswith(b"%PDF"):
+            placed.append(Placement(name, None, "not a PDF: a web page saved as .pdf?"))
+            continue
         digest = hashlib.sha256(data).hexdigest()
         if digest in known:
             placed.append(Placement(name, None, "already imported"))

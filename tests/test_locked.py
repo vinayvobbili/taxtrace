@@ -47,6 +47,16 @@ def test_wrong_passwords_only_still_say_locked(locked: Path, tmp_path: Path, mon
     assert "doesn't open it" in capsys.readouterr().out
 
 
+def test_a_web_page_saved_as_pdf_is_skipped_not_a_crash(tmp_path: Path, capsys):
+    page = tmp_path / "package.pdf"
+    page.write_bytes(b"<!DOCTYPE html><html></html>")
+    with pytest.raises(text.UnsupportedDocument, match="not a readable PDF") as err:
+        text.pages(page)
+    assert not isinstance(err.value, text.Locked)
+    assert cli.main(["k1", str(page)]) == 0
+    assert "not a readable PDF" in capsys.readouterr().out
+
+
 def test_shape_shows_classes_never_characters():
     assert workspace.shape("abcd12345") == "9 characters: aaaa99999"
     assert workspace.shape("Abcd 1234!") == "10 characters: Aaaa_9999*"

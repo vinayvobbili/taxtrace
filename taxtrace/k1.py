@@ -277,7 +277,8 @@ def _parts_one_two(k1: K1, words: list[dict]) -> None:
     if tin := next((m for w in sorted(words, key=lambda w: w["top"]) if (m := TIN.match(w["text"]))), None):
         k1.partner = tin.group(1)
     if (label := _find(words, "B")) is not None:  # the line under "B Partnership's name, address, ..."
-        if rows := sorted({w["top"] for w in words if label["top"] + 3 < w["top"] < label["top"] + 16}):
+        # the first row under it: the next line, or one with a blank line between (some preparers' layouts)
+        if rows := sorted({w["top"] for w in words if label["top"] + 3 < w["top"] < label["top"] + 26}):
             k1.partnership = " ".join(w["text"] for w in sorted(words, key=lambda w: w["x0"])
                                       if abs(w["top"] - rows[0]) <= 1)
     if (w := _find(words, "publicly", "traded")) is not None and (check := _row_word(words, w, "Check")):
