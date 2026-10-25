@@ -460,9 +460,9 @@ ANYWHERE = re.compile(r"(?i:line|box)\s+(\d{1,2}),?\s+(?i:code)\s+([A-Z]{1,2})\b
 # a statement's own title with no box in it ("SCHEDULE K-1 WITHDRAWALS AND DISTRIBUTIONS"): it ends the box above
 TITLE = re.compile(r"^\s*SCHEDULE K-1\b")
 ROW_CODE = re.compile(r"^\s*([A-Z]{1,2})(?:-\s|\s{2,})\s*")  # a table row: "C    Meals (general)", "AE- DEDUCTIONS"
-# the amount ending a line: set apart by a column gap, or a "$" or "(" (never "Line 1", an EIN, or a %); some
-# preparers print whole dollars with a period after them ("1,234.")
-TRAILING = re.compile(r"(?:^\s*|\s{2,}|\s(?=-?\$|\())(-?\$?-?\(?\$?[\d,]*\d(?:\.\d+)?\)?)\.?\s*$")
+# the amount ending a line: set apart by a column gap, or a "$", "(" or minus sign (never "Line 1", an EIN, or a %);
+# some preparers print whole dollars with a period after them ("1,234.")
+TRAILING = re.compile(r"(?:^\s*|\s{2,}|\s(?=-?\$|\(|-\d))(-?\$?-?\(?\$?[\d,]*\d(?:\.\d+)?\)?)\.?\s*$")
 COLUMN_HEADS = re.compile(r"^\s*(?:Code\s+)?Description\s+Amount\s*$|^\s*Explanation\s*$", re.IGNORECASE)
 SHORT = 30  # characters: a label wrapped onto the lines around its amount is short
 # an underlined heading, as layout text draws it: "S_e_c_t_i_o_n_" (an underlined amount, "____5_", isn't one)

@@ -145,6 +145,17 @@ TITLED_STATEMENT = [
     "SCHEDULE K-1  WITHDRAWALS AND DISTRIBUTIONS",
     "CASH DISTRIBUTION                                               48,000.",
 ]
+# a worksheet grid, its amounts a single space after their labels
+GRID_STATEMENT = [
+    "          Schedule K-1, Box 20, Code Z - Section 199A Information",
+    "                        Column A    Column B    Column C",
+    "QBI or Qualified PTP items:",
+    " Ordinary business income (loss) -12",
+    " Net rental real estate income (loss) -4,210",
+    " Section 1231 gain (loss)",
+    "W-2 wages",
+    "Section 199A(g) deduction",
+]
 SECRETS = ["4,210", "1,875", "18,500", "15,302", "2,298", "14,300", "Larkspur", "Quarrystone", "1234567", "4410"]
 
 
@@ -250,6 +261,13 @@ def test_statement_amounts_under_titles_that_name_the_box(tmp_path: Path):
         ("18", "C", Decimal(9)), ("20", "N", Decimal(2250)), ("20", "Z", Decimal(1875)), ("20", "Z", Decimal(310))]
     assert [s.kind for s in found.statement if s.code == "Z"] == ["", "wages"]
     # the totals repeat the items; a distribution under a title naming no box belongs to no box
+
+
+def test_statement_amounts_a_single_space_after_their_labels(tmp_path: Path):
+    (found,) = read(draw(tmp_path / "k1.pdf", [FACE, GRID_STATEMENT]))
+    assert [(s.box, s.code, s.description, s.amount) for s in found.statement] == [
+        ("20", "Z", "Ordinary business income (loss)", Decimal(-12)),
+        ("20", "Z", "Net rental real estate income (loss)", Decimal(-4210))]  # "W-2", "199A(g)": no amounts
 
 
 def test_an_aggregated_total_that_is_not_its_businesses_fails(tmp_path: Path):
