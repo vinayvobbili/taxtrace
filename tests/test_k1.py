@@ -248,6 +248,11 @@ def test_parts_one_and_two_are_read_by_their_labels(face_pdf: Path):
     assert found.section_704c == {}
 
 
+def test_a_partnership_ein_printed_masked_is_still_read(tmp_path: Path):
+    (found,) = read(draw(tmp_path / "k1.pdf", [edited(FACE, **{EIN: "XX-XXX4567"})]))
+    assert found.ein == "XX-XXX4567"
+
+
 def test_a_capital_account_that_does_not_add_up_fails(tmp_path: Path):
     path = draw(tmp_path / "k1.pdf", [edited(FACE, **{"15,302": "15,320"})])
     (found,) = read(path)

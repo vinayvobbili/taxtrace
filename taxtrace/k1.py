@@ -23,7 +23,7 @@ from .prior import CENT, YEAR, Check, Question, _number, amount
 BOX = re.compile(r"^(\d{1,2})([abc])?$")
 CODE = re.compile(r"^([A-Z]{1,2})(\*)?$")
 SHARE = re.compile(r"^\d{1,3}\.\d+$")  # "12.3456789", the % sign printed apart
-EIN = re.compile(r"^\d{2}-\d{7}$")
+EIN = re.compile(r"^(?:\d{2}|[X*]{2})-(?:\d{3}|[X*]{3})\d{4}$")  # some partner copies print it XX-XXX1234
 TIN = re.compile(r"^(?:\d{3}|[X*]{3})-(?:\d{2}|[X*]{2})-(\d{4})$")  # the partner's, often printed XXX-XX-1234
 MARKS = {"X", "x", "4", "✔", "✓", "✗"}  # a check mark: ZapfDingbats draws one as the letter "4"
 STATEMENT = {"STMT", "*STMT", "STMT*", "*"}
