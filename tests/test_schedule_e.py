@@ -120,3 +120,27 @@ def test_cli_puts_the_year_together_and_asks_what_the_documents_cant_say(
     asked = [q["text"].split(":")[0] for q in saved["questions"]]
     assert asked == ["line 2", "line 3 is 12 months at the monthly rent", "line 9", "line 18 is rolled forward from "
                      "the 2020 depreciation schedule", "line 19, other (Association Dues, Miscellaneous)"]
+
+    # what only the person knows, confirmed once, settles its questions on every later run
+    assert cli.main(["rental", str(docs), "--year", "2025", "--confirm", "fair_rental_days=365",
+                     "--confirm", "personal_use_days=0", "--confirm", "rent_all_year=yes",
+                     "--confirm", "earlier_policy=210.15", "--confirm", "dues=1,140"]) == 0
+    capsys.readouterr()
+    assert cli.main(["rental", str(docs), "--year", "2025"]) == 0
+    out = printed(capsys)
+    assert "  line 19 other: confirmed by you" in out and "1,140" not in out and "210" not in out
+    saved = json.loads((workspace_home / "schedule-e" / "2025.json").read_text())
+    assert (saved["fair_rental_days"], saved["personal_use_days"]) == (365, 0)
+    assert (saved["lines"]["9"]["amount"], saved["lines"]["19"]["amount"]) == ("1128.55", "1140")
+    assert [q["text"].split(":")[0] for q in saved["questions"]] == [
+        "line 18 is rolled forward from the 2020 depreciation schedule"]
+
+
+def test_a_confirmation_must_be_one_the_schedule_takes():
+    assert schedule_e.confirmation("rent-all-year=Yes") == ("rent_all_year", True)
+    for bad in ("rent_all_year=maybe", "tenant=Quenby", "dues"):
+        try:
+            schedule_e.confirmation(bad)
+        except ValueError:
+            continue
+        raise AssertionError(bad)

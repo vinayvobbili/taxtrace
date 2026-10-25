@@ -267,6 +267,10 @@ taxtrace rental --year 2025    # reads the answers and policies in <workspace>/2
 - Depreciation (line 18) from the schedule rolled forward by `prior --project`, a question until that year's return
   confirms it.
 
+What only you know is settled with `--confirm`, kept in `schedule-e/<year>-confirmed.json` for every later run:
+`fair_rental_days=365`, `personal_use_days=0`, `rent_all_year=yes`, `earlier_policy=AMOUNT` (a premium paid this
+year for a policy before the one read, `0` for none) and `dues=AMOUNT` (association dues, line 19).
+
 A document goes with the property when its address has the same house number and street. A line the latest filed
 Schedule E had that this year has nothing for (association dues on line 19) is a question, as are the fair rental
 and personal use days. Locked documents are skipped without a Keychain prompt: answers and policies aren't locked.

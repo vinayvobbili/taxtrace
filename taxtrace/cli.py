@@ -554,13 +554,27 @@ def cmd_rental(args: argparse.Namespace) -> int:
     forms = [f for path in sorted((home / workspace.FORMS).glob("*.json")) for f in json.loads(path.read_text())]
     projected_path = home / workspace.CARRYFORWARDS / f"projected-{year}.json"
     projected = json.loads(projected_path.read_text()) if projected_path.exists() else None
+    out = home / workspace.SCHEDULE_E
+    kept = out / f"{year}-confirmed.json"  # what was confirmed on earlier runs stays confirmed
+    confirmed = json.loads(kept.read_text()) if kept.exists() else {}
+    try:
+        confirmed |= dict(map(schedule_e.confirmation, args.confirm))
+    except ValueError as err:
+        print(err, file=sys.stderr)
+        return 2
+    if args.confirm:
+        out.mkdir(parents=True, exist_ok=True)
+        kept.write_text(json.dumps(confirmed, indent=2) + "\n")
     rental = schedule_e.build(year, last=last, answers=found_answers, forms=forms, policies=policies,
-                              projected=projected)
+                              projected=projected, confirmed=confirmed)
     print(f"{year} Schedule E for {masked(rental.address) or 'an unknown property'}"
           + (f", against {last.year}'s filed return" if last else "") + ":")
     for n, line in sorted(rental.lines.items()):
-        print(f"  line {n} {schedule_e.LINES[n].lower()}: {line.source}, "
-              f"{redact.redact(line.file, terms, bare_years=True).text} p{line.page}")
+        print(f"  line {n} {schedule_e.LINES[n].lower()}: " + ("confirmed by you" if line.source == "confirmed" else
+              f"{line.source}, {redact.redact(line.file, terms, bare_years=True).text} p{line.page}"))
+    if confirmed:
+        print("  confirmed: " + ", ".join(k.replace("_", " ") + (f" {'yes' if v else 'no'}" if isinstance(v, bool)
+                                                                 else "") for k, v in confirmed.items()))
     if last:
         print(f"  {last.year}: lines {', '.join(map(str, sorted(last.lines)))}"
               + (f"; line 19: {', '.join(masked(o.what) for o in last.other)}" if last.other else ""))
@@ -568,7 +582,6 @@ def cmd_rental(args: argparse.Namespace) -> int:
         print(f"  failed: {c.what}" + (f" ({masked(c.quote)})" if c.quote else ""))
     for q in rental.questions:
         print(f"  question: {q.text}" + (f" ({masked(q.quote)})" if q.quote else ""))
-    out = home / workspace.SCHEDULE_E
     out.mkdir(parents=True, exist_ok=True)
     (out / f"{year}.json").write_text(json.dumps(rental.to_json(), indent=2) + "\n")
     print(f"wrote to {out / f'{year}.json'}")
@@ -775,6 +788,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("paths", nargs="*", help="documents or folders with the answers and policies "
                                             "(default: <workspace>/<year>)")
     p.add_argument("--year", type=int, required=True, help="the tax year")
+    p.add_argument("--confirm", action="append", default=[], metavar="KEY=VALUE",
+                   help="settle a question only you can answer, kept for later runs: fair_rental_days=365, "
+                        "personal_use_days=0, rent_all_year=yes, earlier_policy=AMOUNT (0: none), dues=AMOUNT")
     p.set_defaults(func=cmd_rental)
     p = sub.add_parser("passive", help="each passive activity's year, from the saved returns and K-1s",
                        description=cmd_passive.__doc__)

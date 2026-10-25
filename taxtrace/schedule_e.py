@@ -43,6 +43,11 @@ WORDS = ((7, ("clean", "maintenance", "lawn", "landscap", "pest")), (14, ("repai
          (10, ("legal", "professional", "accounting")), (11, ("management", "manager")),
          (12, ("mortgage interest",)), (13, ("interest",)), (15, ("supplies",)), (16, ("tax",)),
          (17, ("utilit", "water", "electric", "sewer", "trash")), (19, ("hoa", "association", "dues")))
+CONFIRMS = {  # what a person can settle with `rental --confirm`, and its kind
+    "fair_rental_days": int, "personal_use_days": int, "rent_all_year": bool,
+    "earlier_policy": Decimal,  # a premium paid this year for a policy before the one the declarations show
+    "dues": Decimal,  # association (HOA) dues paid this year: line 19
+}
 ESCROWED = ((16, ("TAX",)), (9, ("INS", "HAZARD")))  # box 10's words, for what the lender paid from escrow
 
 
@@ -174,17 +179,39 @@ def _line(answer: Answer) -> int | None:
     return next((n for n, words in WORDS if any(w in what for w in words)), None)
 
 
+def confirmation(spec: str) -> tuple[str, str | bool]:
+    """'rent_all_year=yes' as ("rent_all_year", True); 'dues=1,140' as ("dues", "1140"): a fact only a person knows."""
+    key, sep, value = spec.partition("=")
+    key = key.strip().replace("-", "_")
+    if not sep or key not in CONFIRMS:
+        raise ValueError(f"--confirm takes one of {', '.join(CONFIRMS)}, as KEY=VALUE")
+    value = value.strip()
+    if CONFIRMS[key] is bool:
+        if value.lower() not in ("yes", "no", "true", "false"):
+            raise ValueError(f"{key} is yes or no")
+        return key, value.lower() in ("yes", "true")
+    return key, str(int(value) if CONFIRMS[key] is int else amount(value))
+
+
 def build(year: int, *, last: Rental | None, answers: list[Answer], forms: list[dict], policies: list[Policy],
-          projected: dict | None, address: str = "") -> Rental:
-    """This year's Schedule E for one property, from what's been read; `last` is the latest filed one."""
+          projected: dict | None, address: str = "", confirmed: dict | None = None) -> Rental:
+    """This year's Schedule E for one property, from what's been read; `last` is the latest filed one, and
+    `confirmed` what the person said (`confirmation`), which settles the questions the documents can't."""
+    confirmed = confirmed or {}
     place = address or (last.address if last else "")
     rental = Rental(address=place, year=year)
     if not place:
         rental.ask("which property: no filed Schedule E has been read (`taxtrace prior`) to give its address")
-    if last:
-        rental.kind = last.kind
+    rental.kind = last.kind if last else ""
+    if "fair_rental_days" in confirmed:
+        rental.fair_rental_days = int(confirmed["fair_rental_days"])
+        rental.personal_use_days = int(confirmed.get("personal_use_days", 0))
+    elif last:
         rental.ask(f"line 2: {last.year}'s return had {last.fair_rental_days or 'no'} fair rental days and "
-                   f"{last.personal_use_days or 'no'} personal use days: the same for {year}?")
+                   f"{last.personal_use_days or 'no'} personal use days: the same for {year}? "
+                   "(--confirm fair_rental_days=N --confirm personal_use_days=N)")
+    else:
+        rental.ask("line 2: how many days the property was rented at a fair rent, and how many it was used personally")
     for a in answers:
         if not (RENT.search(a.section) or RENT.search(a.what)):
             continue
@@ -196,17 +223,22 @@ def build(year: int, *, last: Rental | None, answers: list[Answer], forms: list[
             rental.lines[n].amount += a.yearly
         else:
             rental.lines[n] = Line(n, a.yearly, "answers", a.file, a.page, a.quote, a.what)
-        if n == 3 and a.per == "month":
+        if n == 3 and a.per == "month" and confirmed.get("rent_all_year") is not True:
             rental.ask(f"line 3 is 12 months at the monthly rent: if the property was empty for a while or the rent "
-                       f"changed in {year}, the rent actually received", a.page, a.quote)
+                       f"changed in {year}, the rent actually received (or --confirm rent_all_year=yes)",
+                       a.page, a.quote)
         elif a.per == "":
             rental.ask(f"line {n}: the answer doesn't say whether it's a year's or a month's: taken as the year's",
                        a.page, a.quote)
     _mortgage(rental, year, forms)
-    _insurance(rental, year, policies)
+    _insurance(rental, year, policies, confirmed)
     _depreciation(rental, year, projected)
+    if dues := Decimal(confirmed.get("dues", "0")):
+        rental.lines[19] = Line(19, dues, "confirmed", "", 0, "", "Association dues")
     if last:
         for n, old in last.lines.items():
+            if n == 19 and "dues" in confirmed:
+                continue
             if n in EXPENSES and old.amount and n not in rental.lines:
                 what = f" ({', '.join(o.what for o in last.other)})" if n == 19 and last.other else ""
                 rental.ask(f"line {n}, {LINES[n].lower()}{what}: {last.year}'s return had an amount, and nothing for "
@@ -243,7 +275,7 @@ def _mortgage(rental: Rental, year: int, forms: list[dict]) -> None:
             rental.lines[n] = Line(n, Decimal(v["amount"]), "1098 box 10", f["file"], v["page"], v["quote"])
 
 
-def _insurance(rental: Rental, year: int, policies: list[Policy]) -> None:
+def _insurance(rental: Rental, year: int, policies: list[Policy], confirmed: dict) -> None:
     mine = [p for p in policies if p.kind == "landlord" and same_place(p.location, rental.address)]
     if not mine:
         if 9 not in rental.lines:
@@ -254,10 +286,12 @@ def _insurance(rental: Rental, year: int, policies: list[Policy]) -> None:
                    "isn't added again", mine[0].page, mine[0].quote)
         return
     p = mine[0]
-    rental.lines[9] = Line(9, p.premium, "policy", p.file, p.page, p.quote)
-    if p.new_since.endswith(str(year)):
+    rental.lines[9] = Line(9, p.premium + Decimal(confirmed.get("earlier_policy", "0")), "policy", p.file, p.page,
+                           p.quote)
+    if p.new_since.endswith(str(year)) and "earlier_policy" not in confirmed:
         rental.ask(f"line 9: a new policy from {p.new_since}: if another policy covered the property earlier in "
-                   f"{year}, what was paid for it in {year} is an expense too", p.page)
+                   f"{year}, what was paid for it in {year} is an expense too (--confirm earlier_policy=AMOUNT, "
+                   "0 for none)", p.page)
 
 
 def _depreciation(rental: Rental, year: int, projected: dict | None) -> None:
