@@ -142,3 +142,108 @@ def test_cli_saves_the_statement_and_prints_it_masked(tmp_path: Path, workspace_
     (saved,) = json.loads((workspace_home / "forms" / "bank-9876-20250401.json").read_text())
     assert (saved["form"], saved["account"], len(saved["rows"])) == ("BANK", "9876", 4)
     assert "000123459876" not in json.dumps(saved) and "Account Holder" not in json.dumps(saved)
+
+
+# A monthly e-statement of every account a customer holds: a balance summary, the term deposits, and a page per savings
+# account, one with the month's transactions (the interest, then SMS charges and their GST) and one without.
+TOP = [(424, 5, "Welcome Ms. Lalitha Vemulapati"), (424, 22, "Customer CIF00004417"), (348, 34, "As on 31-03-26")]
+BALANCES = [*TOP,
+    (30, 465, "MY ACCOUNTS"),
+    (35, 521, "Transaction Accounts*"), (144, 521, "SAVING ACCOUNT"), (265, 521, "INR"), (339, 521, "1"),
+    (419, 521, "1"), (502, 521, "52361.95"),
+    (47, 536, "Fixed Deposit*"), (150, 536, "TERM DEPOSIT"), (265, 536, "INR"), (339, 536, "2"), (419, 536, "0"),
+    (500, 536, "250000.00"),
+    (28, 551, "Total INR: Rs."), (90, 551, "302361.95"),
+]
+DEPOSITS = [*TOP,
+    (10, 159, "FIXED DEPOSITS"), (502, 185, "CURRENCY: INR"),
+    (10, 213, "Account Type"), (88, 208, "Account Number"), (166, 208, "Principal"), (377, 213, "Interest Accrued"),
+    (12, 249, "TERM DEPOSIT"), (70, 249, "XXXXXXX3301"), (126, 249, "15-07-25"), (166, 249, "150000.00"),
+    (227, 249, "P"), (310, 249, "6.80"), (346, 249, "0.00"), (396, 249, "7546.30"), (459, 249, "172010.00"),
+    (514, 249, "15-07-27"), (560, 249, "Yes"),
+    (257, 275, "EITHER OR"),
+    (12, 279, "TERM DEPOSIT"), (70, 279, "XXXXXXX3302"), (126, 279, "02-01-26"), (166, 279, "100000.00"),
+    (227, 279, "P"), (310, 279, "7.00"), (346, 279, "0.00"), (396, 279, "1706.85"), (459, 279, "114888.00"),
+    (514, 279, "02-01-28"), (560, 279, "Yes"),
+    (258, 283, "SURVIVOR"),
+]
+SAVINGS = [*TOP,
+    (10, 158, "TRANSACTION DETAILS"), (15, 186, "SAVING ACCOUNT"), (15, 202, "XXXXXXX5520"),
+    (30, 238, "Name of the Account Holder"), (320, 238, "Ms. Lalitha Vemulapati"),
+    (30, 485, "Mode of Operation"), (320, 485, "FORMER OR SURVIVOR"),
+    (30, 574, "Available Balance"), (320, 574, "52361.95"),
+    (10, 612, "TRANSACTION OVERVIEW"),
+    (24, 630, "Date"), (126, 630, "Transaction Reference"), (297, 630, "Ref.No./Chq.No."), (397, 630, "Credit"),
+    (468, 630, "Debit"), (532, 630, "Balance"),
+    (12, 645, "Your Opening Balance on 01-03-26:"), (184, 645, "52000.00"),
+    (19, 660, "31-03-26"), (62, 660, "INTEREST CREDIT"), (367, 660, "-"), (416, 660, "379.65"), (506, 660, "0"),
+    (547, 660, "52379.65"),
+    (19, 675, "31-03-26"), (62, 675, "SMS CHG"), (367, 675, "-"), (436, 675, "0"), (490, 675, "15.00"),
+    (547, 675, "52364.65"),
+    (62, 683, "JAN-MAR QTR"),  # the description's second line
+    (19, 695, "31-03-26"), (62, 695, "GST CHG"), (367, 695, "-"), (436, 695, "0"), (494, 695, "2.70"),
+    (547, 695, "52361.95"),
+    (12, 710, "Your Closing Balance on 31-03-26:"), (180, 710, "52361.95"),
+    (10, 722, "*All dates are in DD-MM-YY format"),
+]
+QUIET = [*TOP,
+    (10, 158, "TRANSACTION DETAILS"), (15, 186, "SAVING ACCOUNT"), (15, 202, "XXXXXXX7781"),
+    (30, 325, "Mode of Operation"), (320, 325, "SINGLE"),
+    (30, 414, "Available Balance"), (320, 414, "0.00"),
+]
+ALL_ACCOUNTS = [BALANCES, DEPOSITS, SAVINGS, QUIET]
+
+
+def read_all(path: Path) -> list[statement.Statement]:
+    pages = text.pages(path)
+    assert all(statement.is_consolidated(p) for p in pages) and not statement.is_statement(pages[2])
+    return statement.read_consolidated(path.name, pages, {n: text.words(path, n, None) for n in range(1, 5)})
+
+
+def test_a_statement_of_every_account_reads_as_one_statement_each(tmp_path: Path):
+    found = read_all(draw(tmp_path / "godavari-5520-2026-03.pdf", ALL_ACCOUNTS))
+    assert [(s.kind, s.account, s.start, s.end, s.currency) for s in found] == [
+        ("term deposit", "3301", "01-03-2026", "31-03-2026", "INR"),
+        ("term deposit", "3302", "01-03-2026", "31-03-2026", "INR"),
+        ("savings", "5520", "01-03-2026", "31-03-2026", "INR"),
+        ("savings", "7781", "01-03-2026", "31-03-2026", "INR")]
+    first, second, savings, quiet = found
+    assert first.term == {"opened": "15-07-2025", "principal": Decimal("150000.00"), "rate": Decimal("6.80"),
+                          "accrued": Decimal("7546.30"), "maturity": Decimal("172010.00"), "matures": "15-07-2027"}
+    assert (first.opening, first.closing, second.closing) == (Decimal("157546.30"), Decimal("157546.30"),
+                                                              Decimal("101706.85"))
+    assert (savings.operation, quiet.operation) == ("FORMER OR SURVIVOR", "SINGLE")
+    assert [(str(r.deposit), str(r.withdrawal), str(r.balance), r.kind, r.description) for r in savings.rows] == [
+        ("379.65", "0", "52379.65", "interest", "INTEREST CREDIT"),
+        ("0", "15.00", "52364.65", "", "SMS CHG JAN-MAR QTR"),
+        ("0", "2.70", "52361.95", "", "GST CHG")]
+    assert (savings.opening, savings.closing) == (Decimal("52000.00"), Decimal("52361.95"))
+    assert (quiet.rows, quiet.opening, quiet.closing) == ([], Decimal("0.00"), Decimal("0.00"))
+    assert not [c for s in found for c in s.failed] and not [q for s in found for q in s.questions]
+    # the summary's three lines, each deposit's maturity, the savings account's chain, closing and available balance
+    assert sum(len(s.checks) for s in found) == 3 + 2 + 5 + 1
+
+
+def test_an_account_off_the_balance_summary_or_its_own_chain_fails(tmp_path: Path):
+    swap = {"52364.65": "52364.60", "302361.95": "302361.90"}
+    page = [(x, top, swap.get(p, p)) for x, top, p in SAVINGS]
+    balances = [(x, top, swap.get(p, p)) for x, top, p in BALANCES]
+    found = read_all(draw(tmp_path / "statement.pdf", [balances, DEPOSITS, page, QUIET]))
+    assert [c.what for s in found for c in s.failed] == [
+        "the accounts add up to the balance summary's total",
+        "the balance on 31-03-2026 follows from the one before",
+        "the balance on 31-03-2026 follows from the one before"]
+
+
+def test_cli_saves_each_account_of_a_statement_of_every_account(tmp_path: Path, workspace_home: Path, capsys):
+    assert cli.main(["bank", str(draw(tmp_path / "Godavari Vemulapati.pdf", ALL_ACCOUNTS))]) == 0
+    out = printed(capsys)
+    for secret in ["Lalitha", "Vemulapati", "3301", "5520", "52361.95", "150000.00", "CIF00004417"]:
+        assert secret not in out
+    assert ("term deposit ending #### in INR, opened 15-07-2025, matures 15-07-2027, 01-03-2026 to 31-03-2026; "
+            "0 rows") in out
+    assert "savings account ending #### in INR, former or survivor, 01-03-2026 to 31-03-2026; 3 rows (1 interest" in out
+    saved = sorted(p.name for p in (workspace_home / "forms").glob("bank-*.json"))
+    assert saved == ["bank-3301-20260301.json", "bank-3302-20260301.json", "bank-5520-20260301.json",
+                     "bank-7781-20260301.json"]
+    assert "Lalitha" not in "".join((workspace_home / "forms" / n).read_text() for n in saved)

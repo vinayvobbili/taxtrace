@@ -342,6 +342,16 @@ A bank's monthly "Account Statement" is read too: a row number, dates as `05 Jan
 amounts, Indian commas (`1,23,456.78`), an Opening Balance row and an Account Summary. Its quarterly interest is
 credited net of TDS (`Int:1234.56 and TAX:123.45`), and is read as two rows, the interest and then the TDS withheld.
 
+So is a bank's monthly e-statement of every account the customer holds there ("As on 31-01-26"): a balance summary,
+the term deposits, and a page per savings account with the month's transactions (dates as `31-01-26`, amounts
+right-aligned under Credit, Debit and Balance) between its opening and closing balance lines. Each account is saved as
+a statement of its own, with how it's held (single, "former or survivor"). A term deposit's balance is its principal
+and the interest accrued on it, and the foreign side takes its interest for the year as what that value grew by:
+interest added to a cumulative deposit is income in the year it's added, though none is paid out, and a renewal
+carries it into the new principal. A value that falls (TDS taken from the interest at India's year end) is asked
+about. The checks: each account's balances follow from its opening balance, its closing balance is its available
+balance, and the accounts add up to the balance summary.
+
 The checks: each balance is the one before plus the deposit or less the withdrawal, and the rows add up to the
 statement's grand totals (or, on a monthly statement, its opening and closing balances are the summary's, and its
 net interest is the interest less the TDS). A statement runs on India's year (April to March), so a calendar year usually needs two.

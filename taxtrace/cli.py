@@ -629,28 +629,36 @@ def cmd_bank(args: argparse.Namespace) -> int:
         except text.UnsupportedDocument as err:
             print(f"{name}: skipped, {err}")
             continue
-        tables = [n for n, page in enumerate(pages, 1) if statement.is_statement(page)]
-        if not tables:
+        if any(statement.is_consolidated(page) for page in pages):  # every account the customer holds there
+            statements = statement.read_consolidated(
+                doc.name, pages, {n: text.words(doc, n, password) for n in range(1, len(pages) + 1)})
+        elif tables := [n for n, page in enumerate(pages, 1) if statement.is_statement(page)]:
+            statements = [statement.read(doc.name, pages, {n: text.words(doc, n, password) for n in tables})]
+        else:
             continue
-        found = statement.read(doc.name, pages, {n: text.words(doc, n, password) for n in tables})
-        failed += bool(found.failed)
-        kinds = {k: sum(r.kind == k for r in found.rows) for k in ("interest", "tax refund", "tds", "tds refund")}
-        print(f"{name}: account ending {masked(found.account) or '?'} in {found.currency or '?'}, "
-              f"{found.start or '?'} to {found.end or '?'}; {len(found.rows)} rows ("
-              + ", ".join(f"{v} {k}" for k, v in kinds.items()) + f"); {len(found.checks) - len(found.failed)} of "
-              f"{len(found.checks)} checks pass")
-        if args.rows:
-            for r in found.rows:
-                print(f"  {r.on} {'deposit' if r.deposit else 'withdrawal'} {r.kind or '-'}: {masked(r.description)}")
-        for c in found.failed:
-            print(f"  failed: {c.what}" + (f" ({masked(c.quote)})" if c.quote else ""))
-        for q in found.questions:
-            print(f"  question: {q.text}")
-        out.mkdir(parents=True, exist_ok=True)
-        start = "".join(reversed(found.start.split("-"))) if found.start else doc.stem
-        (out / f"bank-{found.account or 'x'}-{start}.json").write_text(
-            json.dumps([found.to_json()], indent=2, default=str) + "\n")
-        written += 1
+        for found in statements:
+            failed += bool(found.failed)
+            kinds = {k: sum(r.kind == k for r in found.rows) for k in ("interest", "tax refund", "tds", "tds refund")}
+            held = f", {found.operation.lower()}" if found.operation else ""
+            term = f", opened {found.term['opened']}, matures {found.term['matures']}" if found.term else ""
+            label = {"savings": "savings account"}.get(found.kind, found.kind or "account")
+            print(f"{name}: {label} ending {masked(found.account) or '?'} in "
+                  f"{found.currency or '?'}{held}{term}, {found.start or '?'} to {found.end or '?'}; "
+                  f"{len(found.rows)} rows (" + ", ".join(f"{v} {k}" for k, v in kinds.items())
+                  + f"); {len(found.checks) - len(found.failed)} of {len(found.checks)} checks pass")
+            if args.rows:
+                for r in found.rows:
+                    print(f"  {r.on} {'deposit' if r.deposit else 'withdrawal'} {r.kind or '-'}: "
+                          f"{masked(r.description)}")
+            for c in found.failed:
+                print(f"  failed: {c.what}" + (f" ({masked(c.quote)})" if c.quote else ""))
+            for q in found.questions:
+                print(f"  question: {q.text}")
+            out.mkdir(parents=True, exist_ok=True)
+            start = "".join(reversed(found.start.split("-"))) if found.start else doc.stem
+            (out / f"bank-{found.account or 'x'}-{start}.json").write_text(
+                json.dumps([found.to_json()], indent=2, default=str) + "\n")
+            written += 1
     print(f"wrote to {out}" if written else "no statements of account found")
     return 1 if failed else 0
 
@@ -780,7 +788,9 @@ def cmd_foreign(args: argparse.Namespace) -> int:
     for n, a in enumerate(found.accounts, 1):
         parts = [f"{c.what} at {c.rate.source}" for c in (a.interest, a.highest, a.december_31) if c]
         holder = {"self": "yours", "spouse": "your spouse's", "joint": "both of yours"}.get(a.holder, "whose?")
-        print(f"  account {n}: {a.country}, ending {masked(a.account) or '?'} in {a.currency or '?'}, {holder}, covers "
+        kind = {"savings": "a savings account ", "term deposit": "a term deposit "}.get(a.kind, "")
+        print(f"  account {n}: {a.country}, {kind}ending {masked(a.account) or '?'} in {a.currency or '?'}, {holder}, "
+              "covers "
               + (", ".join(c.replace("..", " to ") for c in a.covered) or "none of the year")
               + (f"; {'; '.join(parts)}" if parts else ""))
     for r in found.refunds:

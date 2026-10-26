@@ -11,7 +11,7 @@ import pytest
 from conftest import make_pdf, printed
 from test_itr import RETURN, SECRETS
 from test_k1 import draw
-from test_statement import MONTHLY, PAGE, SUMMARY, statement_page
+from test_statement import ALL_ACCOUNTS, MONTHLY, PAGE, SUMMARY, statement_page
 from test_statement import SECRETS as STATEMENT_SECRETS
 
 from taxtrace import cli, foreign, fx
@@ -165,3 +165,45 @@ def test_a_year_still_going_is_estimated_at_the_latest_days_rate(tmp_path: Path,
     # once the year is over, its own rates are asked for
     found = foreign.build(2026, itrs=[], rates=rates, statements=statements, today=date(2027, 2, 1))
     assert not found.estimated and any("no 2026 rate" in q.text for q in found.questions)
+
+
+def test_each_account_of_a_statement_of_every_account_has_its_balance(tmp_path: Path, workspace_home: Path,
+                                                                     monkeypatch):
+    monkeypatch.setattr(fx, "_get", fake_get([]))
+    assert cli.main(["bank", str(draw(tmp_path / "godavari.pdf", ALL_ACCOUNTS))]) == 0
+    statements = [s for f in sorted((workspace_home / "forms").glob("bank-*.json")) for s in json.loads(f.read_text())]
+    csv = FRED_CSV + "2026-10-23,88.1000\n"
+    rates = fx.Rates("INR", tmp_path / "fx", get=lambda url: csv if "fred" in url else fake_get([])(url))
+    found = foreign.build(2026, itrs=[], rates=rates, statements=statements, today=date(2026, 10, 25))
+    accounts = {a.account: a for a in found.accounts}
+    deposit, savings, quiet = accounts["3301"], accounts["5520"], accounts["7781"]
+    assert (deposit.kind, savings.kind) == ("term deposit", "savings")
+    assert deposit.highest.amount == Decimal("157546.30")  # its principal and the interest accrued on it
+    assert (savings.highest.amount, savings.interest.amount) == (Decimal("52379.65"), Decimal("379.65"))
+    assert quiet.highest.amount == Decimal("0.00") and quiet.covered == ["2026-03-01..2026-03-31"]
+    # interest added to a deposit is the year's: one opened in the year from its principal, the other needs December's
+    assert accounts["3302"].interest.amount == Decimal("1706.85") and deposit.interest is None
+    assert any(q.text.startswith("account 1: a term deposit without a statement from before 2026") for q in
+               found.questions)
+
+
+def test_a_term_deposits_interest_is_what_its_value_grew_by_and_a_fall_is_asked_about(tmp_path: Path,
+                                                                                    workspace_home: Path, monkeypatch):
+    monkeypatch.setattr(fx, "_get", fake_get([]))
+
+    def month(as_on: str, start: str, accrued: str) -> list:
+        swap = {"As on 31-03-26": f"As on {as_on}", "7546.30": accrued}
+        return [[(x, top, swap.get(p, p).replace("31-03-26", as_on).replace("01-03-26", start)) for x, top, p in page]
+                for page in ALL_ACCOUNTS]
+
+    for name, pages in [("december", month("31-12-25", "01-12-25", "5000.00")),
+                        ("february", month("28-02-26", "01-02-26", "8000.00")), ("march", ALL_ACCOUNTS)]:
+        assert cli.main(["bank", str(draw(tmp_path / f"{name}.pdf", pages))]) == 0
+    statements = [s for f in sorted((workspace_home / "forms").glob("bank-*.json")) for s in json.loads(f.read_text())]
+    csv = FRED_CSV + "2026-10-23,88.1000\n"
+    rates = fx.Rates("INR", tmp_path / "fx", get=lambda url: csv if "fred" in url else fake_get([])(url))
+    found = foreign.build(2026, itrs=[], rates=rates, statements=statements, today=date(2026, 10, 25))
+    (deposit,) = [a for a in found.accounts if a.account == "3301"]
+    assert deposit.interest.amount == Decimal("2546.30")  # 1,57,546.30 on March 31 less 1,55,000 on December 31
+    assert any(q.text.startswith("account 1: the term deposit's value fell on 2026-03-31: was TDS taken") for q in
+               found.questions)

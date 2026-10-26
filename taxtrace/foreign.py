@@ -108,6 +108,7 @@ class Account:
     december_31: Converted | None = None
     files: list[str] = field(default_factory=list)
     holder: str = ""  # "self", "spouse" or "joint" (the two spouses), once confirmed
+    kind: str = ""  # "savings" or "term deposit", when a statement of several accounts says
 
 
 @dataclass
@@ -338,7 +339,7 @@ def _account(found: Foreign, n: int, statements: list[dict], rates: Rates, today
     year = found.year
     first = statements[0]
     account = Account("India", first.get("account", ""), first.get("currency", ""),
-                      files=[s["file"] for s in statements], holder=holder)
+                      files=[s["file"] for s in statements], holder=holder, kind=first.get("kind", ""))
     found.accounts.append(account)
     covered, missing = _covered(statements, year)
     account.covered = [f"{a}..{b}" for a, b in covered]
@@ -353,10 +354,18 @@ def _account(found: Foreign, n: int, statements: list[dict], rates: Rates, today
     # the balance at each change in the year: each statement's opening balance, then each row's
     points: list[tuple[date, Decimal, dict]] = []
     for s in statements:
-        if s["rows"] and s.get("start"):
-            r = s["rows"][0]
+        if not s.get("start"):
+            continue
+        # where a balance printed apart from the rows was read: an account without transactions, a term deposit
+        printed = {"page": s.get("balance_page") or 1, "quote": s.get("balance_quote", "")}
+        r = s["rows"][0] if s["rows"] else printed
+        if s.get("opening") is not None:
+            points.append((statement_day(s["start"]), Decimal(s["opening"]), r))
+        elif s["rows"]:
             opening = Decimal(r["balance"]) - Decimal(r["deposit"]) + Decimal(r["withdrawal"])
             points.append((statement_day(s["start"]), opening, r))
+        if s.get("closing") is not None and s.get("end"):
+            points.append((statement_day(s["end"]), Decimal(s["closing"]), printed))
     points += [(on, Decimal(r["balance"]), r) for on, r, _ in rows]
     inside = [(on, b, r) for on, b, r in points if any(a <= on <= z for a, z in covered)]
     try:
@@ -377,7 +386,9 @@ def _account(found: Foreign, n: int, statements: list[dict], rates: Rates, today
         return Converted(what, amount, rate.dollars(amount), rate, r["page"], r["quote"])
 
     interest = [(on, r) for on, r, _ in rows if r["kind"] == "interest" and on.year == year]
-    if interest:
+    if account.kind == "term deposit":
+        _deposit_interest(found, n, account, statements, lambda amount, r: convert("interest", amount, yearly, r))
+    elif interest:
         total = sum((Decimal(r["deposit"]) for _, r in interest), Decimal(0))
         account.interest = convert("interest", total, yearly, interest[0][1])
     for on, r, s in rows:
@@ -399,6 +410,38 @@ def _account(found: Foreign, n: int, statements: list[dict], rates: Rates, today
         if before:
             _, balance, r = max(before, key=lambda t: t[0])  # the last change on or before December 31
             account.december_31 = convert("balance on December 31", balance, december, r)
+
+
+def _deposit_interest(found: Foreign, n: int, account: Account, statements: list[dict], convert) -> None:
+    """A term deposit's interest in the year: what its value (the principal and the interest accrued on it) grew by,
+    from the last statement before the year (or its principal, opened in the year) to the last in it. Interest added
+    to a deposit is the year's income though none is paid out, and a renewal carries the value into the new
+    principal. A value that falls, as when TDS is taken from the interest at India's financial year end, is asked
+    about: what was taken is interest too, and a tax for Form 1116."""
+    year = found.year
+    values = sorted((statement_day(s["end"]), Decimal(s["closing"]), s) for s in statements
+                    if s.get("closing") is not None and s.get("end"))
+    inside = [v for v in values if v[0].year == year]
+    if not inside:
+        return
+    before = [v for v in values if v[0].year < year]
+    first = inside[0][2]
+    if before:
+        start = before[-1][1]
+    elif first.get("term") and statement_day(first["term"]["opened"]).year == year:
+        start = Decimal(first["term"]["principal"])
+    else:
+        found.ask(f"account {n}: a term deposit without a statement from before {year}: its value on December 31, "
+                  f"{year - 1} (the {year - 1} December statement) gives the interest it earned in {year}")
+        return
+    for (on, value, _), (_, prior, _) in zip(values[1:], values, strict=False):
+        if on.year == year and value < prior:
+            found.ask(f"account {n}: the term deposit's value fell on {on}: was TDS taken from its interest? The "
+                      "bank's interest certificate (or Form 26AS) gives it: it's interest earned, and India's tax "
+                      "on it")
+    last = inside[-1][2]
+    account.interest = convert(inside[-1][1] - start, {"page": last.get("balance_page") or 1,
+                                                      "quote": last.get("balance_quote", "")})
 
 
 def _reporting(found: Foreign, confirmed: dict) -> None:
