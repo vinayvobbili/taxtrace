@@ -110,7 +110,9 @@ Only the entries `setup` moved go through the helper; any other is read the clas
 you deny the classic prompt during `setup`, it says so and leaves that entry as it was: run `setup` again.
 taxtrace reads each entry at most once per command, so a folder of returns sharing the `default` password
 costs one prompt. `taxtrace unlock` says which entry opens each locked file, and how each stored password
-is shaped (`aaaa99999`), never what it is.
+is shaped (`aaaa99999`), never what it is. A password pdfminer turns down is tried once more with qpdf
+(`brew install qpdf`), which gets it on stdin and decrypts a copy into a temporary folder for the read: when qpdf
+turns it down too, the stored password is wrong, not the reader.
 
 Another tool can read an entry `setup` moved, such as an API key it shares with the chat, without the entry
 trusting that tool too:

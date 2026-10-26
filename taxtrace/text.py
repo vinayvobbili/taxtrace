@@ -14,8 +14,10 @@ import hashlib
 import logging
 import shutil
 import subprocess
+import tempfile
 import zipfile
 from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from xml.etree import ElementTree
 
@@ -126,18 +128,47 @@ def _column(ref: str, default: int) -> int:
 
 
 def _pdf_pages(path: Path, password: str | None) -> list[str]:
+    with _opened(path, password) as doc:
+        return [page.extract_text(layout=True, x_density=_x_density(page)) or "" for page in doc.pages]
+
+
+@contextmanager
+def _opened(path: Path, password: str | None):
+    """The PDF open in pdfplumber. A password pdfminer turns down gets a second try with qpdf, whose decryption is
+    a full implementation's: the copy it decrypts lives in a temporary folder only while it's read."""
     import pdfplumber
     from pdfminer.pdfdocument import PDFPasswordIncorrect
     from pdfplumber.utils.exceptions import PdfminerException
 
     try:
-        with pdfplumber.open(path, password=password or "") as doc:
-            return [page.extract_text(layout=True, x_density=_x_density(page)) or "" for page in doc.pages]
+        doc = pdfplumber.open(path, password=password or "")
     except PdfminerException as err:
         # pdfplumber wraps pdfminer's error as the first argument.
         if not (err.args and isinstance(err.args[0], PDFPasswordIncorrect)):
             raise UnsupportedDocument("not a readable PDF (a web page saved as .pdf, or a damaged file)") from None
-        raise Locked("password-protected" if password is None else "the stored password doesn't open it") from None
+    else:
+        with doc:
+            yield doc
+        return
+    if password is None:
+        raise Locked("password-protected")
+    with tempfile.TemporaryDirectory(prefix="taxtrace-") as tmp:
+        plain = Path(tmp) / "decrypted.pdf"
+        if not _qpdf_decrypt(path, password, plain):
+            raise Locked("the stored password doesn't open it")
+        with pdfplumber.open(plain) as doc:
+            yield doc
+
+
+def _qpdf_decrypt(path: Path, password: str, out: Path) -> bool:
+    """Whether qpdf (if installed) opened `path` with `password` and wrote it to `out` without the lock. The password
+    goes in on stdin, never in the command line where other processes could see it."""
+    exe = shutil.which("qpdf")
+    if exe is None:
+        return False
+    run = subprocess.run([exe, "--decrypt", "--password-file=-", str(path), str(out)], input=password + "\n",
+                         capture_output=True, text=True)
+    return run.returncode in (0, 3) and out.exists()  # 3: written, with warnings
 
 
 def _x_density(page) -> float:
@@ -183,9 +214,7 @@ def ocr(path: Path, cache: Path) -> Path:
 def words(path: Path, page: int, password: str | None = None) -> list[dict]:
     """One PDF page's words with where they sit (points from the top left): what a parser of a printed form, whose
     values aren't in reading order next to their labels, places them by."""
-    import pdfplumber
-
-    with pdfplumber.open(path, password=password or "") as doc:
+    with _opened(path, password) as doc:
         found = doc.pages[page - 1].extract_words(keep_blank_chars=False, use_text_flow=False)
     return [{"text": w["text"], "x0": round(w["x0"], 1), "x1": round(w["x1"], 1), "top": round(w["top"], 1)}
             for w in found]

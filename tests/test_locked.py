@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -45,6 +46,28 @@ def test_wrong_passwords_only_still_say_locked(locked: Path, tmp_path: Path, mon
     monkeypatch.setattr(workspace, "pdf_passwords", lambda path: ["stale"])
     assert cli.main(["redact", str(locked), "--out", str(tmp_path / "r")]) == 0
     assert "doesn't open it" in capsys.readouterr().out
+
+
+@pytest.mark.skipif(shutil.which("qpdf") is None, reason="qpdf isn't installed")
+def test_a_password_pdfminer_turns_down_still_opens_through_qpdf(locked: Path, monkeypatch):
+    import pdfplumber
+    from pdfminer.pdfdocument import PDFPasswordIncorrect
+    from pdfplumber.utils.exceptions import PdfminerException
+
+    real_open = pdfplumber.open
+
+    def pdfminer_refuses(path, **kw):  # as it does an encryption it gets wrong; qpdf's copy has no lock
+        if Path(path) == locked:
+            raise PdfminerException(PDFPasswordIncorrect())
+        return real_open(path, **kw)
+
+    monkeypatch.setattr(pdfplumber, "open", pdfminer_refuses)
+    assert "Form 4562" in text.pages(locked, PASSWORD)[0]
+    assert any(w["text"] == "4562" for w in text.words(locked, 1, PASSWORD))
+    with pytest.raises(text.Locked, match="doesn't open it"):
+        text.pages(locked, "wrong")
+    with pytest.raises(text.Locked, match="password-protected"):
+        text.pages(locked)
 
 
 def test_a_web_page_saved_as_pdf_is_skipped_not_a_crash(tmp_path: Path, capsys):
