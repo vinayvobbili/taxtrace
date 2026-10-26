@@ -20,8 +20,9 @@ arrived beyond the refund is India's interest on it, income in the year it arriv
 
 What only the person knows is confirmed once (`foreign --confirm`) and kept for later runs: who owned the property
 (on a joint return, either spouse's sale counts in full; anyone else's share doesn't), the date each improvement was
-paid, how the property was used when the dollar result is a loss, and the filing status Form 8938's thresholds
-follow.
+paid, how the property was used when the dollar result is a loss, the filing status Form 8938's thresholds
+follow, and whose each account is. Each spouse files their own FBAR, of the accounts in their name: an account
+held with someone outside the return (a parent) is theirs in full. Form 8938 on a joint return takes both spouses'.
 """
 
 from __future__ import annotations
@@ -44,8 +45,10 @@ CONFIRMS = {
     "use": USES,  # how the property was used, which matters when the dollar result is a loss
     "filing": FILINGS,  # for Form 8938's thresholds
 }
+# whose an account is, confirmed as account_<its last four digits>: "joint" is the two spouses
+HOLDERS = ("self", "spouse", "joint")
 AVERAGE = "average"
-FBAR = Decimal(10000)  # all foreign accounts' highest balances together, at any time in the year
+FBAR = Decimal(10000)  # a person's foreign accounts' highest balances together, at any time in the year
 # Form 8938 for someone living in the US: (on December 31, at any time in the year), all the assets together
 FORM_8938 = {"joint": (Decimal(100000), Decimal(150000))} | {
     f: (Decimal(50000), Decimal(75000)) for f in ("single", "separate", "head")}
@@ -104,6 +107,7 @@ class Account:
     highest: Converted | None = None  # the highest balance in what's covered, at the Treasury's December 31 rate
     december_31: Converted | None = None
     files: list[str] = field(default_factory=list)
+    holder: str = ""  # "self", "spouse" or "joint" (the two spouses), once confirmed
 
 
 @dataclass
@@ -149,6 +153,10 @@ def confirmation(spec: str) -> tuple[str, str]:
     """'owner=spouse' as ("owner", "spouse"); 'improvement_dates=2014-09-15' checked as dates."""
     key, sep, value = spec.partition("=")
     key, value = key.strip().replace("-", "_"), value.strip()
+    if sep and key.startswith("account_"):
+        if not (len(key) == 12 and key[8:].isdigit()) or value.lower() not in HOLDERS:
+            raise ValueError(f"an account's holder is account_<its last four digits>={'|'.join(HOLDERS)}")
+        return key, value.lower()
     if not sep or key not in CONFIRMS:
         raise ValueError(f"--confirm takes one of {', '.join(CONFIRMS)}, as KEY=VALUE")
     if CONFIRMS[key] == "dates":
@@ -196,7 +204,7 @@ def build(year: int, *, itrs: list[dict], rates: Rates, confirmed: dict | None =
     for s in statements:
         by_account.setdefault(s.get("account") or s["file"], []).append(s)
     for n, (_, mine) in enumerate(sorted(by_account.items()), 1):
-        _account(found, n, mine, rates, today)
+        _account(found, n, mine, rates, today, confirmed.get(f"account_{mine[0].get('account', '')}", ""))
     if found.accounts:
         _reporting(found, confirmed)
     return found
@@ -326,11 +334,11 @@ def _covered(statements: list[dict], year: int) -> tuple[list[tuple[date, date]]
     return covered, missing
 
 
-def _account(found: Foreign, n: int, statements: list[dict], rates: Rates, today: date) -> None:
+def _account(found: Foreign, n: int, statements: list[dict], rates: Rates, today: date, holder: str) -> None:
     year = found.year
     first = statements[0]
     account = Account("India", first.get("account", ""), first.get("currency", ""),
-                      files=[s["file"] for s in statements])
+                      files=[s["file"] for s in statements], holder=holder)
     found.accounts.append(account)
     covered, missing = _covered(statements, year)
     account.covered = [f"{a}..{b}" for a, b in covered]
@@ -394,11 +402,27 @@ def _account(found: Foreign, n: int, statements: list[dict], rates: Rates, today
 
 
 def _reporting(found: Foreign, confirmed: dict) -> None:
-    """Whether the FBAR and Form 8938 are due, from all the accounts together: True or False when the statements
-    settle it, None while a missing one could change it."""
+    """Whether each spouse's FBAR (of the accounts in their name) and Form 8938 (all the accounts) are due: True or
+    False when the statements settle it, None while a missing one, or an account whose holder isn't confirmed, could
+    change it."""
+    def dollars(accounts: list[Account]) -> Decimal:
+        return sum((a.highest.dollars for a in accounts if a.highest), Decimal(0))
+
     complete = all(not a.missing for a in found.accounts)
-    highest = sum((a.highest.dollars for a in found.accounts if a.highest), Decimal(0))
-    found.reporting["fbar"] = True if highest > FBAR else (False if complete else None)
+    unknown = [a for a in found.accounts if not a.holder]
+    for n, a in enumerate(found.accounts, 1):
+        if not a.holder:
+            found.ask(f"whose is account {n}: yours, your spouse's, or both of yours? (`--confirm "
+                      f"account_<its last four digits>={'|'.join(HOLDERS)}`; one held with someone else, a parent, "
+                      "is yours)")
+    for person, key in (("self", "fbar"), ("spouse", "fbar_spouse")):
+        theirs = [a for a in found.accounts if a.holder in (person, "joint")]
+        if person == "spouse" and not theirs:
+            continue
+        known, possible = dollars(theirs), dollars(theirs + unknown)
+        found.reporting[key] = True if known > FBAR else (
+            False if possible <= FBAR and all(not a.missing for a in theirs + unknown) else None)
+    highest = dollars(found.accounts)
     filing = confirmed.get("filing")
     if filing is None:
         found.reporting["form_8938"] = None

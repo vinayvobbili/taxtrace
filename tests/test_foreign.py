@@ -59,7 +59,8 @@ def test_a_confirmation_must_be_one_the_foreign_side_takes():
     assert foreign.confirmation("improvement-dates=2014-09-15, 2015-01-02") == (
         "improvement_dates", "2014-09-15,2015-01-02")
     assert foreign.confirmation("improvement_dates=Average") == ("improvement_dates", "average")
-    for bad in ("owner=cousin", "improvement_dates=15/09/2014", "rate=88"):
+    assert foreign.confirmation("account_4410=Joint") == ("account_4410", "joint")
+    for bad in ("owner=cousin", "improvement_dates=15/09/2014", "rate=88", "account_4410=other", "account_44=self"):
         with pytest.raises(ValueError):
             foreign.confirmation(bad)
 
@@ -128,15 +129,21 @@ def test_bank_statements_give_the_interest_the_refund_and_whether_to_report(tmp_
     assert cli.main(["bank", str(draw(tmp_path / "earlier.pdf", [earlier]))]) == 0
     capsys.readouterr()
     assert cli.main(["foreign", "--year", "2025", "--confirm", "filing=joint"]) == 0
+    # each spouse's FBAR is of the accounts in their name: until it's known whose this one is, neither is settled
+    assert "  your FBAR: not settled yet\n  Form 8938: not due\n" in printed(capsys)
+    assert cli.main(["foreign", "--year", "2025", "--confirm", "account_9876=spouse"]) == 0
     out = printed(capsys)
     for secret in [*STATEMENT_SECRETS, "3980000", "615480"]:
         assert secret not in out
-    assert "  account 1: India, ending #### in INR, covers 2025-01-01 to 2025-12-31; interest at IRS yearly" in out
+    assert ("  account 1: India, ending #### in INR, your spouse's, covers 2025-01-01 to 2025-12-31; interest at IRS "
+            "yearly") in out
     assert "  India's refund: arrived 2025-12-02, with interest on it (Schedule B) at IRS yearly" in out
-    assert "  FBAR: due\n  Form 8938: not due\n" in out
+    assert "  your FBAR: not due\n  your spouse's FBAR: due\n  Form 8938: not due\n" in out
+    assert "  confirmed: filing, account ####\n" in out
     saved = json.loads((workspace_home / "foreign" / "2025.json").read_text())
     (account,) = saved["accounts"]
-    assert account["missing"] == [] and saved["reporting"] == {"fbar": True, "form_8938": False}
+    assert account["missing"] == [] and account["holder"] == "spouse"
+    assert saved["reporting"] == {"fbar": False, "fbar_spouse": True, "form_8938": False}
     # the sale's price, at the Treasury's December 31 rate (89.411); December 31's is the last row's
     assert (account["highest"]["amount"], account["highest"]["dollars"]) == ("3980000.00", "44513.54")
     assert (account["december_31"]["amount"], account["december_31"]["dollars"]) == ("615480.80", "6883.73")

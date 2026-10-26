@@ -368,8 +368,10 @@ The rates are public and fetched once into `<workspace>/fx`, each kept with its 
 What only you know is settled with `--confirm`, kept in `foreign/<year>-confirmed.json`: `owner=self|spouse|joint|other`
 (on a joint return either spouse's sale counts in full), `improvement_dates=YYYY-MM-DD,...` (until then an
 improvement is at its financial year's mean rate; `average` keeps that rate when the dates aren't known),
-`use=investment|personal|rental` (asked when the dollar result is a loss) and `filing=joint|single|separate|head`
-(for Form 8938's thresholds).
+`use=investment|personal|rental` (asked when the dollar result is a loss), `filing=joint|single|separate|head`
+(for Form 8938's thresholds) and `account_<last four digits>=self|spouse|joint` (whose an account is). Each spouse
+files their own FBAR, of the accounts in their name, so the FBAR is tested per person; an account held with someone
+outside the return (a parent) is yours in full. Form 8938 on a joint return takes both spouses' accounts together.
 
 With the bank statements `bank` saved, `foreign` also gives each account's year:
 

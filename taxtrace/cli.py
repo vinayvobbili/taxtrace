@@ -779,19 +779,20 @@ def cmd_foreign(args: argparse.Namespace) -> int:
               f"{masked(t.kept.rate.day)}")
     for n, a in enumerate(found.accounts, 1):
         parts = [f"{c.what} at {c.rate.source}" for c in (a.interest, a.highest, a.december_31) if c]
-        print(f"  account {n}: {a.country}, ending {masked(a.account) or '?'} in {a.currency or '?'}, covers "
+        holder = {"self": "yours", "spouse": "your spouse's", "joint": "both of yours"}.get(a.holder, "whose?")
+        print(f"  account {n}: {a.country}, ending {masked(a.account) or '?'} in {a.currency or '?'}, {holder}, covers "
               + (", ".join(c.replace("..", " to ") for c in a.covered) or "none of the year")
               + (f"; {'; '.join(parts)}" if parts else ""))
     for r in found.refunds:
         print(f"  {r.country}'s refund: " + (f"arrived {r.arrived}" if r.arrived else "not on a statement read")
               + (f", with interest on it (Schedule B) at {r.interest.rate.source}" if r.interest else ""))
-    names = {"fbar": "FBAR", "form_8938": "Form 8938"}
+    names = {"fbar": "your FBAR", "fbar_spouse": "your spouse's FBAR", "form_8938": "Form 8938"}
     for key, due in found.reporting.items():
         print(f"  {names[key]}: " + {True: "due", False: "not due", None: "not settled yet"}[due]
               + (" (an estimate at the latest day's rate: the year's rates come out after December 31)"
                  if found.estimated and due is not None else ""))
     if confirmed:
-        print("  confirmed: " + ", ".join(k.replace("_", " ") for k in confirmed))
+        print("  confirmed: " + ", ".join(masked(k.replace("_", " ")) for k in confirmed))
     for q in found.questions:
         print(f"  question: {q.text}")
     out.mkdir(parents=True, exist_ok=True)
