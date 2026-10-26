@@ -10,7 +10,7 @@ readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.10"
-dependencies = ["pdfplumber>=0.11"]
+dependencies = ["pdfplumber>=0.11", "pypdfium2>=4"]
 keywords = ["tax", "tax-return", "schedule-e", "rental-property", "fbar", "foreign-tax-credit", "provenance", "local-llm"]
 classifiers = [
     "Programming Language :: Python :: 3",

@@ -134,8 +134,9 @@ def _pdf_pages(path: Path, password: str | None) -> list[str]:
 
 @contextmanager
 def _opened(path: Path, password: str | None):
-    """The PDF open in pdfplumber. A password pdfminer turns down gets a second try with qpdf, whose decryption is
-    a full implementation's: the copy it decrypts lives in a temporary folder only while it's read."""
+    """The PDF open in pdfplumber. A password pdfminer turns down gets another try with qpdf, then PDFium (Chrome's
+    engine), which forgives what some banks' generators get wrong, as Preview and Acrobat do: the copy either
+    decrypts lives in a temporary folder only while it's read."""
     import pdfplumber
     from pdfminer.pdfdocument import PDFPasswordIncorrect
     from pdfplumber.utils.exceptions import PdfminerException
@@ -154,7 +155,7 @@ def _opened(path: Path, password: str | None):
         raise Locked("password-protected")
     with tempfile.TemporaryDirectory(prefix="taxtrace-") as tmp:
         plain = Path(tmp) / "decrypted.pdf"
-        if not _qpdf_decrypt(path, password, plain):
+        if not (_qpdf_decrypt(path, password, plain) or _pdfium_decrypt(path, password, plain)):
             raise Locked("the stored password doesn't open it")
         with pdfplumber.open(plain) as doc:
             yield doc
@@ -169,6 +170,22 @@ def _qpdf_decrypt(path: Path, password: str, out: Path) -> bool:
     run = subprocess.run([exe, "--decrypt", "--password-file=-", str(path), str(out)], input=password + "\n",
                          capture_output=True, text=True)
     return run.returncode in (0, 3) and out.exists()  # 3: written, with warnings
+
+
+def _pdfium_decrypt(path: Path, password: str, out: Path) -> bool:
+    """Whether PDFium opened `path` with `password` and saved it to `out` without the lock."""
+    import pypdfium2 as pdfium
+    import pypdfium2.raw as pdfium_c
+
+    try:
+        doc = pdfium.PdfDocument(path, password=password)
+    except pdfium.PdfiumError:
+        return False
+    try:
+        doc.save(out, flags=pdfium_c.FPDF_REMOVE_SECURITY)
+    finally:
+        doc.close()
+    return out.exists()
 
 
 def _x_density(page) -> float:

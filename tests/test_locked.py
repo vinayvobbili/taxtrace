@@ -70,6 +70,25 @@ def test_a_password_pdfminer_turns_down_still_opens_through_qpdf(locked: Path, m
         text.pages(locked)
 
 
+def test_when_qpdf_turns_it_down_too_pdfium_opens_it(locked: Path, monkeypatch):
+    import pdfplumber
+    from pdfminer.pdfdocument import PDFPasswordIncorrect
+    from pdfplumber.utils.exceptions import PdfminerException
+
+    real_open = pdfplumber.open
+
+    def pdfminer_refuses(path, **kw):
+        if Path(path) == locked:
+            raise PdfminerException(PDFPasswordIncorrect())
+        return real_open(path, **kw)
+
+    monkeypatch.setattr(pdfplumber, "open", pdfminer_refuses)
+    monkeypatch.setattr(text, "_qpdf_decrypt", lambda path, password, out: False)
+    assert "Form 4562" in text.pages(locked, PASSWORD)[0]
+    with pytest.raises(text.Locked, match="doesn't open it"):
+        text.pages(locked, "wrong")
+
+
 def test_a_web_page_saved_as_pdf_is_skipped_not_a_crash(tmp_path: Path, capsys):
     page = tmp_path / "package.pdf"
     page.write_bytes(b"<!DOCTYPE html><html></html>")
