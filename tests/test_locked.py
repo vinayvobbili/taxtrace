@@ -71,6 +71,7 @@ def test_a_password_pdfminer_turns_down_still_opens_through_qpdf(locked: Path, m
 
 
 def test_when_qpdf_turns_it_down_too_pdfium_opens_it(locked: Path, monkeypatch):
+    pytest.importorskip("pypdfium2.raw", reason="pypdfium2 without its PDFium library", exc_type=ImportError)
     import pdfplumber
     from pdfminer.pdfdocument import PDFPasswordIncorrect
     from pdfplumber.utils.exceptions import PdfminerException

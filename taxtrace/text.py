@@ -173,9 +173,12 @@ def _qpdf_decrypt(path: Path, password: str, out: Path) -> bool:
 
 
 def _pdfium_decrypt(path: Path, password: str, out: Path) -> bool:
-    """Whether PDFium opened `path` with `password` and saved it to `out` without the lock."""
-    import pypdfium2 as pdfium
-    import pypdfium2.raw as pdfium_c
+    """Whether PDFium (if its library loads) opened `path` with `password` and saved it to `out` without the lock."""
+    try:
+        import pypdfium2 as pdfium
+        import pypdfium2.raw as pdfium_c
+    except ImportError:  # a pypdfium2 built without its binary
+        return False
 
     try:
         doc = pdfium.PdfDocument(path, password=password)
