@@ -376,6 +376,17 @@ def test_words_by_row_within_a_region(face_pdf: Path, capsys):
     assert value.split()[1:] == ["410:(#,###)"]
 
 
+def test_words_of_every_page_of_several_files_in_one_run(face_pdf: Path, tmp_path: Path, capsys):
+    other = draw(tmp_path / "other.pdf", [[(40, 40, "Quillfeather cover letter")]])
+    assert cli.main(["words", str(face_pdf), str(other), "--page", "all", "--top", ":45", "--rows"]) == 0
+    out = capsys.readouterr().out
+    assert [ln for ln in out.splitlines() if ln.startswith("==")] == [
+        "== 2025 K-1 ********.pdf page 1", "== 2025 K-1 ********.pdf page 2", "== other.pdf page 1"]
+    assert "78:cover 97:letter" in out and "Quillfeather" not in out
+    with pytest.raises(SystemExit):
+        cli.main(["words", str(face_pdf), "--page", "0"])
+
+
 def test_a_name_that_is_not_a_path_is_looked_up_in_the_workspace(workspace_home: Path, capsys):
     draw(workspace_home / "2025" / "k1.pdf", [FACE])
     assert cli.main(["k1", "2025"]) == 0

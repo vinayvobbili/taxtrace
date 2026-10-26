@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from decimal import Decimal
 from pathlib import Path
 
 from conftest import printed
@@ -47,6 +48,56 @@ def statement_page(period: str, rows: list[tuple[str, str, str, str, str]]) -> l
         words += [(30, top, on), (84, top, out), (146, top, dep), (208, top, balance), (248, top, "Cr."),
                   (270, top, description)]
     return head + [w for w in words if w[2]]
+
+
+# The monthly layout: a row number, "05 Jan 2026" dates, the description left of the amounts, Indian commas, an
+# opening balance row, interest credited net of its TDS, and the account summary on the next page.
+MONTHLY = [
+    (30, 40, "Account Statement"), (30, 55, "01 Jan 2026 - 31 Mar 2026"),
+    (30, 80, "Sarayu Peddibhotla"), (300, 80, "Account No. 4471209935"),
+    (300, 95, "Account Type NRO Savings A/c"), (300, 110, "Currency Indian Rupee"),
+    (200, 180, "Savings Account Transactions"),
+    (30, 200, "#"), (60, 200, "Date"), (110, 200, "Description"), (260, 200, "Chq/Ref. No."),
+    (330, 200, "Withdrawal (Dr.)"), (410, 200, "Deposit (Cr.)"), (480, 200, "Balance"),
+    (30, 215, "-"), (60, 215, "-"), (110, 215, "Opening Balance"), (495, 215, "1,02,410.00"),
+    (30, 230, "1"), (60, 230, "05 Jan 2026"), (110, 230, "NEFT IN RAMAPURAM"), (260, 230, "REF-1"),
+    (425, 230, "25,000.00"), (495, 230, "1,27,410.00"),
+    (110, 238, "TRADERS CO"),  # the description's second line, under its row
+    (30, 252, "2"), (60, 252, "12 Feb 2026"), (110, 252, "UPI 77.50 GROCER"), (260, 252, "UPI-77"),
+    (345, 252, "4,410.00"), (495, 252, "1,23,000.00"),
+    (30, 266, "3"), (60, 266, "31 Mar 2026"), (110, 266, "Int:1234.56 and TAX:123.45.-2026"),
+    (425, 266, "1,111.11"), (495, 266, "1,24,111.11"),
+    (30, 700, "Statement Generated on 02 Apr 2026, 10:15"), (480, 700, "Page 1 of 2"),
+]
+SUMMARY = [
+    (30, 40, "Account No.4471209935"), (200, 90, "Account Summary"),
+    (40, 110, "Account Opening Balance Closing Balance"),
+    (40, 125, "Savings Account (SA):"), (300, 125, "1,02,410.00"), (420, 125, "1,24,111.11"),
+]
+
+
+def test_a_monthly_statement_with_net_interest_reads_as_interest_then_tds(tmp_path: Path):
+    found = read(draw(tmp_path / "ramapuram-9935-2026-01.pdf", [MONTHLY, SUMMARY]))
+    assert (found.account, found.currency, found.start, found.end) == ("9935", "INR", "01-01-2026", "31-03-2026")
+    assert (str(found.opening), found.summary) == ("102410.00", (Decimal("102410.00"), Decimal("124111.11")))
+    assert [(r.on, str(r.withdrawal), str(r.deposit), str(r.balance), r.kind) for r in found.rows] == [
+        ("05-01-2026", "0", "25000.00", "127410.00", ""),
+        ("12-02-2026", "4410.00", "0", "123000.00", ""),
+        ("31-03-2026", "0", "1234.56", "124234.56", "interest"),  # the interest before its TDS
+        ("31-03-2026", "123.45", "0", "124111.11", "tds"),
+    ]
+    assert found.rows[0].description == "NEFT IN RAMAPURAM REF-1 TRADERS CO"
+    assert found.failed == [] and len(found.checks) == 6 and found.questions == []
+
+
+def test_a_monthly_statement_off_its_summary_or_its_net_interest_fails(tmp_path: Path):
+    swap = {"1,24,111.11": "1,24,111.10", "1,111.11": "1,111.10", "Currency Indian Rupee": "Currency INDIAN RUPEE"}
+    page = [(x, top, swap.get(p, p)) for x, top, p in MONTHLY]
+    found = read(draw(tmp_path / "statement.pdf", [page, SUMMARY]))
+    assert found.currency == "INR"
+    assert [c.what for c in found.failed] == ["the interest on 31-03-2026 less its TDS is what was credited",
+                                              "the balance on 31-03-2026 follows from the one before",
+                                              "the opening and closing balances are the account summary's"]
 
 
 SECRETS = ["Mrudula", "Kanchibhotla", "000123459876", "9876", "102410.00", "4970.00", "108110.80", "9988"]

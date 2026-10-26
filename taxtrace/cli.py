@@ -116,20 +116,34 @@ def cmd_outline(args: argparse.Namespace) -> int:
 
 
 def cmd_words(args: argparse.Namespace) -> int:
-    """A page's words with their positions, masked: the geometry of a printed form, without its values or names."""
+    """A page's words with their positions, masked: the geometry of a printed form, without its values or names.
+
+    Several files, or every page (--page all), in one run: files sharing a Keychain entry cost one approval."""
     terms = workspace.redact_terms()
-    doc = Path(args.path)
-    try:
-        _, password = _unlocked(doc)
-    except text.UnsupportedDocument as err:
-        print(f"{redact.redact(doc.name, terms, bare_years=True).text}: {err}", file=sys.stderr)
-        return 1
-    found = sorted((w for w in text.words(doc, args.page, password)
-                    if _within(w["x0"], args.x) and _within(w["top"], args.top)), key=lambda w: (w["top"], w["x0"]))
+    status = 0
+    many = len(args.paths) > 1 or args.page == "all"
+    for doc in map(Path, args.paths):
+        name = redact.redact(doc.name, terms, bare_years=True).text
+        try:
+            pages, password = _unlocked(doc)
+        except text.UnsupportedDocument as err:
+            print(f"{name}: {err}", file=sys.stderr)
+            status = 1
+            continue
+        for page in range(1, len(pages) + 1) if args.page == "all" else [int(args.page)]:
+            if many:
+                print(f"== {name} page {page}")
+            _print_words(text.words(doc, page, password), args, terms)
+    return status
+
+
+def _print_words(words: list[dict], args: argparse.Namespace, terms: list[str]) -> None:
+    found = sorted((w for w in words if _within(w["x0"], args.x) and _within(w["top"], args.top)),
+                   key=lambda w: (w["top"], w["x0"]))
     if not args.rows:
         for w in found:
             print(f"{w['top']:7.1f} {w['x0']:6.1f}-{w['x1']:<6.1f} {redact.redact(w['text'], terms).text}")
-        return 0
+        return
     rows: list[list[dict]] = []
     for w in found:  # a row: words whose tops are within 2 points of the row's first
         if rows and w["top"] - rows[-1][0]["top"] <= 2:
@@ -139,7 +153,12 @@ def cmd_words(args: argparse.Namespace) -> int:
     for row in rows:
         print(f"{row[0]['top']:7.1f} " + " ".join(f"{w['x0']:.0f}:{redact.redact(w['text'], terms).text}"
                                                 for w in sorted(row, key=lambda w: w["x0"])))
-    return 0
+
+
+def _page(spec: str) -> str:
+    if spec != "all" and not (spec.isdigit() and int(spec) > 0):
+        raise argparse.ArgumentTypeError(f"not a page number or all: {spec}")
+    return spec
 
 
 def _range(spec: str) -> tuple[float, float]:
@@ -768,7 +787,9 @@ def cmd_foreign(args: argparse.Namespace) -> int:
               + (f", with interest on it (Schedule B) at {r.interest.rate.source}" if r.interest else ""))
     names = {"fbar": "FBAR", "form_8938": "Form 8938"}
     for key, due in found.reporting.items():
-        print(f"  {names[key]}: " + {True: "due", False: "not due", None: "not settled yet"}[due])
+        print(f"  {names[key]}: " + {True: "due", False: "not due", None: "not settled yet"}[due]
+              + (" (an estimate at the latest day's rate: the year's rates come out after December 31)"
+                 if found.estimated and due is not None else ""))
     if confirmed:
         print("  confirmed: " + ", ".join(k.replace("_", " ") for k in confirmed))
     for q in found.questions:
@@ -989,8 +1010,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--lines", type=int, default=2, help="lines per page (default: 2)")
     p.set_defaults(func=cmd_outline)
     p = sub.add_parser("words", help="a page's masked words with their positions", description=cmd_words.__doc__)
-    p.add_argument("path", help="a PDF")
-    p.add_argument("--page", type=int, default=1, help="page number (default: 1)")
+    p.add_argument("paths", nargs="+", help="PDFs")
+    p.add_argument("--page", type=_page, default="1", help="page number, or all (default: 1)")
     p.add_argument("--x", type=_range, metavar="MIN:MAX", help="only words starting in this range of points")
     p.add_argument("--top", type=_range, metavar="MIN:MAX", help="only words this far down the page, in points")
     p.add_argument("--rows", action="store_true", help="one line per row: each word as x:text")

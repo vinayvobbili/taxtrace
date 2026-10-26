@@ -124,6 +124,8 @@ class Foreign:
     refunds: list[Refund] = field(default_factory=list)
     # whether the year's foreign accounts must be reported: True, False, or None until a missing statement is read
     reporting: dict[str, bool | None] = field(default_factory=dict)
+    # the year isn't over: the accounts are at the latest day's rate until its average and December 31 rate come out
+    estimated: bool = False
     questions: list[Question] = field(default_factory=list)
 
     def ask(self, text: str, page: int = 0, quote: str = "") -> None:
@@ -175,10 +177,10 @@ def _held_over_a_year(acquired: date, sold: date) -> bool:
 
 
 def build(year: int, *, itrs: list[dict], rates: Rates, confirmed: dict | None = None,
-          statements: list[dict] | None = None) -> Foreign:
+          statements: list[dict] | None = None, today: date | None = None) -> Foreign:
     """The year's foreign sales, taxes and accounts from India's returns (`taxtrace itr`) and the banks' statements
     (`taxtrace bank`), converted with `rates`."""
-    confirmed, statements = confirmed or {}, statements or []
+    confirmed, statements, today = confirmed or {}, statements or [], today or date.today()
     found = Foreign(year)
     for ret in itrs:
         mine = [(n, row) for n, row in enumerate(ret.get("sales", []), 1) if _day(row["sold"]).year == year]
@@ -194,7 +196,7 @@ def build(year: int, *, itrs: list[dict], rates: Rates, confirmed: dict | None =
     for s in statements:
         by_account.setdefault(s.get("account") or s["file"], []).append(s)
     for n, (_, mine) in enumerate(sorted(by_account.items()), 1):
-        _account(found, n, mine, rates)
+        _account(found, n, mine, rates, today)
     if found.accounts:
         _reporting(found, confirmed)
     return found
@@ -324,7 +326,7 @@ def _covered(statements: list[dict], year: int) -> tuple[list[tuple[date, date]]
     return covered, missing
 
 
-def _account(found: Foreign, n: int, statements: list[dict], rates: Rates) -> None:
+def _account(found: Foreign, n: int, statements: list[dict], rates: Rates, today: date) -> None:
     year = found.year
     first = statements[0]
     account = Account("India", first.get("account", ""), first.get("currency", ""),
@@ -352,8 +354,16 @@ def _account(found: Foreign, n: int, statements: list[dict], rates: Rates) -> No
     try:
         yearly, december = rates.yearly(year), rates.year_end(year)
     except NoRate as err:
-        found.ask(f"account {n}: {err}")
-        return
+        if year < today.year:
+            found.ask(f"account {n}: {err}")
+            return
+        # neither exists while the year is still going: the latest day's rate stands in for both until then
+        try:
+            yearly = december = rates.daily(today)
+        except NoRate as late:
+            found.ask(f"account {n}: {late}")
+            return
+        found.estimated = True
 
     def convert(what: str, amount: Decimal, rate: Rate, r: dict) -> Converted:
         return Converted(what, amount, rate.dollars(amount), rate, r["page"], r["quote"])

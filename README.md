@@ -66,7 +66,8 @@ A path that isn't one from where you are is looked up in the workspace: `taxtrac
 
 `taxtrace outline <files>` lists each page's masked heading: which forms a document holds, in order.
 `taxtrace words <pdf> --page 2 --rows` shows a page's words, masked, with where each one sits (`--x 300:450` and
-`--top 70:240` narrow it to a region): the geometry of a printed form, for writing a reader of it.
+`--top 70:240` narrow it to a region): the geometry of a printed form, for writing a reader of it. `--page all` and
+several files take one run, so files that share a Keychain entry cost one approval.
 A scanned PDF (pictures of pages, no text) is read through [ocrmypdf](https://ocrmypdf.readthedocs.io)
 on your machine (`brew install ocrmypdf`), once: the searchable copy is kept under the original's sha256
 in `<workspace>/ocr-cache`, so the text values are quoted from never shifts.
@@ -335,8 +336,13 @@ it (a description of several lines is centred on its row). Each row gets a kind:
 period it pays for), a tax refund, TDS withheld on interest, or a TDS refund. These give Schedule B and Form 1116 the
 interest, Form 8938 and the FBAR the balances, and a cross-check that India's refund arrived.
 
+A bank's monthly "Account Statement" is read too: a row number, dates as `05 Jan 2026`, the description left of the
+amounts, Indian commas (`1,23,456.78`), an Opening Balance row and an Account Summary. Its quarterly interest is
+credited net of TDS (`Int:1234.56 and TAX:123.45`), and is read as two rows, the interest and then the TDS withheld.
+
 The checks: each balance is the one before plus the deposit or less the withdrawal, and the rows add up to the
-statement's grand totals. A statement runs on India's year (April to March), so a calendar year usually needs two.
+statement's grand totals (or, on a monthly statement, its opening and closing balances are the summary's, and its
+net interest is the interest less the TDS). A statement runs on India's year (April to March), so a calendar year usually needs two.
 Of the account number only its last four digits are kept, and nothing that names the holders.
 
 ## Foreign side
@@ -376,7 +382,9 @@ With the bank statements `bank` saved, `foreign` also gives each account's year:
   income in the year it arrived.
 
 India's statements run April to March, so a calendar year needs two. Until both are read, the days not covered are
-asked for, and the FBAR and Form 8938 stay unsettled unless what's covered already crosses a threshold.
+asked for, and the FBAR and Form 8938 stay unsettled unless what's covered already crosses a threshold. While the
+year is still going, its average and December 31 rates don't exist yet: the latest day's rate stands in for both,
+and the FBAR and Form 8938 answers say they're estimates.
 
 ## Chat
 

@@ -11,7 +11,7 @@ import pytest
 from conftest import make_pdf, printed
 from test_itr import RETURN, SECRETS
 from test_k1 import draw
-from test_statement import PAGE, statement_page
+from test_statement import MONTHLY, PAGE, SUMMARY, statement_page
 from test_statement import SECRETS as STATEMENT_SECRETS
 
 from taxtrace import cli, foreign, fx
@@ -141,3 +141,20 @@ def test_bank_statements_give_the_interest_the_refund_and_whether_to_report(tmp_
     assert (account["highest"]["amount"], account["highest"]["dollars"]) == ("3980000.00", "44513.54")
     assert (account["december_31"]["amount"], account["december_31"]["dollars"]) == ("615480.80", "6883.73")
     assert not any(q["text"].startswith(("account", "how you file")) for q in saved["questions"])
+
+
+def test_a_year_still_going_is_estimated_at_the_latest_days_rate(tmp_path: Path, workspace_home: Path, monkeypatch):
+    monkeypatch.setattr(fx, "_get", fake_get([]))
+    assert cli.main(["bank", str(draw(tmp_path / "monthly.pdf", [MONTHLY, SUMMARY]))]) == 0
+    statements = [s for f in sorted((workspace_home / "forms").glob("bank-*.json")) for s in json.loads(f.read_text())]
+    csv = FRED_CSV + "2026-03-31,85.0000\n2026-10-23,88.1000\n"
+    rates = fx.Rates("INR", tmp_path / "fx", get=lambda url: csv if "fred" in url else fake_get([])(url))
+    found = foreign.build(2026, itrs=[], rates=rates, statements=statements, today=date(2026, 10, 25))
+    (account,) = found.accounts
+    assert found.estimated and account.interest.rate.day == "2026-10-23"  # no IRS 2026 average yet
+    assert (account.interest.amount, account.interest.dollars) == (Decimal("1234.56"), Decimal("14.01"))
+    assert (account.highest.amount, account.highest.dollars) == (Decimal("127410.00"), Decimal("1446.20"))
+    assert [(t.kept.what, t.kept.dollars) for t in found.taxes] == [("TDS on interest", Decimal("1.45"))]  # at 85
+    # once the year is over, its own rates are asked for
+    found = foreign.build(2026, itrs=[], rates=rates, statements=statements, today=date(2027, 2, 1))
+    assert not found.estimated and any("no 2026 rate" in q.text for q in found.questions)
