@@ -434,6 +434,13 @@ plus this paycheck's for each one left: the pay period's length says how often y
 paycheck is paid as long after its period ends as this one was, so a December period paid in January counts next
 year. A bonus or a new W-4 changes that, so it's a question.
 
+`taxtrace paystub --rate 47` says what each paycheck left would take home at a 47% pre-tax 401(k) deferral: this
+paycheck's net pay, less the deferral's change, plus the federal withholding it moves (the percentage method: the
+year's brackets past the standard deduction, on the paycheck's taxable wages times the paychecks in a year) and the
+state's at its flat rate, until the year's limit stops the deferrals. The terminal gets each paycheck's take-home as
+a share of this one's and the cents of take-home a deferred dollar costs; the amounts go to the file, and `--show`
+prints them in your own terminal only.
+
 No underpayment penalty is due when the year's payments reach the smaller of 90% of the year's own tax and 100%
 of last year's (110% when last year's adjusted gross income was over $150,000, $75,000 married filing separately).
 Last year's tax is the Carryover Worksheet's federal tax liability, or Form 1040's line 24 less line 32.

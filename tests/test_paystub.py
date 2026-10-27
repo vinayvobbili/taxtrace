@@ -80,7 +80,7 @@ def test_cli_prints_no_amounts_and_estimates_takes_the_projection(tmp_path: Path
     path = draw(tmp_path / "Payslip.pdf", [PAYSLIP])
     assert cli.main(["paystub", str(path)]) == 0
     out = printed(capsys)
-    assert "paid Oct 31, 2026, twice a month, 4 paychecks left in 2026; federal and state tax withheld; 6 of 6 " \
+    assert "paid Oct 31, 2026, twice a month, 4 paychecks left in 2026; federal and state tax withheld; 7 of 7 " \
            "checks pass" in out
     assert "401(k): pretax deferrals; room left under the 2026 limit #,###.##; pre-tax is 10% of salary now, 37% " \
            "for the 4 paychecks left fills it" in out
@@ -100,3 +100,33 @@ def test_cli_prints_no_amounts_and_estimates_takes_the_projection(tmp_path: Path
     assert "filling the 401(k)'s room withholds about #,###.## less: every quarter isn't met; ###.## more withheld " \
            "(a W-4 extra amount) makes it up" in out
     assert json.loads((workspace_home / "estimates" / "2026.json").read_text())["withheld"] == "27839.46"
+
+
+def test_a_higher_percentage_takes_home_less_by_the_withholding_it_saves_until_the_limit(tmp_path: Path):
+    stub = paystub.read("p.pdf", text.words(draw(tmp_path / "p.pdf", [PAYSLIP]), 1))
+    assert stub.net == paystub.Taxed(Decimal("4343.41"), Decimal(93160), "Net Pay") and stub.state == "NC"
+    # 47% of 7,500 is 3,525, 2,775 more than now: 6,688.33 a paycheck is 160,519.92 a year, 128,319.92 past the
+    # 32,200 deduction, and 66,600 less takes 27,519.92 off at 22% and 39,080.08 at 12%, 447.67 a paycheck; NC's
+    # 3.99% is 110.72. The 11,000 of room left leaves 425 for December 31's, 325 less than now.
+    assert stub.at_rate(Decimal(47)) == [
+        paystub.Payday(date(2026, 11, 15), Decimal("3525.00"), Decimal("2126.80")),
+        paystub.Payday(date(2026, 11, 30), Decimal("3525.00"), Decimal("2126.80")),
+        paystub.Payday(date(2026, 12, 15), Decimal("3525.00"), Decimal("2126.80")),
+        paystub.Payday(date(2026, 12, 31), Decimal("425.00"), Decimal("4583.94"))]
+    assert stub.at_rate(Decimal(10))[0].take_home == Decimal("4343.41")  # today's percentage changes nothing
+    assert stub.at_rate(Decimal(47), "head") is None  # no brackets kept for it
+
+
+def test_cli_rate_prints_shares_and_keeps_the_amounts_in_the_file(tmp_path: Path, workspace_home: Path, capsys):
+    path = draw(tmp_path / "Payslip.pdf", [PAYSLIP])
+    assert cli.main(["paystub", "--rate", "47", str(path)]) == 0
+    out = printed(capsys)
+    assert "at 47% pre-tax, withheld as married filing jointly: each dollar deferred is 80 cents of take-home" in out
+    assert "Nov 15: defers #,###.##, takes home #,###.## (49% of this paycheck's)" in out
+    assert "Dec 31: defers ###.##, takes home #,###.## (106% of this paycheck's); the 2026 limit is reached" in out
+    for secret in [*SECRETS, "2,126.80", "4,583.94"]:
+        assert secret not in out
+    saved = json.loads((workspace_home / "forms" / "Payslip.json").read_text())["at_rate"]
+    assert saved["percent"] == "47" and saved["paychecks"][0] == {"paid": "2026-11-15", "deferred": "3525.00",
+                                                                  "take_home": "2126.80"}
+    assert cli.main(["paystub", "--rate", "47", "--show", str(path)]) == 2  # the output isn't a terminal

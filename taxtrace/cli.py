@@ -7,7 +7,7 @@ import json
 import re
 import subprocess
 import sys
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
 from . import __version__, importer, redact, text, workspace
@@ -697,13 +697,27 @@ def cmd_paystub(args: argparse.Namespace) -> int:
     The values go only to that folder. What's printed is masked: the payment date, how often you're paid, the
     paychecks left in the year, which taxes were read, the checks and the questions. A locked document is skipped
     without asking the Keychain unless --unlock is given.
+
+    --rate PERCENT works out each paycheck left at that pre-tax 401(k) percentage of salary: what it defers and takes
+    home, and the take-home as a share of this paycheck's. Its amounts go to the file, as `at_rate`; --show prints
+    them too, only to a terminal (your own, not a session that reads the output). The withholding follows the filing
+    status `foreign --confirm filing=` kept, married filing jointly when none was.
     """
     from . import paystub
 
+    if args.show and not sys.stdout.isatty():
+        print("--show prints the amounts only to a terminal: run it in your own")
+        return 2
     home = workspace.outside_git(workspace.home())
     terms = workspace.redact_terms()
     def masked(line: str) -> str:
         return redact.redact(line, terms).text.strip()
+
+    def money(value: Decimal) -> str:
+        return f"{value:,.2f}" if args.show else masked(f"{value:,.2f}")
+
+    filings = {"joint": "married filing jointly", "single": "single", "separate": "married filing separately",
+               "head": "head of household"}
 
     often = {"weekly": "weekly", "biweekly": "every two weeks", "semimonthly": "twice a month", "monthly": "monthly"}
     out, written, failed = home / workspace.FORMS, 0, 0
@@ -736,12 +750,29 @@ def cmd_paystub(args: argparse.Namespace) -> int:
                   f"{masked(f'{room:,.2f}')}" + (f"; pre-tax is {rates[0]}% of salary now, {rates[1]}% for the "
                                                   f"{stub.paychecks_left()} paychecks left fills it"
                                                   if rates and room else ""))
+        kept = home / workspace.FOREIGN / f"{stub.paid.year if stub.paid else 0}-confirmed.json"
+        filing = (json.loads(kept.read_text()).get("filing") or "joint") if kept.exists() else "joint"
+        if args.rate is not None and (paychecks := stub.at_rate(args.rate, filing)) is None:
+            print(f"  at {args.rate}%: not worked out; it takes the salary, the net pay, the federal taxable wages and "
+                  f"a pre-tax 401(k) row, and the year's brackets for {filings.get(filing, filing)}")
+        elif args.rate is not None:
+            now, before = stub.net.current, stub.deferred["pretax"].current
+            planned = (stub.salary.current * args.rate / 100).quantize(Decimal("0.01"), ROUND_HALF_UP)
+            cost = next(((now - p.take_home) / (p.deferred - before) for p in paychecks if p.deferred != before), None)
+            print(f"  at {args.rate}% pre-tax, withheld as {filings.get(filing, filing)}" +
+                  (f": each dollar deferred is {cost * 100:.0f} cents of take-home" if cost else ""))
+            for p in paychecks:
+                print(f"    {p.paid:%b} {p.paid.day}: defers {money(p.deferred)}, takes home {money(p.take_home)} "
+                      f"({p.take_home / now:.0%} of this paycheck's)" +
+                      (f"; the {stub.paid.year} limit is reached" if p.deferred < planned else ""))
+            print("  question: the take-home is worked out the way the percentage method withholds: the plan's cap on "
+                  "the percentage, a bonus or a W-4's extra amount changes it")
         for c in stub.failed:
             print(f"  failed: {c.what}")
         for q in stub.questions:
             print(f"  question: {q.text}")
         out.mkdir(parents=True, exist_ok=True)
-        (out / f"{doc.stem}.json").write_text(json.dumps(stub.to_json(), indent=2) + "\n")
+        (out / f"{doc.stem}.json").write_text(json.dumps(stub.to_json(args.rate, filing), indent=2) + "\n")
         written += 1
     print(f"wrote to {out}" if written else "no pay stubs found")
     return 1 if failed else 0
@@ -1637,6 +1668,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("paths", nargs="*", help=PATHS_HELP)
     p.add_argument("--unlock", action="store_true",
                    help="ask the Keychain for a locked document's password (default: skip locked ones)")
+    p.add_argument("--rate", type=Decimal, metavar="PERCENT",
+                   help="each paycheck left's take-home at this pre-tax 401(k) percentage of salary")
+    p.add_argument("--show", action="store_true", help="print --rate's amounts, only to a terminal")
     p.set_defaults(func=cmd_paystub)
     p = sub.add_parser("itr", help="read India's income tax returns: a property sale, interest, the tax India kept",
                        description=cmd_itr.__doc__)

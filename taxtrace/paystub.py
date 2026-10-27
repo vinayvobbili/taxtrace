@@ -14,6 +14,12 @@ so it's a question.
 The 401(k) deferrals ("401k Before-Tax", "401(k) Roth"; not a loan's repayment) are read the same way, with the
 salary row, so what's left under the year's limit after the paychecks left is known, and the pre-tax percentage of
 salary that would fill it: a pre-tax deferral lowers the year's taxable wages dollar for dollar.
+
+What a paycheck would take home at another pre-tax percentage is this one's net pay, less the deferral's change,
+plus the income tax withholding that change moves: the federal by the percentage method (Pub. 15-T, for a Form W-4
+from 2020 or later without step 2's box), which follows the year's brackets past the standard deduction on the
+paycheck's taxable wages times the paychecks in a year, and the state's at its flat rate. The deferrals stop when
+the year's limit is reached. Social Security, Medicare and the other deductions don't move.
 """
 
 from __future__ import annotations
@@ -22,7 +28,7 @@ import calendar
 import re
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from itertools import pairwise
 
 from .prior import Check, Question, _rows, amount
@@ -33,6 +39,19 @@ TAXES = {"federal": (("FIT",), ("Federal", "Income", "Tax")), "state": (("SIT",)
 RETIREMENT = re.compile(r"^401\(?k\)?$", re.IGNORECASE)  # "401k Before-Tax", "401(k) Roth"; not "401k Loan Repay"
 LIMITS = {2025: Decimal(23500), 2026: Decimal(24500)}  # a 401(k)'s elective deferrals in a year, before age 50
 SLACK = 1.5
+CENT = Decimal("0.01")
+PERIODS = {"weekly": 52, "biweekly": 26, "semimonthly": 24, "monthly": 12}
+# the year's standard deduction and each bracket's lower bound and rate (Rev. Proc. 2025-32), which the
+# percentage method of withholding follows; married filing separately withholds as single does
+BRACKETS = {
+    (2026, "joint"): (Decimal(32200), ((0, "0.10"), (24800, "0.12"), (100800, "0.22"), (211400, "0.24"),
+                                       (403550, "0.32"), (512450, "0.35"), (768700, "0.37"))),
+    (2026, "single"): (Decimal(16100), ((0, "0.10"), (12400, "0.12"), (50400, "0.22"), (105700, "0.24"),
+                                        (201775, "0.32"), (256225, "0.35"), (640600, "0.37"))),
+}
+WITHHOLDS_AS = {"separate": "single"}
+STATE_RATES = {("NC", 2025): Decimal("0.0425"), ("NC", 2026): Decimal("0.0399")}  # flat: a dollar's withholding
+STATE = re.compile(r"\(([A-Z]{2})\)")  # "SIT Withheld (NC)"
 
 
 @dataclass
@@ -40,6 +59,13 @@ class Taxed:
     current: Decimal
     year_to_date: Decimal
     label: str  # as printed: "SIT Withheld (NC)"
+
+
+@dataclass
+class Payday:
+    paid: date
+    deferred: Decimal  # the pre-tax 401(k) deferral at the new percentage, up to the year's limit
+    take_home: Decimal
 
 
 @dataclass
@@ -52,6 +78,7 @@ class Paystub:
     deferred: dict[str, Taxed] = field(default_factory=dict)  # a 401(k)'s "pretax" and "roth" deferrals
     salary: Taxed | None = None  # the earnings table's "Salary" row, what a deferral's percentage is of
     taxable_wages: Taxed | None = None  # the summary's federal taxable wages: what the W-2's box 1 adds up
+    net: Taxed | None = None  # the summary's net pay
     checks: list[Check] = field(default_factory=list)
     questions: list[Question] = field(default_factory=list)
 
@@ -68,16 +95,46 @@ class Paystub:
         return {7: "weekly", 14: "biweekly"}.get(days, "semimonthly" if 13 <= days <= 16 else
                                                     "monthly" if 28 <= days <= 31 else "")
 
+    @property
+    def state(self) -> str:
+        """The state the state income tax is withheld for, from its label ("SIT Withheld (NC)"); "" when unsaid."""
+        t = self.withheld.get("state")
+        return m.group(1) if t and (m := STATE.search(t.label)) else ""
+
+    def paydays(self) -> list[date]:
+        """The payment dates still to come in the payment date's year, after this one."""
+        if not (self.paid and self.period_end and self.frequency):
+            return []
+        lag, end, days = self.paid - self.period_end, self.period_end, []
+        while ((end := _next_end(end, self.frequency)) + lag).year == self.paid.year:
+            days.append(end + lag)
+        return days
+
     def paychecks_left(self) -> int:
         """The paychecks still to come in the payment date's year, after this one."""
-        if not (self.paid and self.period_end and self.frequency):
-            return 0
-        lag, end, left = self.paid - self.period_end, self.period_end, 0
-        while True:
-            end = _next_end(end, self.frequency)
-            if (end + lag).year != self.paid.year:
-                return left
-            left += 1
+        return len(self.paydays())
+
+    def at_rate(self, percent: Decimal, filing: str = "joint") -> list[Payday] | None:
+        """Each paycheck left at a pre-tax deferral of `percent` of salary, until the year's limit is reached: what
+        it defers and takes home. None when the stub lacks what it takes, or the year's brackets aren't known."""
+        pretax, year = self.deferred.get("pretax"), self.paid.year if self.paid else None
+        brackets = BRACKETS.get((year, WITHHOLDS_AS.get(filing, filing)))
+        if not (pretax and self.salary and self.net and self.taxable_wages and self.frequency and brackets) \
+                or year not in LIMITS:
+            return None
+        days, periods = self.paydays(), PERIODS[self.frequency]
+        others = sum((d.current for kind, d in self.deferred.items() if kind != "pretax"), Decimal(0))
+        room = LIMITS[year] - sum((d.year_to_date for d in self.deferred.values()), Decimal(0)) - others * len(days)
+        state, annual = STATE_RATES.get((self.state, year), Decimal(0)), self.taxable_wages.current * periods
+        paychecks = []
+        for day in days:
+            deferred = max(Decimal(0), min((self.salary.current * percent / 100).quantize(CENT, ROUND_HALF_UP), room))
+            room -= deferred
+            change = deferred - pretax.current
+            federal = (_tax(annual, brackets) - _tax(annual - change * periods, brackets)) / periods
+            paychecks.append(Payday(day, deferred, (self.net.current - change + federal + change * state).quantize(
+                CENT, ROUND_HALF_UP)))
+        return paychecks
 
     def projected(self, tax: str = "federal") -> Decimal | None:
         """What the year's paychecks withhold in all: the year to date's and this one's for each left."""
@@ -112,11 +169,16 @@ class Paystub:
         return now.quantize(Decimal(1)), ((pretax.current + room / left) / self.salary.current * 100).quantize(
             Decimal(1))
 
-    def to_json(self) -> dict:
+    def to_json(self, rate: Decimal | None = None, filing: str = "joint") -> dict:
+        """The stub's values; with `rate`, also each paycheck left's take-home at that pre-tax percentage."""
         def pair(t: Taxed) -> dict:
             return {"current": str(t.current), "year_to_date": str(t.year_to_date), "label": t.label}
 
         rates = self.deferral_rates()
+        paychecks = self.at_rate(rate, filing) if rate is not None else None
+        at_rate = {"percent": str(rate), "filing": filing, "paychecks": [
+            {"paid": _iso(p.paid), "deferred": str(p.deferred), "take_home": str(p.take_home)} for p in paychecks]} \
+            if paychecks is not None else None
         return {"form": "paystub", "file": self.file, "year": self.paid.year if self.paid else None,
                 "period_start": _iso(self.period_start), "period_end": _iso(self.period_end),
                 "paid": _iso(self.paid), "frequency": self.frequency, "paychecks_left": self.paychecks_left(),
@@ -128,7 +190,19 @@ class Paystub:
                 "projected_wages": {"as_is": str(self.projected_wages()), "401k_filled": str(
                     self.projected_wages(fill_401k=True))} if self.taxable_wages else None,
                 "deferral_room": str(r) if (r := self.deferral_room()) is not None else None,
-                "deferral_percent": {"now": str(rates[0]), "to_fill": str(rates[1])} if rates else None}
+                "deferral_percent": {"now": str(rates[0]), "to_fill": str(rates[1])} if rates else None,
+                "net_pay": pair(self.net) if self.net else None, **({"at_rate": at_rate} if at_rate else {})}
+
+
+def _tax(wages: Decimal, brackets: tuple) -> Decimal:
+    """The year's tax the percentage method withholds on a year's wages: the brackets past the standard deduction."""
+    deduction, bands = brackets
+    taxable, tax = max(Decimal(0), wages - deduction), Decimal(0)
+    for (low, rate), (high, _) in pairwise((*bands, (None, None))):
+        if taxable <= low:
+            break
+        tax += ((min(taxable, Decimal(high)) if high is not None else taxable) - low) * Decimal(rate)
+    return tax
 
 
 def _iso(day: date | None) -> str | None:
@@ -183,6 +257,7 @@ def read(name: str, words: list[dict]) -> Paystub:
             elif t == "Salary" and stub.salary is None and j + 1 < len(texts) and MONEY.match(texts[j + 1]):
                 stub.salary = _after(texts, j)
     stub.taxable_wages = _column(rows, ("Federal", "Taxable", "Wages"))
+    stub.net = _column(rows, ("Net", "Pay"))
     _checks(stub)
     return stub
 
@@ -234,6 +309,8 @@ def _checks(stub: Paystub) -> None:
     for kind, d in stub.deferred.items():
         check(f"the {kind} 401(k) deferral this paycheck is part of the year to date's",
               0 <= d.current <= d.year_to_date)
+    if stub.net:
+        check("the net pay this paycheck is part of the year to date's", 0 <= stub.net.current <= stub.net.year_to_date)
     if stub.paid:
         stub.questions.append(Question(
             f"the paychecks left in {stub.paid.year} are taken to withhold what this one did: a bonus, a stock "
