@@ -240,6 +240,18 @@ def test_cli_writes_the_values_and_prints_none(return_2021: Path, workspace_home
     assert saved["unallowed"][1]["unallowed"] == "2366"
 
 
+def test_cli_prints_the_words_of_other_pages_in_the_same_run(return_2021: Path, workspace_home: Path, capsys,
+                                                            monkeypatch):
+    opened = []
+    real = cli._unlocked
+    monkeypatch.setattr(cli, "_unlocked", lambda doc, keychain=True: opened.append(doc) or real(doc, keychain))
+    assert cli.main(["prior", str(return_2021), "--words", "1,9"]) == 0  # a page past the end is left out
+    out = printed(capsys)
+    assert len(opened) == 1  # one opening: a locked return asks the Keychain once
+    assert [ln for ln in out.splitlines() if ln.startswith("==")] == ["== 2021 ****** Return.pdf page 1"]
+    assert "Worksheet" in out and "Vexley" not in out and "12,422" not in out
+
+
 def test_a_full_year_at_the_rate_and_the_last_year(return_2021: Path):
     house, roof = read(return_2021).assets
     assert (house.rate, house.annual, roof.annual) == (Decimal("0.03636"), 10452, 458)

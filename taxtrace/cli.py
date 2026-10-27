@@ -312,6 +312,10 @@ def cmd_prior(args: argparse.Namespace) -> int:
         words = {n: text.words(doc, n, password) for n, page in enumerate(pages, 1) if prior.has_activities(page)} \
             if doc.suffix.lower() in text.PDF_SUFFIXES else {}
         found = prior.read(doc.name, pages, words)
+        if args.words and doc.suffix.lower() in text.PDF_SUFFIXES:  # in the same run: one Keychain approval
+            for n in (n for n in _pages(args.words, len(pages)) if n <= len(pages)):
+                print(f"== {name} page {n}")
+                _print_words(text.words(doc, n, password), argparse.Namespace(x=None, top=None, rows=True), terms)
         if not (found.assets or found.unallowed or found.activities or found.rentals):
             print(f"{name}: no depreciation schedule or Form 8582 worksheets")
             continue
@@ -1200,6 +1204,9 @@ def build_parser() -> argparse.ArgumentParser:
                        description=cmd_prior.__doc__)
     p.add_argument("paths", nargs="*", help="returns or folders (default: <workspace>/prior-returns)")
     p.add_argument("--layout", action="store_true", help="also print each line a value came from, masked")
+    p.add_argument("--words", type=_page, metavar="PAGES",
+                   help="also each return's masked words on these pages (19-20,71), as `words --rows` prints them, "
+                        "in the same run so a locked return asks the Keychain once")
     p.add_argument("--project", type=int, metavar="YEAR",
                    help="roll the latest return's depreciation forward through YEAR, for returns not in hand yet")
     p.set_defaults(func=cmd_prior)

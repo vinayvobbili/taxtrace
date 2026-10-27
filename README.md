@@ -147,6 +147,7 @@ there itself (`redacted/`, `ocr-cache/`).
 ```bash
 taxtrace prior            # every return in <workspace>/prior-returns
 taxtrace prior --layout   # also each line a value came from, masked
+taxtrace prior --words 23-26,71   # also those pages' masked words, in the same run (one Keychain approval)
 ```
 
 Next year's return starts from last year's: each asset's depreciation so far, and each passive activity's loss
