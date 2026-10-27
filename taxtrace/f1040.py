@@ -9,8 +9,8 @@ credits (32), the total payments (33), the overpayment (34), what of it was appl
 (36) and the estimated tax penalty (38). A line left empty is zero. A preparer's worksheet titled "Form 1040" that
 "is not filed with the return" isn't the form.
 
-The form's own arithmetic is checked: line 11 is line 9 less line 10, line 33 adds up lines 25d, 26 and 32, line 34 is line 33 less line 24 when
-that's more than zero, and line 36 is part of line 34.
+The form's own arithmetic is checked: line 11 is line 9 less line 10, line 33 adds up lines 25d, 26 and 32, line
+34 is line 33 less line 24 when that's more than zero, and line 36 is part of line 34.
 """
 
 from __future__ import annotations
@@ -88,8 +88,8 @@ def _checks(f: Filed) -> list[Check]:
         checks.append(Check("Form 1040: line 34 is line 33 less line 24, zero at least",
                             abs(max(zero, f.line("33") - f.line("24")) - f.line("34")) <= CENT, page))
     if "9" in f.lines and f.agi is not None:
-        checks.append(Check("Form 1040: line 11 is line 9 less line 10", abs(f.line("9") - f.line("10") - f.agi) <= CENT,
-                            page))
+        checks.append(Check("Form 1040: line 11 is line 9 less line 10",
+                            abs(f.line("9") - f.line("10") - f.agi) <= CENT, page))
     if "11a" in f.lines and "11b" in f.lines:
         checks.append(Check("Form 1040: line 11b is line 11a", abs(f.line("11a") - f.line("11b")) <= CENT, page))
     checks.append(Check("Form 1040: line 36 is part of line 34", f.line("36") <= f.line("34"), page))
