@@ -51,7 +51,7 @@ def keychain_hint() -> str:
     from . import gate
 
     if gate.ready():  # trusted by the approval helper only: each read asks for Apple Watch or Touch ID
-        return f"{gate.store_hint(KEYCHAIN_SERVICE, KEYCHAIN_DEFAULT)} (or -a '<file name>' for one file)"
+        return f"{gate.store_hint(KEYCHAIN_SERVICE, KEYCHAIN_DEFAULT)} (or the file's name, or its issuer's)"
     # -T "" trusts no app, so macOS asks the person (Allow / Deny) every time anything reads the entry,
     # this tool included: nothing running as them can take the password without their click.
     return (f"security add-generic-password -s {KEYCHAIN_SERVICE} -a {KEYCHAIN_DEFAULT} -T \"\" -w "

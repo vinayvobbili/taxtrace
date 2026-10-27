@@ -108,6 +108,10 @@ retyped or shown. From then on the entry trusts only the helper, and the helper 
 own approval: Apple Watch, Touch ID, or the password where neither is set up. Every read is still yours to allow.
 Only the entries `setup` moved go through the helper; any other is read the classic way, with its one prompt. If
 you deny the classic prompt during `setup`, it says so and leaves that entry as it was: run `setup` again.
+Once the helper is built, store a new password with `taxtrace keychain store <name>` (a file's name, its issuer's
+such as `quillbank`, or `default`): `security` asks for it unechoed, the entry trusts only the helper, and taxtrace
+notes it so its reads go through the helper. An entry stored with a bare `security add-generic-password -T <helper>`
+isn't noted, so each read would show the classic prompt as well.
 taxtrace reads each entry at most once per command, so a folder of returns sharing the `default` password
 costs one prompt. `taxtrace unlock` says which entry opens each locked file, and how each stored password
 is shaped (`aaaa99999`), never what it is. A password pdfminer turns down is tried once more with qpdf

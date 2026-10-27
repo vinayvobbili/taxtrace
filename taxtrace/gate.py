@@ -133,12 +133,31 @@ def adopt(service: str, account: str) -> bool:
         run = subprocess.run([str(helper_path()), "--restore", service, owned], capture_output=True, text=True)
     if run.returncode not in (0, 2):
         raise GateError(run.stderr.strip())
-    if run.returncode == 0 and not adopted(service, account):
+    if run.returncode == 0:
+        _list(service, account)
+    return run.returncode == 0
+
+
+def _list(service: str, account: str) -> None:
+    """Note that the entry trusts the helper, so its reads go through it: read any other way, it asks twice."""
+    if not adopted(service, account):
         with _adopted_list().open("a") as listed:
             listed.write(f"{service}\t{account}\n")
+
+
+def store(service: str, account: str) -> bool:
+    """Store (or replace) an entry that trusts only the helper, and note it, so its reads take Apple Watch or Touch
+    ID. `security` asks the person for the password itself, unechoed, on the terminal this runs in: it never passes
+    through here."""
+    if not ready():
+        raise GateError("the approval helper isn't built: run taxtrace keychain setup first")
+    run = subprocess.run(["security", "add-generic-password", "-U", "-s", service, "-a", account,
+                          "-T", str(helper_path()), "-w"])
+    if run.returncode == 0:
+        _list(service, account)
     return run.returncode == 0
 
 
 def store_hint(service: str, account: str) -> str:
-    """The command that stores an entry trusting only the helper: `-w` last asks for the password unechoed."""
-    return f"security add-generic-password -s {service} -a '{account}' -T '{helper_path()}' -w"
+    """The command that stores an entry so it takes Apple Watch or Touch ID (`store`)."""
+    return f"taxtrace keychain store '{account}'"
