@@ -137,6 +137,16 @@ def test_cli_puts_the_year_together_and_asks_what_the_documents_cant_say(
         "line 18 is rolled forward from the 2020 depreciation schedule"]
 
 
+def test_the_rent_every_tenant_paid_settles_line_3():
+    # two roommates at 1,075 each, where the questionnaire gave one tenant's monthly rent
+    found = answers.read("q.docx", ["\n".join(["Rental property:", "Rental income = $1,150/month"])])
+    rental = schedule_e.build(2025, last=None, answers=found, forms=[], policies=[], projected=None,
+                              address="2208 Quenby Mill Road", confirmed={"rent": "25800"})
+    assert (rental.amount(3), rental.lines[3].source) == (25800, "confirmed")
+    assert not any(q.text.startswith("line 3") for q in rental.questions)
+    assert schedule_e.confirmation("rent=25,800") == ("rent", "25800")
+
+
 def test_a_label_printed_with_a_split_word_is_read(tmp_path: Path):
     split = [ln.replace("19 Other (list)", "19 O ther (list)") for ln in FILED[0]]
     (rental,) = schedule_e.filed("2021 Return.pdf", text.pages(make_pdf(tmp_path / "2021 Return.pdf", [split])), 2021)

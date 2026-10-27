@@ -45,6 +45,7 @@ WORDS = ((7, ("clean", "maintenance", "lawn", "landscap", "pest")), (14, ("repai
          (17, ("utilit", "water", "electric", "sewer", "trash")), (19, ("hoa", "association", "dues")))
 CONFIRMS = {  # what a person can settle with `rental --confirm`, and its kind
     "fair_rental_days": int, "personal_use_days": int, "rent_all_year": bool,
+    "rent": Decimal,  # the rent actually received this year, every tenant's together: line 3
     "earlier_policy": Decimal,  # a premium paid this year for a policy before the one the declarations show
     "dues": Decimal,  # association (HOA) dues paid this year: line 19
 }
@@ -223,6 +224,8 @@ def build(year: int, *, last: Rental | None, answers: list[Answer], forms: list[
             rental.lines[n].amount += a.yearly
         else:
             rental.lines[n] = Line(n, a.yearly, "answers", a.file, a.page, a.quote, a.what)
+        if n == 3 and "rent" in confirmed:
+            continue
         if n == 3 and a.per == "month" and confirmed.get("rent_all_year") is not True:
             rental.ask(f"line 3 is 12 months at the monthly rent: if the property was empty for a while or the rent "
                        f"changed in {year}, the rent actually received (or --confirm rent_all_year=yes)",
@@ -230,6 +233,8 @@ def build(year: int, *, last: Rental | None, answers: list[Answer], forms: list[
         elif a.per == "":
             rental.ask(f"line {n}: the answer doesn't say whether it's a year's or a month's: taken as the year's",
                        a.page, a.quote)
+    if "rent" in confirmed:
+        rental.lines[3] = Line(3, Decimal(confirmed["rent"]), "confirmed", "", 0, "", "Rents received")
     _mortgage(rental, year, forms)
     _insurance(rental, year, policies, confirmed)
     _depreciation(rental, year, projected)
