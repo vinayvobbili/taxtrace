@@ -46,6 +46,8 @@ Early. What works today:
   [Estimated tax](#estimated-tax)).
 - `taxtrace estimates`: the year's withholding and estimated payments against the safe harbor, quarter by quarter
   (see [Estimated tax](#estimated-tax)).
+- `taxtrace ira`: each spouse's IRA deduction and the Roth IRA's limit at the year's projected income (see
+  [IRAs](#iras)).
 - `taxtrace itr`: reads India's income tax return (ITR-2): a property sale, the interest, the tax India kept (see
   [India's return](#indias-return)).
 - `taxtrace bank`: reads a foreign bank's statement of account: interest, a tax refund, balances (see
@@ -445,6 +447,20 @@ What only you know is kept in `estimates/<year>-confirmed.json`: `withheld=AMOUN
 withheld in all, in place of the pay stub's projection, when there's more than one job or a 1099 withholds too), `paid_YYYY-MM-DD=AMOUNT` (each estimated payment)
 and `tax=AMOUNT` (the year's own tax, once it's worked out). The terminal says which quarters are met or short;
 the amounts are in `estimates/<year>.json`.
+
+## IRAs
+
+```bash
+taxtrace ira --year 2026                       # from the latest pay stub and last year's Form 1040
+taxtrace ira --year 2026 --confirm other=9000  # the year's income besides the wages, once it's known
+```
+
+A married couple filing jointly can each put the year's limit into an IRA, a spouse without pay on the other's
+pay. How much of it is deductible phases out with income: over a lower range for a spouse covered by a 401(k), a
+higher one for a spouse who isn't but is married to one who is. A Roth IRA has its own range. `ira` projects the
+year's income from the pay stub's federal taxable wages to December 31, as they are and with the 401(k)'s room
+filled (which lowers it), plus last year's interest, dividends and Schedule 1 income, and gives each spouse's
+deduction and the Roth IRA's limit in both cases. The income itself is masked.
 
 ## India's return
 

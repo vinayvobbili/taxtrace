@@ -20,6 +20,12 @@ PAYSLIP = [
     (23, 65.1, "Jordan Q. Quillfeather"), (281, 65.1, "4410227"), (383, 65.1, "16-OCT-2026"), (434, 65.1, "-"),
     (439, 65.1, "31-OCT-2026"), (512, 65.1, "31-OCT-2026"),
     (23, 104.2, "Marlowe Group"), (383, 104.2, "Annual"), (512, 104.2, "180,000.00"),
+    (96, 197.7, "Gross Earnings"), (173, 197.7, "Pre-Tax Deductions"), (260, 197.7, "Federal Taxable Wages"),
+    (370, 197.7, "Tax Deductions"), (448, 197.7, "Other Deductions"), (567, 197.7, "Net Pay"),
+    (23, 208.2, "Current"), (124, 208.2, "7,500.00"), (221, 208.2, "811.67"), (318, 208.2, "6,688.33"),
+    (399, 208.2, "2,183.25"), (484, 208.2, "161.67"), (565, 208.2, "4,343.41"),
+    (23, 219.4, "Year to Date"), (115, 219.4, "154,500.00"), (210, 219.4, "16,240.00"), (309, 219.4, "138,260.00"),
+    (394, 219.4, "41,700.00"), (480, 219.4, "3,400.00"), (561, 219.4, "93,160.00"),
     (23, 296.9, "Annual Incentive Bonus"), (239, 296.9, "0.00"), (298, 296.9, "12,000.00"),
     (347, 296.9, "401k Before-Tax"), (510, 296.9, "750.00"), (558, 296.9, "13,500.00"),
     (347, 444.0, "401k Loan Repay 1"), (503, 444.0, "120.00"), (561, 444.0, "2,280.00"),
@@ -51,6 +57,8 @@ def test_the_period_payment_date_and_taxes_are_read_and_the_year_projected(tmp_p
     assert list(stub.deferred) == ["pretax"] and stub.deferred["pretax"].label == "401k Before-Tax"
     assert stub.salary == paystub.Taxed(Decimal(7500), Decimal(142500), "Salary")
     assert stub.deferral_room() == Decimal(8000) and stub.deferral_rates() == (Decimal(10), Decimal(37))
+    assert stub.taxable_wages == paystub.Taxed(Decimal("6688.33"), Decimal(138260), "Federal Taxable Wages")
+    assert stub.projected_wages() == Decimal("165013.32") and stub.projected_wages(True) == Decimal("157013.32")
     assert stub.failed == [] and len(stub.questions) == 2
 
 

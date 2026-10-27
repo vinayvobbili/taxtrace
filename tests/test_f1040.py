@@ -17,7 +17,13 @@ PAGE_1 = [
     "U.S. Individual Income Tax Return 2025",
     "Filing Status   X Married filing jointly",
     "1a  Total amount from Form(s) W-2, box 1 ..........................  1a   204,310",
+    "z   Add lines 1a through 1h ......................................  1z   204,310",
+    "2a  Tax-exempt interest ....  2a  15     b  Taxable interest ........  2b   41",
+    "3a  Qualified dividends ....  3a  1,902  b  Ordinary dividends ......  3b   2,486",
+    "7a  Capital gain or (loss). Attach Schedule D if required ............  7a   1,317",
+    "8   Additional income from Schedule 1, line 10 .......................  8    3,721",
     "9   Add lines 1z, 2b, 3b, 4b, 5b, 6b, 7a, and 8. This is your total income ....  9   211,875",
+    "10  Adjustments to income from Schedule 1, line 26 ...................  10   0",
     "11a Subtract line 10 from line 9. This is your adjusted gross income ......  11a  211,875",
 ]
 PAGE_2 = [
@@ -46,10 +52,11 @@ def test_each_line_is_read_by_its_number_and_label(tmp_path: Path):
     path = make_pdf(tmp_path / "2025 Return.pdf", [PAGE_1, PAGE_2, SCHEDULE_3, WORKSHEET])
     filed, checks = f1040.read(text.pages(path))
     assert filed.pages == [1, 2]  # a schedule's page 2 and the preparer's worksheet aren't the form
-    assert filed.lines == {"11a": 211875, "11b": 211875, "24": 31906, "25d": 33120, "32": 0, "33": 33120,
+    assert filed.lines == {"1z": 204310, "2b": 41, "3b": 2486, "7a": 1317, "8": 3721, "9": 211875, "10": 0,
+                           "11a": 211875, "11b": 211875, "24": 31906, "25d": 33120, "32": 0, "33": 33120,
                            "34": 1214, "36": 300}
     assert filed.agi == Decimal(211875) and filed.line("26") == 0
-    assert [c.what for c in checks if not c.ok] == [] and len(checks) == 5
+    assert [c.what for c in checks if not c.ok] == [] and len(checks) == 6
 
 
 def test_a_sum_that_doesnt_add_up_fails_and_prior_saves_the_lines(tmp_path: Path):

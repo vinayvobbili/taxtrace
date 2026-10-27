@@ -1189,11 +1189,8 @@ def cmd_estimates(args: argparse.Namespace) -> int:
                if not p.name.startswith("projected-")] if folder.exists() else []
     foreign_kept = home / workspace.FOREIGN / f"{year}-confirmed.json"
     filing = json.loads(foreign_kept.read_text()).get("filing", "") if foreign_kept.exists() else ""
-    forms_folder = home / workspace.FORMS
-    forms = [row for p in sorted(forms_folder.glob("*.json")) for rows in [json.loads(p.read_text())]
-             for row in (rows if isinstance(rows, list) else [rows])] if forms_folder.exists() else []
     plan = estimates.build(year, returns=returns, confirmed=confirmed, filing=filing,
-                           stub=estimates.latest_stub(forms, year))
+                           stub=estimates.latest_stub(_forms(home), year))
     print(f"{year} estimated tax: "
           + (f"the safe harbor is {plan.rate:.0%} of {year - 1}'s tax" if plan.rate else "no safe harbor yet")
           + (f"; {len(plan.payments)} estimated payments" if plan.rate else "")
@@ -1224,6 +1221,64 @@ def cmd_estimates(args: argparse.Namespace) -> int:
     (out / f"{year}.json").write_text(json.dumps(estimates.to_json(plan), indent=2) + "\n")
     print(f"wrote to {out / f'{year}.json'}")
     return 1 if bad else 0
+
+
+def _forms(home: Path) -> list[dict]:
+    """Every form `1098`, `1099`, `paystub` and the rest saved, one row each."""
+    folder = home / workspace.FORMS
+    return [row for p in sorted(folder.glob("*.json")) for rows in [json.loads(p.read_text())]
+            for row in (rows if isinstance(rows, list) else [rows])] if folder.exists() else []
+
+
+def cmd_ira(args: argparse.Namespace) -> int:
+    """How much of a year's traditional IRA contribution each of you can deduct, and what a Roth IRA takes, at the
+    year's income: the latest pay stub's wages projected to December 31 (as they are, and with the 401(k)'s room
+    filled) and last year's other income (`prior`). Written to <workspace>/ira/<year>.json.
+
+    What's printed: each case's deduction for the spouse with the 401(k) and the one without, and the Roth IRA's
+    limit (figures of the IRS's ranges, not of the documents), and where the income falls against each range, its
+    amount masked.
+    """
+    from . import estimates, ira
+
+    home = workspace.outside_git(workspace.home())
+    terms = workspace.redact_terms()
+
+    def masked(line: str) -> str:
+        return redact.redact(line, terms).text.strip()
+
+    year = args.year
+    out = home / workspace.IRA
+    kept = out / f"{year}-confirmed.json"
+    confirmed = json.loads(kept.read_text()) if kept.exists() else {}
+    try:
+        confirmed |= dict(map(ira.confirmation, args.confirm))
+    except ValueError as err:
+        print(err, file=sys.stderr)
+        return 2
+    if args.confirm:
+        out.mkdir(parents=True, exist_ok=True)
+        kept.write_text(json.dumps(confirmed, indent=2) + "\n")
+    folder = home / workspace.CARRYFORWARDS
+    returns = [json.loads(p.read_text()) for p in sorted(folder.glob("*.json"))
+               if not p.name.startswith("projected-")] if folder.exists() else []
+    outlook = ira.build(year, stub=estimates.latest_stub(_forms(home), year), returns=returns, confirmed=confirmed)
+    print(f"{year} IRAs: up to {outlook.limit:,} each" if outlook.limit else f"{year} IRAs: no limit known")
+    if outlook.other_from:
+        print(f"  income: the pay stub's wages to December 31, and {outlook.other_from}")
+    for c in outlook.cases:
+        where = ("under" if c.magi <= ira.SPOUSE_COVERED[year][0] else "over"
+                 if c.magi >= ira.SPOUSE_COVERED[year][1] else "inside")
+        print(f"  {c.name}: income {masked(f'{c.magi:,.0f}')}, {where} the "
+              f"{ira.SPOUSE_COVERED[year][0]:,}-{ira.SPOUSE_COVERED[year][1]:,} range; deductible: "
+              f"{c.other_spouse:,} for the spouse without a 401(k), {c.covered_spouse:,} for the one with it; "
+              f"Roth IRA: {c.roth:,} each")
+    for q in outlook.questions:  # built from the year and the rule's own figures, never an amount read
+        print(f"  question: {q.text}")
+    out.mkdir(parents=True, exist_ok=True)
+    (out / f"{year}.json").write_text(json.dumps(ira.to_json(outlook), indent=2) + "\n")
+    print(f"wrote to {out / f'{year}.json'}")
+    return 0
 
 
 def cmd_fbar(args: argparse.Namespace) -> int:
@@ -1618,6 +1673,12 @@ def build_parser() -> argparse.ArgumentParser:
                    help="kept for later runs: withheld=AMOUNT (the year's federal withholding, the last paychecks "
                         "included), paid_YYYY-MM-DD=AMOUNT (an estimated payment), tax=AMOUNT (the year's own tax)")
     p.set_defaults(func=cmd_estimates)
+    p = sub.add_parser("ira", help="a year's IRA deductions and Roth IRA limit at the year's projected income",
+                       description=cmd_ira.__doc__)
+    p.add_argument("--year", type=int, required=True, help="the tax year")
+    p.add_argument("--confirm", action="append", default=[], metavar="KEY=VALUE",
+                   help="kept for later runs: other=AMOUNT (the year's income besides the wages)")
+    p.set_defaults(func=cmd_ira)
     p = sub.add_parser("foreign", help="a year's foreign side in dollars: a property sold abroad, the tax kept there, "
                                        "the accounts' interest and balances", description=cmd_foreign.__doc__)
     p.add_argument("--year", type=int, required=True, help="the tax year")

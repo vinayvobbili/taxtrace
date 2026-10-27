@@ -1,13 +1,15 @@
-"""Form 1040 as filed: the lines next year's estimated tax and its penalty go by.
+"""Form 1040 as filed: its income lines, and the lines next year's estimated tax and its penalty go by.
 
 Each line is found by its number and words of its label, since a print's other rows end in numbers too (the
-routing number's digits): the adjusted gross income (line 11, or 11a and 11b since 2025, when page 2 starts by
+routing number's digits): the wages (line 1z), the taxable interest (2b), the ordinary dividends (3b), the capital
+gain (7), the additional income from Schedule 1 (8: the rental, the K-1s), the total income (9), the adjustments
+(10), the adjusted gross income (line 11, or 11a and 11b since 2025, when page 2 starts by
 repeating it), the total tax (24), the tax withheld (25d), the year's estimated tax payments (26), the refundable
 credits (32), the total payments (33), the overpayment (34), what of it was applied to next year's estimated tax
 (36) and the estimated tax penalty (38). A line left empty is zero. A preparer's worksheet titled "Form 1040" that
 "is not filed with the return" isn't the form.
 
-The form's own arithmetic is checked: line 33 adds up lines 25d, 26 and 32, line 34 is line 33 less line 24 when
+The form's own arithmetic is checked: line 11 is line 9 less line 10, line 33 adds up lines 25d, 26 and 32, line 34 is line 33 less line 24 when
 that's more than zero, and line 36 is part of line 34.
 """
 
@@ -24,9 +26,12 @@ from .prior import CENT, Check
 FORM = re.compile(r"(?<!\()\bForm\s+1040\b(?![-‑])")  # not a schedule's "Schedule 1 (Form 1040)", not 1040-ES
 PAGE_2 = re.compile(r"^Form\s+1040\s+\((?:19|20)\d\d\).*\bPage\s*2\b")  # "Form 1040 (2025) <names> Page 2"
 HEAD = 8  # lines: a preparer's page 1 can open with the SSN's box ahead of the form's title
-LINE = re.compile(rf"(?<!\S)(?P<no>\d{{1,2}}[a-d]?)\s+(?P<amount>{AMOUNT})\s*$")
+LINE = re.compile(rf"(?<!\S)(?P<no>\d{{1,2}}[a-dz]?)\s+(?P<amount>{AMOUNT})\s*$")
 # each line's number as printed, and words its label row holds
 LINES = {
+    "1z": ("add lines 1a through 1h",), "2b": ("taxable interest",), "3b": ("ordinary dividends",),
+    "7": ("capital gain",), "7a": ("capital gain",), "8": ("additional income",), "9": ("your total income",),
+    "10": ("adjustments to income",),
     "11": ("adjusted gross income",), "11a": ("adjusted gross income",), "11b": ("adjusted gross income",),
     "24": ("this is your total tax",), "25d": ("add lines 25a",), "26": ("estimated tax payments",),
     "32": ("total other payments",), "33": ("total payments",), "34": ("amount you overpaid",),
@@ -82,6 +87,9 @@ def _checks(f: Filed) -> list[Check]:
                             abs(f.line("25d") + f.line("26") + f.line("32") - f.line("33")) <= CENT, page))
         checks.append(Check("Form 1040: line 34 is line 33 less line 24, zero at least",
                             abs(max(zero, f.line("33") - f.line("24")) - f.line("34")) <= CENT, page))
+    if "9" in f.lines and f.agi is not None:
+        checks.append(Check("Form 1040: line 11 is line 9 less line 10", abs(f.line("9") - f.line("10") - f.agi) <= CENT,
+                            page))
     if "11a" in f.lines and "11b" in f.lines:
         checks.append(Check("Form 1040: line 11b is line 11a", abs(f.line("11a") - f.line("11b")) <= CENT, page))
     checks.append(Check("Form 1040: line 36 is part of line 34", f.line("36") <= f.line("34"), page))

@@ -51,6 +51,7 @@ class Paystub:
     withheld: dict[str, Taxed] = field(default_factory=dict)  # "federal", "state"
     deferred: dict[str, Taxed] = field(default_factory=dict)  # a 401(k)'s "pretax" and "roth" deferrals
     salary: Taxed | None = None  # the earnings table's "Salary" row, what a deferral's percentage is of
+    taxable_wages: Taxed | None = None  # the summary's federal taxable wages: what the W-2's box 1 adds up
     checks: list[Check] = field(default_factory=list)
     questions: list[Question] = field(default_factory=list)
 
@@ -82,6 +83,14 @@ class Paystub:
         """What the year's paychecks withhold in all: the year to date's and this one's for each left."""
         t = self.withheld.get(tax)
         return None if t is None else t.year_to_date + t.current * self.paychecks_left()
+
+    def projected_wages(self, fill_401k: bool = False) -> Decimal | None:
+        """The year's federal taxable wages (the W-2's box 1): the year to date's and this paycheck's for each left,
+        less the 401(k)'s room left when it's filled."""
+        t = self.taxable_wages
+        if t is None:
+            return None
+        return t.year_to_date + t.current * self.paychecks_left() - ((self.deferral_room() or 0) if fill_401k else 0)
 
     def deferral_room(self) -> Decimal | None:
         """What more the year's 401(k) limit takes past the year to date's deferrals and this paycheck's for each
@@ -115,6 +124,9 @@ class Paystub:
                 "projected_federal": str(p) if (p := self.projected()) is not None else None,
                 "deferred": {k: pair(t) for k, t in self.deferred.items()},
                 "salary": pair(self.salary) if self.salary else None,
+                "taxable_wages": pair(self.taxable_wages) if self.taxable_wages else None,
+                "projected_wages": {"as_is": str(self.projected_wages()), "401k_filled": str(
+                    self.projected_wages(fill_401k=True))} if self.taxable_wages else None,
                 "deferral_room": str(r) if (r := self.deferral_room()) is not None else None,
                 "deferral_percent": {"now": str(rates[0]), "to_fill": str(rates[1])} if rates else None}
 
@@ -170,8 +182,28 @@ def read(name: str, words: list[dict]) -> Paystub:
                 stub.deferred.setdefault("roth" if "roth" in deferred.label.lower() else "pretax", deferred)
             elif t == "Salary" and stub.salary is None and j + 1 < len(texts) and MONEY.match(texts[j + 1]):
                 stub.salary = _after(texts, j)
+    stub.taxable_wages = _column(rows, ("Federal", "Taxable", "Wages"))
     _checks(stub)
     return stub
+
+
+def _column(rows: list[list[dict]], label: tuple[str, ...]) -> Taxed | None:
+    """The summary table's column under a heading: the amounts on its "Current" and "Year to Date" rows that sit
+    under the heading's words."""
+    span = next(((row[j]["x0"], row[j + len(label) - 1]["x1"]) for row in rows for j in range(len(row))
+                 if tuple(w["text"] for w in row[j:j + len(label)]) == label), None)
+    if span is None:
+        return None
+
+    def under(row: list[dict]) -> Decimal | None:
+        return next((amount(w["text"]) for w in row if MONEY.match(w["text"]) and w["x0"] < span[1]
+                     and w["x1"] > span[0]), None)
+
+    current = next((under(r) for r in rows if [w["text"] for w in r[:1]] == ["Current"]
+                    and len(r) > 1 and MONEY.match(r[1]["text"])), None)
+    to_date = next((under(r) for r in rows if [w["text"] for w in r[:3]] == ["Year", "to", "Date"]
+                    and len(r) > 3 and MONEY.match(r[3]["text"])), None)
+    return None if current is None or to_date is None else Taxed(current, to_date, " ".join(label))
 
 
 def _after(texts: list[str], at: int) -> Taxed | None:
