@@ -164,6 +164,7 @@ class Carryforwards:
     other_years: dict[int, int] = field(default_factory=dict)  # page: the year of a schedule for another year
     rentals: list = field(default_factory=list)  # the filed Schedule E's properties (`schedule_e.Rental`)
     foreign_tax: list = field(default_factory=list)  # Schedule B (Form 1116) by category (`f1116b.Schedule`)
+    carryovers: list = field(default_factory=list)  # the Carryover Worksheet's rows (`carryover.Item`)
 
     def check(self, what: str, ok: bool, page: int) -> None:
         self.checks.append(Check(what, ok, page))
@@ -197,11 +198,11 @@ def has_activities(page: str) -> bool:
 
 
 def needs_words(page: str) -> bool:
-    """Whether `read` wants a page's words (`text.words`): Form 8582's Worksheets 1 and 3, and Schedule B (Form
-    1116), whose amounts are placed by the column they sit in."""
-    from . import f1116b
+    """Whether `read` wants a page's words (`text.words`): Form 8582's Worksheets 1 and 3, Schedule B (Form 1116)
+    and the Carryover Worksheet, whose amounts are placed by the column they sit in."""
+    from . import carryover, f1116b
 
-    return has_activities(page) or f1116b.is_page(page)
+    return has_activities(page) or f1116b.is_page(page) or carryover.is_page(page)
 
 
 def read(name: str, pages: list[str], words: dict[int, list[dict]] | None = None) -> Carryforwards:
@@ -256,9 +257,35 @@ def read(name: str, pages: list[str], words: dict[int, list[dict]] | None = None
     found.foreign_tax, checks, questions = f1116b.read(found.year, pages, words or {})
     found.checks += checks
     found.questions += questions
+    _carryovers(found, pages, words or {})
     if found.year is None and (found.assets or found.unallowed):
         found.ask("Which tax year is this return? Its file name doesn't say.", 1, "")
     return found
+
+
+def _carryovers(found: Carryforwards, pages: list[str], words: dict[int, list[dict]]) -> None:
+    """The Carryover Worksheet's rows, checked for the year they carry to and against Schedule B (Form 1116)."""
+    from . import carryover
+
+    for n, page in enumerate(pages, 1):
+        if n not in words or not carryover.is_page(page):
+            continue
+        items, questions = carryover.read(n, words[n])
+        found.carryovers += items
+        found.questions += questions
+        if found.year:
+            found.check(f"the Carryover Worksheet carries to {found.year + 1}",
+                        carryover.to_year(page) == found.year + 1, n)
+        credit = next((i for i in items if i.label.lower().startswith("foreign tax credit")), None)
+        if found.foreign_tax or credit:
+            for amt, key in ((False, "regular"), (True, "amt")):
+                carried = sum((sum(s.following.values(), Decimal(0)) for s in found.foreign_tax if s.amt == amt),
+                              Decimal(0))
+                shown = (credit.amounts.get(key, Decimal(0)) + (credit.amounts.get("amount", Decimal(0)) if not amt
+                                                                 else Decimal(0))) if credit else Decimal(0)
+                found.check(f"the Carryover Worksheet's foreign tax credit ({'AMT' if amt else 'regular tax'}) is "
+                            "Schedule B (Form 1116)'s carryover to the following year",
+                            abs(carried - shown) <= CENT, n)
 
 
 def _against_projection(found: Carryforwards, pages: list[tuple[int, str]]) -> None:

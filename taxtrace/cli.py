@@ -316,8 +316,9 @@ def cmd_prior(args: argparse.Namespace) -> int:
             for n in (n for n in _pages(args.words, len(pages)) if n <= len(pages)):
                 print(f"== {name} page {n}")
                 _print_words(text.words(doc, n, password), argparse.Namespace(x=None, top=None, rows=True), terms)
-        if not (found.assets or found.unallowed or found.activities or found.rentals or found.foreign_tax):
-            print(f"{name}: no depreciation schedule, Form 8582 worksheets or foreign tax carryover")
+        if not (found.assets or found.unallowed or found.activities or found.rentals or found.foreign_tax
+                or found.carryovers):
+            print(f"{name}: no depreciation schedule, Form 8582 worksheets, foreign tax or other carryover")
             continue
         problems = prior.verify(found, pages)
         returns.append(found)
@@ -339,7 +340,9 @@ def cmd_prior(args: argparse.Namespace) -> int:
                         for r in found.rentals)
               # the years a carryover arose in, never its amount
               + "".join(f"; {s.name()} p{s.pages}: carryover to {found.year + 1} from "
-                        f"{', '.join(map(str, sorted(s.following))) or 'no year'}" for s in found.foreign_tax))
+                        f"{', '.join(map(str, sorted(s.following))) or 'no year'}" for s in found.foreign_tax)
+              + (f"; Carryover Worksheet p{sorted({i.page for i in found.carryovers})}: "
+                 f"{len(found.carryovers)} items" if found.carryovers else ""))
         for c in bad:
             print(f"  failed, p{c.page}: {masked(c.what)}")
         for p in problems:
@@ -363,6 +366,8 @@ def cmd_prior(args: argparse.Namespace) -> int:
                 print(f"  p{s.pages} {s.name()}: " + "; ".join(
                     f"line {n} from {', '.join(map(str, sorted(y for y, v in s.lines[n].items() if v)))}"
                     for n in sorted(s.lines) if any(s.lines[n].values())))
+            for i in found.carryovers:  # which amounts a row has (regular, AMT, taxpayer...), never what they are
+                print(f"  p{i.page} carryover, {masked(i.section)}: {masked(i.label)} ({', '.join(i.amounts)})")
     if links := prior.link(returns):
         bad = [c for c in links if not c.ok]
         failed += bool(bad)

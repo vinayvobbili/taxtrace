@@ -177,6 +177,12 @@ Nothing is taken on trust:
   line 8 is lines 3 through 7), the subtotal has to carry from page 1 to page 2, and the total has to add up its
   columns. The AMT copy's page 2 doesn't say it's the AMT copy, so it goes with the nearest page 1. A box
   left unchecked is a question. The terminal shows only the years a carryover arose in.
+- The Carryover Worksheet (Drake's "List of items that will carryover to the next tax return") is read row by
+  row: state and local taxes paid, the QBI loss, the foreign tax credit (regular and AMT), last year's tax for
+  the estimated-tax safe harbor, each spouse's IRA basis. Its foreign tax credit has to equal Schedule B's
+  carryover, and its heading has to name the next year. Anything under Passive Activity or At Risk Limitations
+  is a question, since no copy seen so far had rows there. `--layout` lists each row's label and which amounts it
+  has (regular, AMT, taxpayer, spouse), never the amounts.
 - Returns years apart are checked against each other. An asset's depreciation is rolled forward a full year
   at a time, and has to match the later return's prior depreciation. A miss says how far off it is in years
   of depreciation (0.46 years is a first, partial year left out), with no amounts. A year's foreign tax
