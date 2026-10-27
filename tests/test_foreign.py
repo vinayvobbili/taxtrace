@@ -313,6 +313,8 @@ def test_taxes_accrued_claim_indias_year_that_ends_in_the_us_year(tmp_path: Path
     assert tax.kept.rate.source == "FRED DEXINUS" and found.estimated  # the latest day's, till 2026's average is out
     assert [(t.kept.amount, t.on) for t in found.tds] == [(Decimal("1100.00"), "2026-03-31")]  # kept apart
     assert not any("method=" in q.text for q in found.questions)
+    assert any("With taxes accrued, it's in Form 1116 only as far as India's return" in q.text
+               for q in found.questions)  # the other deposit's overhead
 
     waiting = build({"method": "accrued"}, [earlier])
     assert not waiting.taxes and waiting.tds

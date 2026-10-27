@@ -141,6 +141,7 @@ class Foreign:
     reconciled: list[str] = field(default_factory=list)  # the quarters whose TDS certificate matches what was found
     # with taxes accrued, the TDS withheld in the year: what India's return for its year credits, not Form 1116's
     tds: list[ForeignTax] = field(default_factory=list)
+    method: str = "paid"  # Form 1116's box: taxes paid or accrued
     questions: list[Question] = field(default_factory=list)
 
     def ask(self, text: str, page: int = 0, quote: str = "") -> None:
@@ -221,8 +222,8 @@ def build(year: int, *, itrs: list[dict], rates: Rates, confirmed: dict | None =
     interest certificates and quarterly TDS certificates (`taxtrace bank`), converted with `rates`."""
     confirmed, statements, today = confirmed or {}, statements or [], today or date.today()
     certificates = certificates or []
-    found = Foreign(year)
-    accrued = confirmed.get("method") == "accrued"
+    found = Foreign(year, method=confirmed.get("method", "paid"))
+    accrued = found.method == "accrued"
     for ret in itrs:
         mine = [(n, row) for n, row in enumerate(ret.get("sales", []), 1) if _day(row["sold"]).year == year]
         for n, row in mine:
@@ -321,7 +322,7 @@ def _quarter(found: Foreign, quarter: dict, confirmed: dict, rates: Rates, today
     if settled == "not":
         return
     if settled != "taken":
-        accrued = confirmed.get("method") == "accrued"
+        accrued = found.method == "accrued"
         earlier = sorted({p["on"][-4:] for p in quarter.get("payments", []) if statement_day(p["on"]) < start})
         found.ask(f"the TDS certificate for {period} shows more tax than the statements and the interest certificate: "
                   + (f"it lists interest credited in {', '.join(earlier)}, but tax counts in the year it was taken "
@@ -586,9 +587,12 @@ def _deposit_interest(found: Foreign, n: int, account: Account, statements: list
         ended = statement_day(cert["year_ended"])
         if Decimal(d.get("second_tax") or 0) > 0:
             found.ask(f"account {n}: the interest certificate for the year ended {ended} shows overhead tax on it, "
-                      "apart from the total deducted: tax the bank charged but didn't take from the deposit. It's a "
-                      "tax for Form 1116 in the year it's taken (a TDS debit on a statement, or at maturity), not "
-                      "before; Form 26AS shows whether India credited it", d["page"], d["quote"])
+                      "apart from the total deducted: tax the bank charged but didn't take from the deposit. "
+                      + ("With taxes accrued, it's in Form 1116 only as far as India's return for that year counts it"
+                         if found.method == "accrued" else
+                         "It's a tax for Form 1116 in the year it's taken (a TDS debit on a statement, or at "
+                         "maturity), not before")
+                      + "; Form 26AS shows whether India credited it", d["page"], d["quote"])
         tax = Decimal(d["tax"])
         if not tax:
             continue
