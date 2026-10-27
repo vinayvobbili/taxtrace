@@ -613,9 +613,10 @@ def cmd_bank(args: argparse.Namespace) -> int:
 
     A bank's interest certificate on its deposits goes there too, as certificate-<first account's last four
     digits>-<the financial year's end>.json: each account's interest and the tax kept on it, which a term deposit's
-    statements don't show.
+    statements don't show. So does India's quarterly TDS certificate (Form 16A, or 131 from April 2026), as
+    tds-<file name>.json: the quarter's payments, the tax deducted and the challans that paid it.
     """
-    from . import certificate, statement
+    from . import certificate, statement, tds
 
     home = workspace.outside_git(workspace.home())
     terms = workspace.redact_terms()
@@ -632,6 +633,21 @@ def cmd_bank(args: argparse.Namespace) -> int:
             pages, password = _unlocked(doc)
         except text.UnsupportedDocument as err:
             print(f"{name}: skipped, {err}")
+            continue
+        if any(tds.is_certificate(page) for page in pages):  # India's quarterly TDS certificate
+            quarter = tds.read(doc.name, pages, {n: text.words(doc, n, password) for n in range(1, len(pages) + 1)})
+            failed += bool(quarter.failed)
+            print(f"{name}: TDS certificate (Form {quarter.number or '?'}), {quarter.quarter or '?'} of India's year, "
+                  f"{quarter.start or '?'} to {quarter.end or '?'}; {len(quarter.payments)} payments, "
+                  f"{len(quarter.challans)} challans; " + ("tax deducted" if quarter.deducted else "no tax deducted")
+                  + f"; {len(quarter.checks) - len(quarter.failed)} of {len(quarter.checks)} checks pass")
+            for c in quarter.failed:
+                print(f"  failed: {c.what}" + (f" ({masked(c.quote)})" if c.quote else ""))
+            for q in quarter.questions:
+                print(f"  question: {q.text}")
+            out.mkdir(parents=True, exist_ok=True)
+            (out / f"tds-{doc.stem}.json").write_text(json.dumps(quarter.to_json(), indent=2, default=str) + "\n")
+            written += 1
             continue
         if any(certificate.is_certificate(page) for page in pages):
             found = certificate.read(doc.name, pages,
@@ -798,7 +814,8 @@ def cmd_foreign(args: argparse.Namespace) -> int:
         out.mkdir(parents=True, exist_ok=True)
         kept.write_text(json.dumps(confirmed, indent=2) + "\n")
     found = foreign.build(year, itrs=itrs, rates=fx.Rates("INR", home / workspace.FX), confirmed=confirmed,
-                          statements=statements, certificates=saved("certificate-*.json"))
+                          statements=statements, certificates=saved("certificate-*.json"),
+                          quarters=saved("tds-*.json"))
     print(f"{year} foreign side: {len(found.sales)} sale(s), {len(found.taxes)} foreign tax(es), "
           f"{len(found.accounts)} account(s)"
           + ("" if itrs else "; no Indian return read yet (`taxtrace itr`)")
@@ -820,6 +837,10 @@ def cmd_foreign(args: argparse.Namespace) -> int:
               "covers "
               + (", ".join(c.replace("..", " to ") for c in a.covered) or "none of the year")
               + (f"; {'; '.join(parts)}" if parts else ""))
+    for c in found.withheld:
+        print(f"  Schedule B: {c.what}, at {c.rate.source}")
+    for line in found.reconciled:
+        print(f"  {masked(line)}")
     for r in found.refunds:
         print(f"  {r.country}'s refund: " + (f"arrived {r.arrived}" if r.arrived else "not on a statement read")
               + (f", with interest on it (Schedule B) at {r.interest.rate.source}" if r.interest else ""))

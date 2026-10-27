@@ -95,6 +95,7 @@ class ForeignTax:
     category: str  # Form 1116's category: "passive" for a gain on property
     kept: Converted  # withheld less refunded
     file: str = ""
+    on: str = ""  # the ISO day it was withheld, for TDS
 
 
 @dataclass
@@ -132,6 +133,9 @@ class Foreign:
     reporting: dict[str, bool | None] = field(default_factory=dict)
     # the year isn't over: the accounts are at the latest day's rate until its average and December 31 rate come out
     estimated: bool = False
+    # TDS a quarterly certificate shows that no statement does, taken from a term deposit's interest: interest too
+    withheld: list[Converted] = field(default_factory=list)
+    reconciled: list[str] = field(default_factory=list)  # the quarters whose TDS certificate matches what was found
     questions: list[Question] = field(default_factory=list)
 
     def ask(self, text: str, page: int = 0, quote: str = "") -> None:
@@ -139,9 +143,10 @@ class Foreign:
 
     @property
     def interest(self) -> Decimal:
-        """Schedule B's foreign interest in dollars: the accounts' and India's interest on its refund."""
-        return sum((c.dollars for c in [*(a.interest for a in self.accounts), *(r.interest for r in self.refunds)]
-                    if c), Decimal(0))
+        """Schedule B's foreign interest in dollars: the accounts', India's interest on its refund, and the interest
+        taken as TDS that no statement shows."""
+        return sum((c.dollars for c in [*(a.interest for a in self.accounts), *(r.interest for r in self.refunds),
+                                        *self.withheld] if c), Decimal(0))
 
     def to_json(self) -> dict:
         found = asdict(self)
@@ -199,9 +204,9 @@ def _held_over_a_year(acquired: date, sold: date) -> bool:
 
 def build(year: int, *, itrs: list[dict], rates: Rates, confirmed: dict | None = None,
           statements: list[dict] | None = None, certificates: list[dict] | None = None,
-          today: date | None = None) -> Foreign:
-    """The year's foreign sales, taxes and accounts from India's returns (`taxtrace itr`) and the banks' statements
-    and interest certificates (`taxtrace bank`), converted with `rates`."""
+          quarters: list[dict] | None = None, today: date | None = None) -> Foreign:
+    """The year's foreign sales, taxes and accounts from India's returns (`taxtrace itr`) and the banks' statements,
+    interest certificates and quarterly TDS certificates (`taxtrace bank`), converted with `rates`."""
     confirmed, statements, today = confirmed or {}, statements or [], today or date.today()
     certificates = certificates or []
     found = Foreign(year)
@@ -221,9 +226,68 @@ def build(year: int, *, itrs: list[dict], rates: Rates, confirmed: dict | None =
     for n, (_, mine) in enumerate(sorted(by_account.items()), 1):
         _account(found, n, mine, certificates, rates, today,
                  confirmed.get(f"account_{mine[0].get('account', '')}", ""))
+    for quarter in quarters or []:
+        _quarter(found, quarter, confirmed, rates, today)
     if found.accounts:
         _reporting(found, confirmed)
     return found
+
+
+def _bank(file: str) -> str:
+    """A statement's bank, by its file name's first word ('sbi' of 'sbi-1234-2026-01.pdf'), as `bank_<word>` names
+    it."""
+    m = re.match(r"[a-z]+", file.lower())
+    return m.group(0) if m else ""
+
+
+def _quarter(found: Foreign, quarter: dict, confirmed: dict, rates: Rates, today: date) -> None:
+    """A quarterly TDS certificate's tax against the TDS found for that bank in its quarter: the statements' TDS rows
+    and the interest certificate's. What's left was taken where no statement shows it, from a term deposit's
+    interest (at a renewal, or a quarter's end): a tax for Form 1116 at the quarter's last day's rate, and interest
+    the deposit's value never showed. Found more than the certificate's is asked about."""
+    if not (quarter.get("start") and quarter.get("end") and quarter.get("deducted") is not None):
+        return
+    start, end = statement_day(quarter["start"]), statement_day(quarter["end"])
+    if not (start.year == end.year == found.year):
+        return
+    named = " ".join((quarter.get("deductor") or "").lower().split())
+    # the certificate may print a branch after the bank's name ("STATE BANK OF INDIA, MAIN BRANCH")
+    banks = [k[5:] for k, v in confirmed.items()
+             if k.startswith("bank_") and named and named.startswith(" ".join(v.split(";")[0].lower().split()))]
+    period = f"{start} to {end}"
+    if not banks:
+        found.ask(f"the TDS certificate for {period}: its bank isn't confirmed by the name it prints (`taxtrace "
+                  "foreign --confirm bank_<the statements' file name's first word>=<that name>; <address>`)")
+        return
+    deducted = Decimal(str(quarter["deducted"]))
+    seen = sum((t.kept.amount for t in found.taxes
+                if t.on and start <= date.fromisoformat(t.on) <= end and _bank(t.file) == banks[0]), Decimal(0))
+    left = deducted - seen
+    if abs(left) < 1:  # India rounds TDS to the rupee
+        found.reconciled.append(f"India's TDS certificate for {period} matches the TDS found")
+        return
+    if left < 0:
+        found.ask(f"the TDS certificate for {period} shows less tax than the statements and interest certificate: "
+                  "is a TDS row a reversal, or the interest certificate's tax from another quarter?")
+        return
+    try:
+        daily = rates.daily(end)
+    except NoRate as err:
+        found.ask(f"the TDS certificate for {period}: {err}")
+        return
+    try:
+        yearly = rates.yearly(found.year)
+    except NoRate as err:
+        if found.year < today.year:
+            found.ask(f"the TDS certificate for {period}: {err}")
+            return
+        yearly = daily  # the year's average doesn't exist while it's still going
+        found.estimated = True
+    found.taxes.append(ForeignTax("India", "passive", Converted(
+        "TDS on a term deposit's interest (the quarter's TDS certificate)", left, daily.dollars(left), daily, 1, ""),
+        file=quarter["file"], on=str(end)))
+    found.withheld.append(Converted("interest taken as TDS from a term deposit", left, yearly.dollars(left), yearly,
+                                    1, ""))
 
 
 def _sale(found: Foreign, ret: dict, n: int, row: dict, rates: Rates, confirmed: dict) -> None:
@@ -417,7 +481,7 @@ def _account(found: Foreign, n: int, statements: list[dict], certificates: list[
                 found.ask(f"account {n}'s TDS: {err}")
                 continue
             found.taxes.append(ForeignTax("India", "passive", convert("TDS on interest", amount, rate, r),
-                                          file=s["file"]))
+                                          file=s["file"], on=str(on)))
     if inside:
         _, high, r = max(inside, key=lambda t: t[1])
         account.highest = convert("highest balance", high, december, r)
@@ -483,7 +547,8 @@ def _deposit_interest(found: Foreign, n: int, account: Account, statements: list
             found.ask(f"account {n}'s TDS: {err}")
             continue
         found.taxes.append(ForeignTax("India", "passive", Converted("TDS on interest", tax, daily.dollars(tax), daily,
-                                                                    d["page"], d["quote"]), file=cert["file"]))
+                                                                    d["page"], d["quote"]), file=cert["file"],
+                                      on=str(ended)))
         taken += tax
         explained.add(ended)
     for (on, value, _), (_, prior, _) in zip(values[1:], values, strict=False):

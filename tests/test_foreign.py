@@ -14,6 +14,7 @@ from test_itr import RETURN, SECRETS
 from test_k1 import draw
 from test_statement import ALL_ACCOUNTS, MONTHLY, PAGE, SUMMARY, statement_page
 from test_statement import SECRETS as STATEMENT_SECRETS
+from test_tds import FORM_16A
 
 from taxtrace import cli, foreign, fx
 
@@ -199,7 +200,7 @@ def three_months(tmp_path: Path, home: Path) -> tuple[list[dict], fx.Rates]:
 
     for name, pages in [("december", month("31-12-25", "01-12-25", "5000.00")),
                         ("february", month("28-02-26", "01-02-26", "8000.00")), ("march", ALL_ACCOUNTS)]:
-        assert cli.main(["bank", str(draw(tmp_path / f"{name}.pdf", pages))]) == 0
+        assert cli.main(["bank", str(draw(tmp_path / f"gramin-{name}.pdf", pages))]) == 0
     statements = [s for f in sorted((home / "forms").glob("bank-*.json")) for s in json.loads(f.read_text())]
     csv = FRED_CSV + "2026-03-31,85.0000\n2026-10-23,88.1000\n"
     return statements, fx.Rates("INR", tmp_path / "fx", get=lambda url: csv if "fred" in url else fake_get([])(url))
@@ -220,7 +221,7 @@ def test_the_interest_certificates_tax_is_the_fall_on_march_31_and_interest_too(
                                                                                  workspace_home: Path, monkeypatch):
     monkeypatch.setattr(fx, "_get", fake_get([]))
     statements, rates = three_months(tmp_path, workspace_home)
-    assert cli.main(["bank", str(draw(tmp_path / "certificate.pdf", [CERTIFICATE]))]) == 0
+    assert cli.main(["bank", str(draw(tmp_path / "gramin-certificate.pdf", [CERTIFICATE]))]) == 0
     certificates = [json.loads((workspace_home / "forms" / "certificate-3301-20260331.json").read_text())]
     found = foreign.build(2026, itrs=[], rates=rates, statements=statements, certificates=certificates,
                           today=date(2026, 10, 25))
@@ -241,3 +242,34 @@ def test_the_interest_certificates_tax_is_the_fall_on_march_31_and_interest_too(
     asked = [q.text for q in found.questions if "fell" in q.text or "tax for the year" in q.text]
     assert len(asked) == 1 and asked[0].startswith("account 1: the interest certificate's tax for the year ended "
                                                    "2026-03-31 isn't what the term deposit's value fell by")
+
+
+def test_the_quarters_tds_certificate_counts_what_no_statement_shows_once(tmp_path: Path, workspace_home: Path,
+                                                                          monkeypatch):
+    monkeypatch.setattr(fx, "_get", fake_get([]))
+    statements, rates = three_months(tmp_path, workspace_home)
+    assert cli.main(["bank", str(draw(tmp_path / "gramin-certificate.pdf", [CERTIFICATE])),
+                     str(draw(tmp_path / "gramintds-q4.pdf", [FORM_16A]))]) == 0
+    forms = workspace_home / "forms"
+    certificates = [json.loads((forms / "certificate-3301-20260331.json").read_text())]
+    quarter = json.loads((forms / "tds-gramintds-q4.json").read_text())
+    confirmed = {"bank_gramin": "Godavari Grameena Bank; Main Road, Vennelapadu"}
+
+    def build(deducted: str, confirmed: dict = confirmed) -> foreign.Foreign:
+        return foreign.build(2026, itrs=[], rates=rates, statements=statements, certificates=certificates,
+                             quarters=[{**quarter, "deducted": deducted}], confirmed=confirmed,
+                             today=date(2026, 10, 25))
+
+    found = build("1100.00")  # the interest certificate's 1,100 on March 31: nothing more
+    assert len(found.taxes) == 1 and not found.withheld
+    assert found.reconciled == ["India's TDS certificate for 2026-01-01 to 2026-03-31 matches the TDS found"]
+
+    found = build("1500.00")  # 400 more taken where no statement shows it: a tax, and interest the value never showed
+    assert [(t.kept.amount, t.on, t.file) for t in found.taxes][1:] == [
+        (Decimal("400.00"), "2026-03-31", "gramintds-q4.pdf")]
+    (extra,) = found.withheld
+    assert (extra.amount, extra.rate.source) == (Decimal("400.00"), "FRED DEXINUS")  # a daily rate till 2026 ends
+    assert found.estimated
+
+    assert any("shows less tax" in q.text for q in build("900.00").questions)
+    assert any("its bank isn't confirmed" in q.text for q in build("1100.00", {}).questions)

@@ -363,6 +363,15 @@ foreign side takes it as tax withheld that day (Form 1116) and as interest the v
 fits the fall in the deposit's value that day (at most the fall plus a quarter's interest). Tax taken earlier in
 India's year belongs to an earlier US year, so a certificate that doesn't fit is asked about, never counted whole.
 
+India's quarterly TDS certificate (Form 16A until March 2026, Form 131 from April 2026) goes through `bank` as well:
+the quarter, the bank, each payment of interest, the tax deducted and the challans that paid it to the government,
+checked against their totals. India's quarters fall inside calendar quarters, so the foreign side compares each 2026
+quarter's tax with the TDS it found for that bank (the statements' TDS rows and the interest certificate's): a match is
+noted, and tax left over was taken where no statement shows it (from a term deposit at a renewal), so it counts once,
+as tax withheld on the quarter's last day and as interest. Less tax than was found is asked about. The bank is matched
+by the name the certificate prints, from `foreign --confirm bank_<the statements' file name's first word>=<name>;
+<address>`.
+
 `taxtrace fbar --year 2026` turns the foreign side into each spouse's FBAR (FinCEN Form 114), item by item:
 `<workspace>/foreign/fbar-2026.txt` is a checklist to type into the BSA e-filing form. Each account is in Part II
 (held alone) or Part III (held with anyone else: its statement's mode of operation says, or `foreign --confirm
