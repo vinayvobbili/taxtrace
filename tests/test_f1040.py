@@ -10,11 +10,9 @@ from conftest import make_pdf
 
 from taxtrace import f1040, prior, text
 
-PAGE_1 = [
+PAGE_1 = [  # the title drawn as a picture, not text, as a preparer's print can have it
     "Your first name and middle initial      Last name           Your social security number",
     "Jordan Q.                               Quillfeather        XXX-XX-4410",
-    "Form 1040   Department of the Treasury-Internal Revenue Service",
-    "U.S. Individual Income Tax Return 2025",
     "Filing Status   X Married filing jointly",
     "1a  Total amount from Form(s) W-2, box 1 ..........................  1a   204,310",
     "z   Add lines 1a through 1h ......................................  1z   204,310",
@@ -43,15 +41,17 @@ PAGE_2 = [
 ]
 WORKSHEET = ["Form 1040   Explanation Worksheet (This page is not filed with the return.)",
              "11. QBI amount carried to Form 8995 ..........  11  4,410"]
+D_400 = ["D-400 (25) Individual Income Tax Return 2025   North Carolina Department of Revenue",
+         "6   Federal adjusted gross income (Form 1040, line 11) ........  6   211,875"]
 SCHEDULE_3 = ["Schedule 3 (Form 1040) 2025   Jordan Q. Quillfeather   Page 2",
               "11  Excess social security and tier 1 RRTA tax withheld ......  11  410",
               "15  Add lines 9 through 12 and 14. Enter here and on Form 1040, line 31 ....  15  410"]
 
 
 def test_each_line_is_read_by_its_number_and_label(tmp_path: Path):
-    path = make_pdf(tmp_path / "2025 Return.pdf", [PAGE_1, PAGE_2, SCHEDULE_3, WORKSHEET])
+    path = make_pdf(tmp_path / "2025 Return.pdf", [PAGE_1, PAGE_2, SCHEDULE_3, WORKSHEET, D_400])
     filed, checks = f1040.read(text.pages(path))
-    assert filed.pages == [1, 2]  # a schedule's page 2 and the preparer's worksheet aren't the form
+    assert filed.pages == [1, 2]  # a schedule's page 2, the preparer's worksheet and NC's return aren't the form
     assert filed.lines == {"1z": 204310, "2b": 41, "3b": 2486, "7a": 1317, "8": 3721, "9": 211875, "10": 0,
                            "11a": 211875, "11b": 211875, "24": 31906, "25d": 33120, "32": 0, "33": 33120,
                            "34": 1214, "36": 300}

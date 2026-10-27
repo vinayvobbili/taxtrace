@@ -23,7 +23,7 @@ from . import text
 from .f8995 import AMOUNT, _amount
 from .prior import CENT, Check
 
-FORM = re.compile(r"(?<!\()\bForm\s+1040\b(?![-‑])")  # not a schedule's "Schedule 1 (Form 1040)", not 1040-ES
+PAGE_1 = ("add lines 1a through 1h", "this is your total income")  # not NC's D-400, also an "Income Tax Return"
 PAGE_2 = re.compile(r"^Form\s+1040\s+\((?:19|20)\d\d\).*\bPage\s*2\b")  # "Form 1040 (2025) <names> Page 2"
 HEAD = 8  # lines: a preparer's page 1 can open with the SSN's box ahead of the form's title
 LINE = re.compile(rf"(?<!\S)(?P<no>\d{{1,2}}[a-dz]?)\s+(?P<amount>{AMOUNT})\s*$")
@@ -54,11 +54,10 @@ class Filed:
 
 
 def is_page(page: str) -> bool:
-    heads = " ".join(text.headings(page, HEAD))
-    if "not filed" in heads:
+    if "not filed" in " ".join(text.headings(page, HEAD)):
         return False
-    return any(PAGE_2.match(line) for line in text.headings(page, 3)) or (
-        "Individual Income Tax Return" in heads and bool(FORM.search(heads)))
+    flat = " ".join(page.lower().split())  # page 1's title can be drawn, not text: its own lines say what it is
+    return any(PAGE_2.match(line) for line in text.headings(page, 3)) or all(p in flat for p in PAGE_1)
 
 
 def read(pages: list[str]) -> tuple[Filed | None, list[Check]]:
