@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from decimal import Decimal
 from pathlib import Path
@@ -111,7 +112,9 @@ def cmd_outline(args: argparse.Namespace) -> int:
         print(f"{name}: {len(pages)} pages")
         for n, page in enumerate(pages, 1):
             heads = [redact.redact(h, terms).text for h in text.headings(page, args.lines)]
-            print(f"  p{n}: {' | '.join(heads) if heads else '(blank)'}")
+            line = ' | '.join(heads) if heads else '(blank)'
+            if not args.match or args.match.search(line):
+                print(f"  p{n}: {line}")
     return 0
 
 
@@ -121,7 +124,7 @@ def cmd_words(args: argparse.Namespace) -> int:
     Several files, or every page (--page all), in one run: files sharing a Keychain entry cost one approval."""
     terms = workspace.redact_terms()
     status = 0
-    many = len(args.paths) > 1 or args.page == "all"
+    many = len(args.paths) > 1 or not args.page.isdigit()
     for doc in map(Path, args.paths):
         name = redact.redact(doc.name, terms, bare_years=True).text
         try:
@@ -130,7 +133,7 @@ def cmd_words(args: argparse.Namespace) -> int:
             print(f"{name}: {err}", file=sys.stderr)
             status = 1
             continue
-        for page in range(1, len(pages) + 1) if args.page == "all" else [int(args.page)]:
+        for page in _pages(args.page, len(pages)):
             if many:
                 print(f"== {name} page {page}")
             _print_words(text.words(doc, page, password), args, terms)
@@ -156,9 +159,30 @@ def _print_words(words: list[dict], args: argparse.Namespace, terms: list[str]) 
 
 
 def _page(spec: str) -> str:
-    if spec != "all" and not (spec.isdigit() and int(spec) > 0):
-        raise argparse.ArgumentTypeError(f"not a page number or all: {spec}")
+    """A page ('69'), ranges and pages ('19-20,69-70') or all."""
+    for part in spec.split(",") if spec != "all" else []:
+        first, dash, last = part.partition("-")
+        if not (first.isdigit() and int(first) > 0 and (not dash or (last.isdigit() and int(last) >= int(first)))):
+            raise argparse.ArgumentTypeError(f"not a page number, pages (19-20,69) or all: {spec}")
     return spec
+
+
+def _pages(spec: str, count: int) -> list[int]:
+    """The pages `_page` took, in order."""
+    if spec == "all":
+        return list(range(1, count + 1))
+    pages = []
+    for part in spec.split(","):
+        first, _, last = part.partition("-")
+        pages += range(int(first), int(last or first) + 1)
+    return pages
+
+
+def _pattern(spec: str) -> re.Pattern:
+    try:
+        return re.compile(spec, re.I)
+    except re.error as err:
+        raise argparse.ArgumentTypeError(f"not a regular expression: {err}") from None
 
 
 def _range(spec: str) -> tuple[float, float]:
@@ -1123,10 +1147,12 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("outline", help="list each page's masked heading", description=cmd_outline.__doc__)
     p.add_argument("paths", nargs="*", help=PATHS_HELP)
     p.add_argument("--lines", type=int, default=2, help="lines per page (default: 2)")
+    p.add_argument("--match", type=_pattern, metavar="REGEX",
+                   help="only the pages whose masked heading matches, ignoring case (e.g. '1116|8582|4562')")
     p.set_defaults(func=cmd_outline)
     p = sub.add_parser("words", help="a page's masked words with their positions", description=cmd_words.__doc__)
     p.add_argument("paths", nargs="+", help="PDFs")
-    p.add_argument("--page", type=_page, default="1", help="page number, or all (default: 1)")
+    p.add_argument("--page", type=_page, default="1", help="a page, pages and ranges (19-20,69), or all (default: 1)")
     p.add_argument("--x", type=_range, metavar="MIN:MAX", help="only words starting in this range of points")
     p.add_argument("--top", type=_range, metavar="MIN:MAX", help="only words this far down the page, in points")
     p.add_argument("--rows", action="store_true", help="one line per row: each word as x:text")

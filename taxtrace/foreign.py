@@ -284,8 +284,9 @@ def _quarter(found: Foreign, quarter: dict, confirmed: dict, rates: Rates, today
     if settled != "taken":
         earlier = sorted({p["on"][-4:] for p in quarter.get("payments", []) if statement_day(p["on"]) < start})
         found.ask(f"the TDS certificate for {period} shows more tax than the statements and the interest certificate: "
-                  + (f"it lists interest credited in {', '.join(earlier)}, so some may be tax on an earlier year's "
-                     "interest. " if earlier else "")
+                  + (f"it lists interest credited in {', '.join(earlier)}, but tax counts in the year it was taken "
+                     "when Form 1116 claims taxes paid (its usual box; accrued, once chosen, binds later years). "
+                     if earlier else "")
                   + "Form 26AS gives each deduction's day and account: if it was taken in the quarter from a term "
                   f"deposit's interest, `taxtrace foreign --confirm tds_{end:%Y%m%d}=taken` counts it (Form 1116 and "
                   f"Schedule B); `tds_{end:%Y%m%d}=not` leaves it out")

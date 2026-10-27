@@ -84,6 +84,14 @@ def test_outline_lists_masked_page_headings(prior_return: Path, capsys):
     assert "Quillfeather" not in out
 
 
+def test_outline_can_list_only_the_pages_naming_a_form(prior_return: Path, capsys):
+    assert cli.main(["outline", str(prior_return), "--match", "8582|1116"]) == 0
+    out = capsys.readouterr().out
+    assert "2 pages" in out and "  p2: Form 8582" in out and "  p1:" not in out
+    with pytest.raises(SystemExit):
+        cli.main(["outline", "--match", "(8582"])
+
+
 def test_list_prints_masked_names_by_folder_without_opening(workspace_home: Path, capsys, monkeypatch):
     make_pdf(workspace_home / "2025" / "Quillfeather 2025 W2.pdf", PRIOR_RETURN)
     monkeypatch.setattr(cli, "_open", lambda doc: pytest.fail("list opened a document"))

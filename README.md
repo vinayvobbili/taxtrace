@@ -367,9 +367,9 @@ India's quarterly TDS certificate (Form 16A until March 2026, Form 131 from Apri
 the quarter, the bank, each payment of interest, the tax deducted and the challans that paid it to the government,
 checked against their totals. India's quarters fall inside calendar quarters, so the foreign side compares each 2026
 quarter's tax with the TDS it found for that bank (the statements' TDS rows and the interest certificate's): a match is
-noted, and tax left over is asked about, never counted on its own. It was taken where no statement shows it, or on
-interest credited in an earlier year (a certificate can list such credits): Form 26AS gives each deduction's day and
-account. `foreign --confirm tds_<the quarter's last day, YYYYMMDD>=taken` then counts it once, as tax withheld on the
+noted, and tax left over is asked about, never counted on its own: it was taken where no statement shows it. Form
+26AS gives each deduction's day and account. Tax on interest credited in an earlier year (a certificate can list such
+credits) still counts in the year it was taken when Form 1116 claims taxes paid, its usual box. `foreign --confirm tds_<the quarter's last day, YYYYMMDD>=taken` then counts it once, as tax withheld on the
 quarter's last day and as interest the deposit's value never showed, and `=not` leaves it out. Less tax than was
 found is asked about too. The bank is matched
 by the name the certificate prints, from `foreign --confirm bank_<the statements' file name's first word>=<name>;

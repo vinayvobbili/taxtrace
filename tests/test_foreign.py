@@ -269,12 +269,13 @@ def test_the_quarters_tds_certificate_counts_what_no_statement_shows_once(tmp_pa
     found = build("1500.00")  # 400 more than found: asked about, not counted, till Form 26AS says where it came from
     assert len(found.taxes) == 1 and not found.withheld
     (asked,) = [q.text for q in found.questions if "more tax" in q.text]
-    assert "--confirm tds_20260331=taken" in asked and "earlier year" not in asked
+    assert "--confirm tds_20260331=taken" in asked and "interest credited in" not in asked
     assert len(build("1500.00", {**confirmed, "tds_20260331": "not"}).taxes) == 1
     early = {**quarter, "deducted": "1500.00", "payments": [{**quarter["payments"][0], "on": "02-07-2025"}]}
     late = foreign.build(2026, itrs=[], rates=rates, statements=statements, certificates=certificates,
                          quarters=[early], confirmed=confirmed, today=date(2026, 10, 25))
-    assert any("interest credited in 2025, so some may be tax on an earlier year's" in q.text for q in late.questions)
+    assert any("interest credited in 2025, but tax counts in the year it was taken when Form 1116 claims taxes paid"
+               in q.text for q in late.questions)
 
     # Form 26AS says the 400 was taken in the quarter from a term deposit: a tax, and interest the value never showed
     found = build("1500.00", {**confirmed, "tds_20260331": "taken"})

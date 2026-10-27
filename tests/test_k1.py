@@ -383,8 +383,15 @@ def test_words_of_every_page_of_several_files_in_one_run(face_pdf: Path, tmp_pat
     assert [ln for ln in out.splitlines() if ln.startswith("==")] == [
         "== 2025 K-1 ********.pdf page 1", "== 2025 K-1 ********.pdf page 2", "== other.pdf page 1"]
     assert "78:cover 97:letter" in out and "Quillfeather" not in out
-    with pytest.raises(SystemExit):
-        cli.main(["words", str(face_pdf), "--page", "0"])
+    assert cli.main(["words", str(face_pdf), "--page", "1-2", "--top", ":45", "--rows"]) == 0
+    assert [ln for ln in capsys.readouterr().out.splitlines() if ln.startswith("==")] == [
+        "== 2025 K-1 ********.pdf page 1", "== 2025 K-1 ********.pdf page 2"]
+    assert cli.main(["words", str(face_pdf), "--page", "2,1", "--top", ":45", "--rows"]) == 0
+    assert [ln for ln in capsys.readouterr().out.splitlines() if ln.startswith("==")] == [
+        "== 2025 K-1 ********.pdf page 2", "== 2025 K-1 ********.pdf page 1"]
+    for bad in ("0", "2-1", "1-", "1,", "1,x"):
+        with pytest.raises(SystemExit):
+            cli.main(["words", str(face_pdf), "--page", bad])
 
 
 def test_a_name_that_is_not_a_path_is_looked_up_in_the_workspace(workspace_home: Path, capsys):
