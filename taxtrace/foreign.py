@@ -444,15 +444,22 @@ def _deposit_interest(found: Foreign, n: int, account: Account, statements: list
     taken, explained = Decimal(0), set()
     for cert, d in _certified(certificates, account.account, year):
         ended = statement_day(cert["year_ended"])
+        if Decimal(d.get("second_tax") or 0) > 0:
+            found.ask(f"account {n}: the interest certificate for the year ended {ended} shows overhead tax on it, "
+                      "apart from the total deducted: tax the bank charged but didn't take from the deposit. It's a "
+                      "tax for Form 1116 in the year it's taken (a TDS debit on a statement, or at maturity), not "
+                      "before; Form 26AS shows whether India credited it", d["page"], d["quote"])
+        tax = Decimal(d["tax"])
+        if not tax:
+            continue
         on_day = [v for v in values if v[0] == ended]
         prior = [v for v in values if v[0] < ended]
-        tax = Decimal(d["tax"])
         # the tax is taken from the value on the year's last day: it falls by the tax less the interest added since
         # the statement before, at most a quarter's (a deposit compounds quarterly)
         if on_day and prior:
-            _, before, s = prior[-1]
-            fall, rate = before - on_day[0][1], Decimal(str((s.get("term") or {}).get("rate") or 0))
-        if not (on_day and prior and fall <= tax <= fall + before * rate / 400):
+            _, worth, s = prior[-1]
+            fall, rate = worth - on_day[0][1], Decimal(str((s.get("term") or {}).get("rate") or 0))
+        if not (on_day and prior and fall <= tax <= fall + worth * rate / 400):
             found.ask(f"account {n}: the interest certificate's tax for the year ended {ended} isn't what the term "
                       "deposit's value fell by that day: was some taken earlier in the year (at a renewal, or a "
                       "quarter's end)? Form 26AS gives each deduction's day", d["page"], d["quote"])
@@ -479,9 +486,11 @@ def _deposit_interest(found: Foreign, n: int, account: Account, statements: list
 
 
 def _certified(certificates: list[dict], account: str, year: int) -> list[tuple[dict, dict]]:
-    """The interest certificates' rows for `account` with tax kept, for financial years that ended in `year`."""
+    """The interest certificates' rows for `account` with tax deducted or overhead, for financial years that ended in
+    `year`."""
     return [(c, d) for c in certificates if c.get("year_ended") and statement_day(c["year_ended"]).year == year
-            for d in c["deposits"] if d["account"] == account and Decimal(d["tax"]) > 0]
+            for d in c["deposits"]
+            if d["account"] == account and (Decimal(d["tax"]) > 0 or Decimal(d.get("second_tax") or 0) > 0)]
 
 
 def _reporting(found: Foreign, confirmed: dict) -> None:

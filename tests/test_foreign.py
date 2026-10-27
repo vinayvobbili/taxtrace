@@ -229,13 +229,15 @@ def test_the_interest_certificates_tax_is_the_fall_on_march_31_and_interest_too(
     (tds,) = found.taxes
     assert (tds.kept.what, tds.kept.amount, tds.kept.rate.day, tds.category) == (
         "TDS on interest", Decimal("1100.00"), "2026-03-31", "passive")
-    assert not [q for q in found.questions if "fell" in q.text or "certificate" in q.text]
+    # the other deposit's overhead, charged and not taken, is asked about and isn't a tax yet
+    assert [q.text[:90] for q in found.questions if "fell" in q.text or "certificate" in q.text] == [
+        "account 2: the interest certificate for the year ended 2026-03-31 shows overhead tax on it"]
 
     # more tax than a fall of 453.70 and a quarter's interest can explain: some was taken on another day
     certificates[0]["deposits"][0]["tax"] = "5000.00"
     found = foreign.build(2026, itrs=[], rates=rates, statements=statements, certificates=certificates,
                           today=date(2026, 10, 25))
     assert not found.taxes
-    asked = [q.text for q in found.questions if "fell" in q.text or "certificate" in q.text]
+    asked = [q.text for q in found.questions if "fell" in q.text or "tax for the year" in q.text]
     assert len(asked) == 1 and asked[0].startswith("account 1: the interest certificate's tax for the year ended "
                                                    "2026-03-31 isn't what the term deposit's value fell by")

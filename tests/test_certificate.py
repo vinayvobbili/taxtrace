@@ -17,7 +17,7 @@ CERTIFICATE = [
               "name of"),
     (28, 110, "Ms. Lalitha Vemulapati (CUSTOMER NO :CIF00004417) for the financial year ended 31st March 2026."),
     (23, 141, "ACCOUNT"), (87, 141, "BR."), (121, 141, "A/C"), (154, 141, "BALANCE AS ON"), (248, 141, "INTEREST"),
-    (330, 141, "INTEREST"), (410, 141, "TOTAL TAX"), (483, 141, "ESTIMATED TAX"), (557, 141, "FORM-"),
+    (330, 141, "INTEREST"), (410, 141, "TOTAL TAX"), (483, 141, "OVERHEAD TAX"), (557, 141, "FORM-"),
     (25, 151, "NUMBER"), (81, 151, "CODE"), (116, 151, "TYPE"), (159, 151, "31.MAR.2026"), (259, 151, "PAID"),
     (331, 151, "ACCRUAL"), (410, 151, "DEDUCTED"), (492, 151, "DEDUCTED"), (559, 151, "15G/H"),
     (18, 181, "40912343301"), (81, 181, "04417"), (122, 181, "TD"), (165, 181, "157546.30"), (252, 181, "0.00"),
@@ -41,7 +41,7 @@ def read(path: Path) -> certificate.Certificate:
 
 def test_each_accounts_interest_and_tax_and_the_rows_add_up(tmp_path: Path):
     found = read(draw(tmp_path / "certificate.pdf", [CERTIFICATE]))
-    assert (found.year_ended, found.second_tax_label) == ("31-03-2026", "ESTIMATED TAX DEDUCTED")
+    assert (found.year_ended, found.second_tax_label) == ("31-03-2026", "OVERHEAD TAX DEDUCTED")
     assert [(d.account, d.type, str(d.balance), str(d.paid), str(d.accrued), str(d.tax), str(d.second_tax))
             for d in found.deposits] == [
         ("3301", "TD", "157546.30", "0.00", "7546.30", "1100.00", "0.00"),
@@ -63,7 +63,7 @@ def test_cli_saves_the_certificate_and_prints_it_masked(tmp_path: Path, workspac
         assert secret not in out
     assert "interest certificate for the financial year ended 31-03-2026; 3 accounts; 1 of 1 checks pass" in out
     assert "account ending #### (**): tax deducted" in out
-    assert "account ending #### (**): no tax deducted, some under ESTIMATED TAX DEDUCTED" in out
+    assert "account ending #### (**): no tax deducted, some under OVERHEAD TAX DEDUCTED" in out
     saved = workspace_home / "forms" / "certificate-3301-20260331.json"
     found = json.loads(saved.read_text())
     assert [d["tax"] for d in found["deposits"]] == ["1100.00", "0.00", "0.00"] and "Lalitha" not in saved.read_text()

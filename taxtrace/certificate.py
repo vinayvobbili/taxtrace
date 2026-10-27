@@ -4,7 +4,8 @@ A bank prints one a year, "for the financial year ended 31st March 2026": a row 
 branch code and type, the balance on March 31, the interest paid and the interest accrued in the year, then the
 "Total Tax Deducted" (the TDS, with cess and surcharge) and a second tax column, then a TOTAL row. It is what gives
 a term deposit's TDS: a deposit that adds its interest to itself pays none out, so its statements show no TDS row,
-only its value falling when the tax is taken from the interest at the year's end.
+only its value falling when the tax is taken from the interest at the year's end. The second column ("Overhead Tax
+Deducted") is apart from the total: tax the bank charged but didn't take from the deposit, recovered later.
 
 Checks: the rows' interest paid, interest accrued and both tax columns add up to the TOTAL row. Nothing that names
 the holder is kept, and of an account number only its last four digits.
@@ -34,7 +35,7 @@ class Deposit:
     paid: Decimal  # interest paid in the year
     accrued: Decimal  # interest accrued in the year, not paid
     tax: Decimal  # the total tax deducted: the TDS, with cess and surcharge
-    second_tax: Decimal  # the column after it, headed `Certificate.second_tax_label`
+    second_tax: Decimal  # the column after it, headed `Certificate.second_tax_label`: the overhead, not yet taken
     page: int
     quote: str
 
