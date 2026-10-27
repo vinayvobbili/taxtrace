@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 from conftest import make_pdf, printed
+from test_certificate import CERTIFICATE
 from test_itr import RETURN, SECRETS
 from test_k1 import draw
 from test_statement import ALL_ACCOUNTS, MONTHLY, PAGE, SUMMARY, statement_page
@@ -187,9 +188,9 @@ def test_each_account_of_a_statement_of_every_account_has_its_balance(tmp_path: 
                found.questions)
 
 
-def test_a_term_deposits_interest_is_what_its_value_grew_by_and_a_fall_is_asked_about(tmp_path: Path,
-                                                                                    workspace_home: Path, monkeypatch):
-    monkeypatch.setattr(fx, "_get", fake_get([]))
+def three_months(tmp_path: Path, home: Path) -> tuple[list[dict], fx.Rates]:
+    """Statements of every account for December, February and March: the 1,50,000 deposit worth 1,55,000, then
+    1,58,000, then 1,57,546.30 after March 31's TDS."""
 
     def month(as_on: str, start: str, accrued: str) -> list:
         swap = {"As on 31-03-26": f"As on {as_on}", "7546.30": accrued}
@@ -199,11 +200,42 @@ def test_a_term_deposits_interest_is_what_its_value_grew_by_and_a_fall_is_asked_
     for name, pages in [("december", month("31-12-25", "01-12-25", "5000.00")),
                         ("february", month("28-02-26", "01-02-26", "8000.00")), ("march", ALL_ACCOUNTS)]:
         assert cli.main(["bank", str(draw(tmp_path / f"{name}.pdf", pages))]) == 0
-    statements = [s for f in sorted((workspace_home / "forms").glob("bank-*.json")) for s in json.loads(f.read_text())]
-    csv = FRED_CSV + "2026-10-23,88.1000\n"
-    rates = fx.Rates("INR", tmp_path / "fx", get=lambda url: csv if "fred" in url else fake_get([])(url))
+    statements = [s for f in sorted((home / "forms").glob("bank-*.json")) for s in json.loads(f.read_text())]
+    csv = FRED_CSV + "2026-03-31,85.0000\n2026-10-23,88.1000\n"
+    return statements, fx.Rates("INR", tmp_path / "fx", get=lambda url: csv if "fred" in url else fake_get([])(url))
+
+
+def test_a_term_deposits_interest_is_what_its_value_grew_by_and_a_fall_is_asked_about(tmp_path: Path,
+                                                                                    workspace_home: Path, monkeypatch):
+    monkeypatch.setattr(fx, "_get", fake_get([]))
+    statements, rates = three_months(tmp_path, workspace_home)
     found = foreign.build(2026, itrs=[], rates=rates, statements=statements, today=date(2026, 10, 25))
     (deposit,) = [a for a in found.accounts if a.account == "3301"]
     assert deposit.interest.amount == Decimal("2546.30")  # 1,57,546.30 on March 31 less 1,55,000 on December 31
     assert any(q.text.startswith("account 1: the term deposit's value fell on 2026-03-31: was TDS taken") for q in
                found.questions)
+
+
+def test_the_interest_certificates_tax_is_the_fall_on_march_31_and_interest_too(tmp_path: Path,
+                                                                                 workspace_home: Path, monkeypatch):
+    monkeypatch.setattr(fx, "_get", fake_get([]))
+    statements, rates = three_months(tmp_path, workspace_home)
+    assert cli.main(["bank", str(draw(tmp_path / "certificate.pdf", [CERTIFICATE]))]) == 0
+    certificates = [json.loads((workspace_home / "forms" / "certificate-3301-20260331.json").read_text())]
+    found = foreign.build(2026, itrs=[], rates=rates, statements=statements, certificates=certificates,
+                          today=date(2026, 10, 25))
+    (deposit,) = [a for a in found.accounts if a.account == "3301"]
+    assert deposit.interest.amount == Decimal("3646.30")  # what the value grew by, and the 1,100 taken from it
+    (tds,) = found.taxes
+    assert (tds.kept.what, tds.kept.amount, tds.kept.rate.day, tds.category) == (
+        "TDS on interest", Decimal("1100.00"), "2026-03-31", "passive")
+    assert not [q for q in found.questions if "fell" in q.text or "certificate" in q.text]
+
+    # more tax than a fall of 453.70 and a quarter's interest can explain: some was taken on another day
+    certificates[0]["deposits"][0]["tax"] = "5000.00"
+    found = foreign.build(2026, itrs=[], rates=rates, statements=statements, certificates=certificates,
+                          today=date(2026, 10, 25))
+    assert not found.taxes
+    asked = [q.text for q in found.questions if "fell" in q.text or "certificate" in q.text]
+    assert len(asked) == 1 and asked[0].startswith("account 1: the interest certificate's tax for the year ended "
+                                                   "2026-03-31 isn't what the term deposit's value fell by")

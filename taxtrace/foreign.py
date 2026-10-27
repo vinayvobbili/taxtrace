@@ -186,10 +186,12 @@ def _held_over_a_year(acquired: date, sold: date) -> bool:
 
 
 def build(year: int, *, itrs: list[dict], rates: Rates, confirmed: dict | None = None,
-          statements: list[dict] | None = None, today: date | None = None) -> Foreign:
+          statements: list[dict] | None = None, certificates: list[dict] | None = None,
+          today: date | None = None) -> Foreign:
     """The year's foreign sales, taxes and accounts from India's returns (`taxtrace itr`) and the banks' statements
-    (`taxtrace bank`), converted with `rates`."""
+    and interest certificates (`taxtrace bank`), converted with `rates`."""
     confirmed, statements, today = confirmed or {}, statements or [], today or date.today()
+    certificates = certificates or []
     found = Foreign(year)
     for ret in itrs:
         mine = [(n, row) for n, row in enumerate(ret.get("sales", []), 1) if _day(row["sold"]).year == year]
@@ -205,7 +207,8 @@ def build(year: int, *, itrs: list[dict], rates: Rates, confirmed: dict | None =
     for s in statements:
         by_account.setdefault(s.get("account") or s["file"], []).append(s)
     for n, (_, mine) in enumerate(sorted(by_account.items()), 1):
-        _account(found, n, mine, rates, today, confirmed.get(f"account_{mine[0].get('account', '')}", ""))
+        _account(found, n, mine, certificates, rates, today,
+                 confirmed.get(f"account_{mine[0].get('account', '')}", ""))
     if found.accounts:
         _reporting(found, confirmed)
     return found
@@ -335,7 +338,8 @@ def _covered(statements: list[dict], year: int) -> tuple[list[tuple[date, date]]
     return covered, missing
 
 
-def _account(found: Foreign, n: int, statements: list[dict], rates: Rates, today: date, holder: str) -> None:
+def _account(found: Foreign, n: int, statements: list[dict], certificates: list[dict], rates: Rates, today: date,
+             holder: str) -> None:
     year = found.year
     first = statements[0]
     account = Account("India", first.get("account", ""), first.get("currency", ""),
@@ -387,7 +391,8 @@ def _account(found: Foreign, n: int, statements: list[dict], rates: Rates, today
 
     interest = [(on, r) for on, r, _ in rows if r["kind"] == "interest" and on.year == year]
     if account.kind == "term deposit":
-        _deposit_interest(found, n, account, statements, lambda amount, r: convert("interest", amount, yearly, r))
+        _deposit_interest(found, n, account, statements, certificates, rates,
+                          lambda amount, r: convert("interest", amount, yearly, r))
     elif interest:
         total = sum((Decimal(r["deposit"]) for _, r in interest), Decimal(0))
         account.interest = convert("interest", total, yearly, interest[0][1])
@@ -412,12 +417,14 @@ def _account(found: Foreign, n: int, statements: list[dict], rates: Rates, today
             account.december_31 = convert("balance on December 31", balance, december, r)
 
 
-def _deposit_interest(found: Foreign, n: int, account: Account, statements: list[dict], convert) -> None:
+def _deposit_interest(found: Foreign, n: int, account: Account, statements: list[dict], certificates: list[dict],
+                      rates: Rates, convert) -> None:
     """A term deposit's interest in the year: what its value (the principal and the interest accrued on it) grew by,
     from the last statement before the year (or its principal, opened in the year) to the last in it. Interest added
     to a deposit is the year's income though none is paid out, and a renewal carries the value into the new
-    principal. A value that falls, as when TDS is taken from the interest at India's financial year end, is asked
-    about: what was taken is interest too, and a tax for Form 1116."""
+    principal. TDS is taken from the interest at India's financial year end: the bank's interest certificate gives
+    it, a tax for Form 1116 at that day's rate and interest the value never showed. A value that falls without a
+    certificate to say why is asked about."""
     year = found.year
     values = sorted((statement_day(s["end"]), Decimal(s["closing"]), s) for s in statements
                     if s.get("closing") is not None and s.get("end"))
@@ -434,14 +441,47 @@ def _deposit_interest(found: Foreign, n: int, account: Account, statements: list
         found.ask(f"account {n}: a term deposit without a statement from before {year}: its value on December 31, "
                   f"{year - 1} (the {year - 1} December statement) gives the interest it earned in {year}")
         return
+    taken, explained = Decimal(0), set()
+    for cert, d in _certified(certificates, account.account, year):
+        ended = statement_day(cert["year_ended"])
+        on_day = [v for v in values if v[0] == ended]
+        prior = [v for v in values if v[0] < ended]
+        tax = Decimal(d["tax"])
+        # the tax is taken from the value on the year's last day: it falls by the tax less the interest added since
+        # the statement before, at most a quarter's (a deposit compounds quarterly)
+        if on_day and prior:
+            _, before, s = prior[-1]
+            fall, rate = before - on_day[0][1], Decimal(str((s.get("term") or {}).get("rate") or 0))
+        if not (on_day and prior and fall <= tax <= fall + before * rate / 400):
+            found.ask(f"account {n}: the interest certificate's tax for the year ended {ended} isn't what the term "
+                      "deposit's value fell by that day: was some taken earlier in the year (at a renewal, or a "
+                      "quarter's end)? Form 26AS gives each deduction's day", d["page"], d["quote"])
+            explained.add(ended)  # asked about here, not again as a fall
+            continue
+        try:
+            daily = rates.daily(ended)
+        except NoRate as err:
+            found.ask(f"account {n}'s TDS: {err}")
+            continue
+        found.taxes.append(ForeignTax("India", "passive", Converted("TDS on interest", tax, daily.dollars(tax), daily,
+                                                                    d["page"], d["quote"]), file=cert["file"]))
+        taken += tax
+        explained.add(ended)
     for (on, value, _), (_, prior, _) in zip(values[1:], values, strict=False):
-        if on.year == year and value < prior:
+        if on.year == year and value < prior and on not in explained:
             found.ask(f"account {n}: the term deposit's value fell on {on}: was TDS taken from its interest? The "
-                      "bank's interest certificate (or Form 26AS) gives it: it's interest earned, and India's tax "
-                      "on it")
+                      "bank's interest certificate (`taxtrace bank` reads it) or Form 26AS gives it: it's interest "
+                      "earned, and India's tax on it")
     last = inside[-1][2]
-    account.interest = convert(inside[-1][1] - start, {"page": last.get("balance_page") or 1,
-                                                      "quote": last.get("balance_quote", "")})
+    # the tax taken from the deposit was interest it earned, though its value never showed it
+    account.interest = convert(inside[-1][1] - start + taken, {"page": last.get("balance_page") or 1,
+                                                              "quote": last.get("balance_quote", "")})
+
+
+def _certified(certificates: list[dict], account: str, year: int) -> list[tuple[dict, dict]]:
+    """The interest certificates' rows for `account` with tax kept, for financial years that ended in `year`."""
+    return [(c, d) for c in certificates if c.get("year_ended") and statement_day(c["year_ended"]).year == year
+            for d in c["deposits"] if d["account"] == account and Decimal(d["tax"]) > 0]
 
 
 def _reporting(found: Foreign, confirmed: dict) -> None:

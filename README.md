@@ -352,6 +352,13 @@ carries it into the new principal. A value that falls (TDS taken from the intere
 about. The checks: each account's balances follow from its opening balance, its closing balance is its available
 balance, and the accounts add up to the balance summary.
 
+The bank's interest certificate on its deposits ("for the financial year ended 31st March 2026") goes through `bank`
+too: per account, the balance on March 31, the interest paid and accrued, and the total tax deducted, checked against
+its TOTAL row. It gives what a term deposit's statements don't: the TDS taken from its interest on March 31. The
+foreign side takes it as tax withheld that day (Form 1116) and as interest the value never showed, but only when it
+fits the fall in the deposit's value that day (at most the fall plus a quarter's interest). Tax taken earlier in
+India's year belongs to an earlier US year, so a certificate that doesn't fit is asked about, never counted whole.
+
 The checks: each balance is the one before plus the deposit or less the withdrawal, and the rows add up to the
 statement's grand totals (or, on a monthly statement, its opening and closing balances are the summary's, and its
 net interest is the interest less the TDS). A statement runs on India's year (April to March), so a calendar year usually needs two.

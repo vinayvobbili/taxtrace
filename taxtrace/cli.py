@@ -610,8 +610,12 @@ def cmd_bank(args: argparse.Namespace) -> int:
 
     The values go only to that folder, as bank-<last four digits>-<period start>.json. What's printed is masked: the
     period, how many rows of each kind, the checks that failed and the questions.
+
+    A bank's interest certificate on its deposits goes there too, as certificate-<first account's last four
+    digits>-<the financial year's end>.json: each account's interest and the tax kept on it, which a term deposit's
+    statements don't show.
     """
-    from . import statement
+    from . import certificate, statement
 
     home = workspace.outside_git(workspace.home())
     terms = workspace.redact_terms()
@@ -628,6 +632,29 @@ def cmd_bank(args: argparse.Namespace) -> int:
             pages, password = _unlocked(doc)
         except text.UnsupportedDocument as err:
             print(f"{name}: skipped, {err}")
+            continue
+        if any(certificate.is_certificate(page) for page in pages):
+            found = certificate.read(doc.name, pages,
+                                     {n: text.words(doc, n, password) for n in range(1, len(pages) + 1)})
+            failed += bool(found.failed)
+            print(f"{name}: interest certificate for the financial year ended {found.year_ended or '?'}; "
+                  f"{len(found.deposits)} accounts; {len(found.checks) - len(found.failed)} of {len(found.checks)} "
+                  "checks pass")
+            for d in found.deposits:
+                print(f"  account ending {masked(d.account)} ({masked(d.type) or '?'}): "
+                      + ("tax deducted" if d.tax else "no tax deducted")
+                      + (f", some under {masked(found.second_tax_label) or 'the second tax column'}"
+                         if d.second_tax else ""))
+            for c in found.failed:
+                print(f"  failed: {c.what}" + (f" ({masked(c.quote)})" if c.quote else ""))
+            for q in found.questions:
+                print(f"  question: {q.text}")
+            out.mkdir(parents=True, exist_ok=True)
+            ended = "".join(reversed(found.year_ended.split("-"))) if found.year_ended else doc.stem
+            first = found.deposits[0].account if found.deposits else "x"
+            (out / f"certificate-{first}-{ended}.json").write_text(
+                json.dumps(found.to_json(), indent=2, default=str) + "\n")
+            written += 1
             continue
         if any(statement.is_consolidated(page) for page in pages):  # every account the customer holds there
             statements = statement.read_consolidated(
@@ -771,7 +798,7 @@ def cmd_foreign(args: argparse.Namespace) -> int:
         out.mkdir(parents=True, exist_ok=True)
         kept.write_text(json.dumps(confirmed, indent=2) + "\n")
     found = foreign.build(year, itrs=itrs, rates=fx.Rates("INR", home / workspace.FX), confirmed=confirmed,
-                          statements=statements)
+                          statements=statements, certificates=saved("certificate-*.json"))
     print(f"{year} foreign side: {len(found.sales)} sale(s), {len(found.taxes)} foreign tax(es), "
           f"{len(found.accounts)} account(s)"
           + ("" if itrs else "; no Indian return read yet (`taxtrace itr`)")
