@@ -87,11 +87,12 @@ def test_cli_puts_the_sale_and_indias_tax_in_dollars(tmp_path: Path, workspace_h
     assert (sale["basis"], sale["gain"]) == ("25615.85", "29749.45")
     assert saved["taxes"][0]["kept"]["dollars"] == "5394.75"  # 4,72,580 at the sale day's 87.6
     asked = [q["text"] for q in saved["questions"]]
-    assert len(asked) == 3 and "the date each improvement" in asked[0] and "who owned the property" in asked[1]
+    assert len(asked) == 4 and "the date each improvement" in asked[0] and "who owned the property" in asked[1]
     assert "--confirm method=paid|accrued" in asked[2]
+    assert "on the 2024 return's Schedule B (Form 1116)" in asked[3]  # no earlier return read
 
     assert cli.main(["foreign", "--year", "2025", "--confirm", "owner=spouse", "--confirm", "method=paid",
-                     "--confirm", "improvement_dates=2014-04-01"]) == 0
+                     "--confirm", "improvement_dates=2014-04-01", "--confirm", "carryover=none"]) == 0
     saved = json.loads((workspace_home / "foreign" / "2025.json").read_text())
     assert saved["questions"] == [] and saved["sales"][0]["improvements"][0]["dollars"] == "4000.00"
     assert cli.main(["foreign", "--year", "2025"]) == 0  # kept for later runs
@@ -319,3 +320,53 @@ def test_taxes_accrued_claim_indias_year_that_ends_in_the_us_year(tmp_path: Path
     waiting = build({"method": "accrued"}, [earlier])
     assert not waiting.taxes and waiting.tds
     assert any("its return for assessment year 2026-27 kept" in q.text for q in waiting.questions)
+
+
+LAST_YEAR = {"year": 2025, "file": "2025 Return - Client Copy.pdf", "foreign_tax": [
+    {"category": "passive", "amt": False, "lines": {"1": {"2024": "1250"}, "8": {"2024": "850", "2025": "2875"}}},
+    {"category": "passive", "amt": True, "lines": {"8": {"2024": "0", "2025": "12"}}}]}
+
+
+def test_last_years_schedule_b_is_this_years_carryover(tmp_path: Path):
+    rates = fx.Rates("INR", tmp_path / "fx", get=fake_get([]))
+
+    def build(carryforwards: list[dict] | None) -> foreign.Foreign:
+        return foreign.build(2026, itrs=[], rates=rates, carryforwards=carryforwards, today=date(2026, 10, 27))
+
+    signed = {"year": 2025, "file": "2025 Signed.pdf", "foreign_tax": []}  # a copy without Schedule B adds nothing
+    found = build([LAST_YEAR, signed, {"year": 2020, "file": "2020.pdf", "foreign_tax": LAST_YEAR["foreign_tax"]}])
+    regular, amt = found.carryovers
+    assert (regular.category, regular.amt, regular.years, regular.total) == (
+        "passive", False, {2024: Decimal(850), 2025: Decimal(2875)}, Decimal(3725))
+    assert (amt.amt, amt.years) == (True, {2025: Decimal(12)})  # a year with nothing left isn't carried
+    assert not found.questions
+    saved = json.loads(json.dumps(found.to_json(), default=str))
+    assert saved["carryovers"][0]["years"] == {"2024": "850", "2025": "2875"}
+
+    assert any("2025 return's Schedule B (Form 1116): `taxtrace prior` reads it" in q.text
+               for q in build([]).questions)  # last year's return not read
+    assert build(None).questions == []  # nothing asked of a caller that doesn't track carryovers
+    old = {**LAST_YEAR, "foreign_tax": [{"category": "passive", "amt": False, "lines": {"8": {"2016": "40"}}}]}
+    assert [q.text for q in build([old]).questions] == [
+        "The passive category's foreign tax from 2016 carried this far is in its last year: what 2026 can't credit of "
+        "it expires"]
+    other = {**LAST_YEAR, "file": "2025 Amended.pdf",
+             "foreign_tax": [{"category": "passive", "amt": False, "lines": {"8": {"2025": "2785"}}}]}
+    assert any("Two 2025 returns disagree on the passive category's foreign tax carryover" in q.text
+               for q in build([LAST_YEAR, other]).questions)
+
+
+def test_cli_carries_the_schedule_b_prior_read(tmp_path: Path, workspace_home: Path, capsys):
+    from test_f1116b import AMT_1, AMT_2, REGULAR_1, REGULAR_2
+
+    path = draw(tmp_path / "2025 Return.pdf", [REGULAR_1, REGULAR_2, AMT_2, AMT_1])
+    assert cli.main(["prior", str(path)]) == 0
+    printed(capsys)
+    assert cli.main(["foreign", "--year", "2026"]) == 0
+    out = printed(capsys)
+    assert ("Form 1116 line 10: passive category's carryover from 2017, 2024, 2025, from 2025 Return.pdf's "
+            "Schedule B") in out
+    assert "Form 1116 line 10 (AMT): passive category's carryover from 2025" in out
+    assert not any(a in out for a in ("2,875", "2875", "850"))
+    saved = json.loads((workspace_home / "foreign" / "2026.json").read_text())
+    assert saved["carryovers"][0]["years"] == {"2017": "90", "2024": "850", "2025": "2875"}

@@ -48,6 +48,7 @@ CONFIRMS = {
     # Form 1116's box: taxes paid (each in the year withheld) or accrued (India's year's tax in the US year it ends);
     # accrued, once chosen, binds every later year
     "method": ("paid", "accrued"),
+    "carryover": ("none",),  # no earlier return carries foreign tax into this year: last year's isn't needed
 }
 # whose an account is, confirmed as account_<its last four digits>: "joint" is the two spouses
 HOLDERS = ("self", "spouse", "joint")
@@ -126,6 +127,21 @@ class Refund:
 
 
 @dataclass
+class Carryover:
+    """Foreign tax the limit kept from being credited in earlier years, in dollars: last year's Schedule B (Form
+    1116) line 8, this year's line 1, and Form 1116's line 10 for its category."""
+
+    category: str
+    amt: bool  # the alternative minimum tax's own carryover
+    years: dict[int, Decimal]  # the year each tax arose: what's left of it
+    file: str  # the return it was read from
+
+    @property
+    def total(self) -> Decimal:
+        return sum(self.years.values(), Decimal(0))
+
+
+@dataclass
 class Foreign:
     year: int
     sales: list[Sale] = field(default_factory=list)
@@ -142,6 +158,7 @@ class Foreign:
     # with taxes accrued, the TDS withheld in the year: what India's return for its year credits, not Form 1116's
     tds: list[ForeignTax] = field(default_factory=list)
     method: str = "paid"  # Form 1116's box: taxes paid or accrued
+    carryovers: list[Carryover] = field(default_factory=list)  # from last year's return, by category
     questions: list[Question] = field(default_factory=list)
 
     def ask(self, text: str, page: int = 0, quote: str = "") -> None:
@@ -217,9 +234,11 @@ def _held_over_a_year(acquired: date, sold: date) -> bool:
 
 def build(year: int, *, itrs: list[dict], rates: Rates, confirmed: dict | None = None,
           statements: list[dict] | None = None, certificates: list[dict] | None = None,
-          quarters: list[dict] | None = None, today: date | None = None) -> Foreign:
+          quarters: list[dict] | None = None, carryforwards: list[dict] | None = None,
+          today: date | None = None) -> Foreign:
     """The year's foreign sales, taxes and accounts from India's returns (`taxtrace itr`) and the banks' statements,
-    interest certificates and quarterly TDS certificates (`taxtrace bank`), converted with `rates`."""
+    interest certificates and quarterly TDS certificates (`taxtrace bank`), converted with `rates`; and the foreign
+    tax carried in from last year's return (`taxtrace prior`'s `carryforwards`)."""
     confirmed, statements, today = confirmed or {}, statements or [], today or date.today()
     certificates = certificates or []
     found = Foreign(year, method=confirmed.get("method", "paid"))
@@ -251,7 +270,35 @@ def build(year: int, *, itrs: list[dict], rates: Rates, confirmed: dict | None =
                   "Until then, each tax counts in the year it was withheld (paid)")
     if found.accounts:
         _reporting(found, confirmed)
+    if carryforwards is not None and confirmed.get("carryover") != "none":
+        _carryovers(found, carryforwards)
     return found
+
+
+def _carryovers(found: Foreign, carryforwards: list[dict]) -> None:
+    """Last year's Schedule B (Form 1116) line 8 by category: what this year's Form 1116 can still credit. A tax
+    carries ten years after its own, so the one from ten years back is in its last year."""
+    last = [r for r in carryforwards if r.get("year") == found.year - 1]
+    if not last:
+        found.ask(f"The foreign tax carried into {found.year} is on the {found.year - 1} return's Schedule B (Form "
+                  f"1116): `taxtrace prior` reads it (or, with none to carry, `--confirm carryover=none`)")
+        return
+    by_kind: dict[tuple[str, bool], Carryover] = {}
+    for r in last:
+        for s in r.get("foreign_tax", []):
+            years = {int(y): Decimal(v) for y, v in s.get("lines", {}).get("8", {}).items() if Decimal(v)}
+            then = Carryover(s["category"], bool(s["amt"]), years, r.get("file", ""))
+            if (seen := by_kind.get((then.category, then.amt))) is not None:
+                if seen.years != then.years:
+                    found.ask(f"Two {found.year - 1} returns disagree on the {then.category or 'unknown'} category's "
+                              f"foreign tax carryover{' (AMT)' if then.amt else ''}: which is the one filed?")
+                continue
+            by_kind[(then.category, then.amt)] = then
+    found.carryovers = [c for c in by_kind.values() if c.years]
+    for c in found.carryovers:
+        if found.year - 10 in c.years:
+            found.ask(f"The {c.category} category's foreign tax from {found.year - 10}{' (AMT)' if c.amt else ''} "
+                      f"carried this far is in its last year: what {found.year} can't credit of it expires")
 
 
 def _accrued(found: Foreign, itrs: list[dict], rates: Rates, today: date) -> None:

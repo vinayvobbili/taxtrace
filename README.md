@@ -426,6 +426,12 @@ year ends in, as its return for that year finally kept it, at the IRS's average 
 then kept apart (`tds` in the output), since that return credits it, and the TDS from April on belongs to next year's
 Form 1116.
 
+Foreign tax the limit kept from being credited carries forward ten years. `foreign` takes it from last year's return
+as `prior` read it: its Schedule B (Form 1116) line 8, per category and for the alternative minimum tax, by the year
+each tax arose, is this year's Form 1116 line 10 (`carryovers` in the output). Without last year's return read, that's
+a question (`--confirm carryover=none` when nothing carries). A tax in its tenth year is flagged: what this year can't
+credit of it expires.
+
 The rates are public and fetched once into `<workspace>/fx`, each kept with its source:
 
 - a day's rate: the Federal Reserve's noon buying rate (FRED, `DEXINUS` for the rupee), or the last business day's

@@ -882,9 +882,12 @@ def cmd_foreign(args: argparse.Namespace) -> int:
     if args.confirm:
         out.mkdir(parents=True, exist_ok=True)
         kept.write_text(json.dumps(confirmed, indent=2) + "\n")
+    carried = home / workspace.CARRYFORWARDS
+    carryforwards = [json.loads(p.read_text()) for p in sorted(carried.glob("*.json"))
+                     if not p.name.startswith("projected-")]
     found = foreign.build(year, itrs=itrs, rates=fx.Rates("INR", home / workspace.FX), confirmed=confirmed,
                           statements=statements, certificates=saved("certificate-*.json"),
-                          quarters=saved("tds-*.json"))
+                          quarters=saved("tds-*.json"), carryforwards=carryforwards)
     print(f"{year} foreign side: {len(found.sales)} sale(s), {len(found.taxes)} foreign tax(es), "
           f"{len(found.accounts)} account(s)"
           + ("" if itrs else "; no Indian return read yet (`taxtrace itr`)")
@@ -906,6 +909,10 @@ def cmd_foreign(args: argparse.Namespace) -> int:
               "covers "
               + (", ".join(c.replace("..", " to ") for c in a.covered) or "none of the year")
               + (f"; {'; '.join(parts)}" if parts else ""))
+    for c in found.carryovers:  # the years it arose in, never the amount
+        source = redact.redact(c.file, terms, bare_years=True).text
+        print(f"  Form 1116 line 10{' (AMT)' if c.amt else ''}: {c.category} category's carryover from "
+              f"{', '.join(map(str, sorted(c.years)))}, from {source}'s Schedule B")
     if found.tds:
         print(f"  TDS withheld in the year: {len(found.tds)} deduction(s), kept apart: with taxes accrued, Form 1116 "
               "takes India's return's tax for its year, which credits them")
@@ -1259,7 +1266,8 @@ def build_parser() -> argparse.ArgumentParser:
                         "filing=joint|single|separate|head, joint_<last four>=yes|no (for the FBAR), "
                         "bank_<statements' file name's first word>=<name>; <mailing address> (for the FBAR), "
                         "tds_<a quarter's last day, YYYYMMDD>=taken|not (TDS beyond the statements', per Form 26AS), "
-                        "method=paid|accrued (Form 1116's box; accrued binds later years)")
+                        "method=paid|accrued (Form 1116's box; accrued binds later years), "
+                        "carryover=none (no earlier return carries foreign tax in)")
     p.set_defaults(func=cmd_foreign)
     p = sub.add_parser("fbar", help="each spouse's FBAR for a year, item by item, from the foreign side",
                        description=cmd_fbar.__doc__)
