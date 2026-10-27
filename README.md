@@ -183,6 +183,10 @@ Nothing is taken on trust:
   carryover, and its heading has to name the next year. Anything under Passive Activity or At Risk Limitations
   is a question, since no copy seen so far had rows there. `--layout` lists each row's label and which amounts it
   has (regular, AMT, taxpayer, spouse), never the amounts.
+- Form 8995 (the simplified QBI deduction) gives each business's qualified business income (line 1, continued
+  on its own page past five businesses) and lines 2 to 17. Its arithmetic is checked line by line, its QBI and
+  REIT/PTP losses carried on (lines 16 and 17) have to be the Carryover Worksheet's and the next year's lines 3
+  and 7.
 - Returns years apart are checked against each other. An asset's depreciation is rolled forward a full year
   at a time, and has to match the later return's prior depreciation. A miss says how far off it is in years
   of depreciation (0.46 years is a first, partial year left out), with no amounts. A year's foreign tax

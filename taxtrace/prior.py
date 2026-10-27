@@ -165,6 +165,7 @@ class Carryforwards:
     rentals: list = field(default_factory=list)  # the filed Schedule E's properties (`schedule_e.Rental`)
     foreign_tax: list = field(default_factory=list)  # Schedule B (Form 1116) by category (`f1116b.Schedule`)
     carryovers: list = field(default_factory=list)  # the Carryover Worksheet's rows (`carryover.Item`)
+    qbi: object | None = None  # the filed Form 8995 (`f8995.Filed`)
 
     def check(self, what: str, ok: bool, page: int) -> None:
         self.checks.append(Check(what, ok, page))
@@ -257,6 +258,10 @@ def read(name: str, pages: list[str], words: dict[int, list[dict]] | None = None
     found.foreign_tax, checks, questions = f1116b.read(found.year, pages, words or {})
     found.checks += checks
     found.questions += questions
+    from . import f8995
+
+    found.qbi, checks = f8995.read(pages)
+    found.checks += checks
     _carryovers(found, pages, words or {})
     if found.year is None and (found.assets or found.unallowed):
         found.ask("Which tax year is this return? Its file name doesn't say.", 1, "")
@@ -286,6 +291,13 @@ def _carryovers(found: Carryforwards, pages: list[str], words: dict[int, list[di
                 found.check(f"the Carryover Worksheet's foreign tax credit ({'AMT' if amt else 'regular tax'}) is "
                             "Schedule B (Form 1116)'s carryover to the following year",
                             abs(carried - shown) <= CENT, n)
+        for label, line in (("qbi loss carryover", 16), ("qualified reit and ptp loss carryover", 17)):
+            row = next((i for i in items if i.label.lower().startswith(label)), None)
+            on_form = found.qbi.line(line) if found.qbi else Decimal(0)
+            if row or on_form:  # the worksheet prints the loss without its sign
+                shown = abs(row.amounts.get("amount", Decimal(0))) if row else Decimal(0)
+                found.check(f"the Carryover Worksheet's {label.replace('qbi', 'QBI').replace('reit', 'REIT')} is "
+                            f"Form 8995's line {line}", abs(shown - abs(on_form)) <= CENT, n)
 
 
 def _against_projection(found: Carryforwards, pages: list[tuple[int, str]]) -> None:
@@ -661,6 +673,11 @@ def link(returns: list[Carryforwards]) -> list[Check]:
     taxed = sorted((r for r in returns if r.year and r.foreign_tax), key=lambda r: r.year)
     for earlier, later in pairwise(taxed):
         checks += f1116b.link(earlier.foreign_tax, earlier.year, later.foreign_tax, later.year)
+    from . import f8995
+
+    filed = sorted((r for r in returns if r.year and r.qbi), key=lambda r: r.year)
+    for earlier, later in pairwise(filed):
+        checks += f8995.link(earlier.qbi, earlier.year, later.qbi, later.year)
     dated = sorted((r for r in returns if r.year and r.assets), key=lambda r: r.year)
     for earlier, later in pairwise(dated):
         by_asset = {(a.in_service(), a.cost): a for a in earlier.assets if a.in_service()}

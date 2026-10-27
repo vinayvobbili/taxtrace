@@ -19,6 +19,7 @@ import re
 from dataclasses import dataclass, field
 from decimal import Decimal
 
+from . import text
 from .prior import CENT, Check, Question, _rows, amount
 
 FIRST = re.compile(r"SCHEDULE B\b.*Foreign Tax Carryover", re.IGNORECASE)
@@ -51,8 +52,15 @@ class Schedule:
 
 def is_page(page: str) -> bool:
     """Whether a page is either page of Schedule B (Form 1116), whose amounts are read by position."""
-    heads = " ".join(" ".join(ln.split()) for ln in page.splitlines()[:6] if ln.strip())
-    return bool(FIRST.search(heads) or SECOND.search(heads))
+    return _which(page) is not None
+
+
+def _which(page: str) -> int | None:
+    """1 or 2 for Schedule B's pages: page 2 names itself in its first lines, page 1 in its very first."""
+    heads = text.headings(page, 3)
+    if SECOND.search(" ".join(heads)):
+        return 2
+    return 1 if heads and FIRST.search(heads[0]) else None
 
 
 def read(year: int | None, pages: list[str], words: dict[int, list[dict]]) -> tuple[
@@ -60,10 +68,8 @@ def read(year: int | None, pages: list[str], words: dict[int, list[dict]]) -> tu
     """Each category's Schedule B in a return for `year`, with the checks of its sums and what couldn't be read."""
     firsts, seconds = [], []
     for n, page in enumerate(pages, 1):
-        if n not in words or not is_page(page):
-            continue
-        heads = " ".join(" ".join(ln.split()) for ln in page.splitlines()[:6] if ln.strip())
-        (firsts if FIRST.search(heads) else seconds).append(n)
+        if n in words and (which := _which(page)):
+            (firsts if which == 1 else seconds).append(n)
     schedules: list[Schedule] = []
     checks: list[Check] = []
     questions: list[Question] = []

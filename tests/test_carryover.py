@@ -4,6 +4,7 @@ from pathlib import Path
 
 from conftest import printed
 from test_f1116b import AMT_1, AMT_2, REGULAR_1, REGULAR_2, read
+from test_f8995 import FORM_8995  # its line 16 is the worksheet's QBI loss carryover
 from test_k1 import draw
 
 from taxtrace import cli
@@ -37,7 +38,7 @@ WORKSHEET = [
 
 
 def test_each_row_and_whose_amount_it_is(tmp_path: Path):
-    found = read(draw(tmp_path / "2025 Return.pdf", [WORKSHEET]))
+    found = read(draw(tmp_path / "2025 Return.pdf", [WORKSHEET, FORM_8995]))
     assert [(i.section, i.label, i.amounts) for i in found.carryovers] == [
         ("Itemized Deductions", "State/local taxes paid in 2025 to 2026 to the Schedule A", {"amount": 1480}),
         ("Losses", "QBI loss carryover", {"amount": 12345}),
@@ -55,14 +56,17 @@ def test_each_row_and_whose_amount_it_is(tmp_path: Path):
 
 
 def test_the_credit_ties_to_schedule_b(tmp_path: Path):
-    found = read(draw(tmp_path / "2025 Return.pdf", [REGULAR_1, REGULAR_2, AMT_2, AMT_1, WORKSHEET]))
+    found = read(draw(tmp_path / "2025 Return.pdf", [REGULAR_1, REGULAR_2, AMT_2, AMT_1, WORKSHEET, FORM_8995]))
     assert found.failed == [], found.failed
-    assert sum(c.what.startswith("the Carryover Worksheet") for c in found.checks) == 3  # the year, regular, AMT
+    # the year, the credit's regular and AMT amounts, the QBI loss
+    assert sum(c.what.startswith("the Carryover Worksheet") for c in found.checks) == 4
     off = [(x, top, "3,851" if phrase == "3,815" else phrase) for x, top, phrase in WORKSHEET]
-    found = read(draw(tmp_path / "2025 Off.pdf", [REGULAR_1, REGULAR_2, AMT_2, AMT_1, off]))
+    found = read(draw(tmp_path / "2025 Off.pdf", [REGULAR_1, REGULAR_2, AMT_2, AMT_1, off, FORM_8995]))
     assert [c.what for c in found.failed] == [
         "the Carryover Worksheet's foreign tax credit (regular tax) is Schedule B (Form 1116)'s carryover to the "
         "following year"]
+    found = read(draw(tmp_path / "2025 No 8995.pdf", [REGULAR_1, REGULAR_2, AMT_2, AMT_1, WORKSHEET]))
+    assert [c.what for c in found.failed] == ["the Carryover Worksheet's QBI loss carryover is Form 8995's line 16"]
 
 
 def test_another_year_and_a_passive_row_are_caught(tmp_path: Path):
@@ -76,7 +80,7 @@ def test_another_year_and_a_passive_row_are_caught(tmp_path: Path):
 
 
 def test_cli_shows_the_labels_never_the_amounts(tmp_path: Path, workspace_home: Path, capsys):
-    path = draw(tmp_path / "2025 Return.pdf", [REGULAR_1, REGULAR_2, AMT_2, AMT_1, WORKSHEET])
+    path = draw(tmp_path / "2025 Return.pdf", [REGULAR_1, REGULAR_2, AMT_2, AMT_1, WORKSHEET, FORM_8995])
     assert cli.main(["prior", str(path), "--layout"]) == 0
     out = printed(capsys)
     assert "Carryover Worksheet p[5]: 6 items" in out

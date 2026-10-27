@@ -13,6 +13,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from . import text
 from .prior import Question, _rows, amount
 
 HEADING = "Carryover Worksheet"
@@ -33,7 +34,7 @@ class Item:
 
 
 def is_page(page: str) -> bool:
-    return any(HEADING in " ".join(ln.split()) for ln in page.splitlines()[:3] if ln.strip())
+    return any(HEADING in ln for ln in text.headings(page, 3))
 
 
 def to_year(page: str) -> int | None:
