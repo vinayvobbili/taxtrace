@@ -890,6 +890,9 @@ def cmd_foreign(args: argparse.Namespace) -> int:
               "covers "
               + (", ".join(c.replace("..", " to ") for c in a.covered) or "none of the year")
               + (f"; {'; '.join(parts)}" if parts else ""))
+    if found.tds:
+        print(f"  TDS withheld in the year: {len(found.tds)} deduction(s), kept apart: with taxes accrued, Form 1116 "
+              "takes India's return's tax for its year, which credits them")
     for c in found.withheld:
         print(f"  Schedule B: {c.what}, at {c.rate.source}")
     for line in found.reconciled:
@@ -1236,7 +1239,8 @@ def build_parser() -> argparse.ArgumentParser:
                         "improvement_dates=YYYY-MM-DD,..., use=investment|personal|rental, "
                         "filing=joint|single|separate|head, joint_<last four>=yes|no (for the FBAR), "
                         "bank_<statements' file name's first word>=<name>; <mailing address> (for the FBAR), "
-                        "tds_<a quarter's last day, YYYYMMDD>=taken|not (TDS beyond the statements', per Form 26AS)")
+                        "tds_<a quarter's last day, YYYYMMDD>=taken|not (TDS beyond the statements', per Form 26AS), "
+                        "method=paid|accrued (Form 1116's box; accrued binds later years)")
     p.set_defaults(func=cmd_foreign)
     p = sub.add_parser("fbar", help="each spouse's FBAR for a year, item by item, from the foreign side",
                        description=cmd_fbar.__doc__)

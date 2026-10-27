@@ -86,15 +86,16 @@ def test_cli_puts_the_sale_and_indias_tax_in_dollars(tmp_path: Path, workspace_h
         "55365.30", "21681.42", "3934.43")
     assert (sale["basis"], sale["gain"]) == ("25615.85", "29749.45")
     assert saved["taxes"][0]["kept"]["dollars"] == "5394.75"  # 4,72,580 at the sale day's 87.6
-    assert [q["text"].split(":")[1].strip()[:20] for q in saved["questions"]] == [
-        "the date each improv", "who owned the proper"]
+    asked = [q["text"] for q in saved["questions"]]
+    assert len(asked) == 3 and "the date each improvement" in asked[0] and "who owned the property" in asked[1]
+    assert "--confirm method=paid|accrued" in asked[2]
 
-    assert cli.main(["foreign", "--year", "2025", "--confirm", "owner=spouse",
+    assert cli.main(["foreign", "--year", "2025", "--confirm", "owner=spouse", "--confirm", "method=paid",
                      "--confirm", "improvement_dates=2014-04-01"]) == 0
     saved = json.loads((workspace_home / "foreign" / "2025.json").read_text())
     assert saved["questions"] == [] and saved["sales"][0]["improvements"][0]["dollars"] == "4000.00"
     assert cli.main(["foreign", "--year", "2025"]) == 0  # kept for later runs
-    assert "confirmed: owner, improvement dates" in capsys.readouterr().out
+    assert "confirmed: owner, method, improvement dates" in capsys.readouterr().out
     # dates not known: the financial year's mean rate stands, and the question is settled
     assert cli.main(["foreign", "--year", "2025", "--confirm", "improvement_dates=average"]) == 0
     saved = json.loads((workspace_home / "foreign" / "2025.json").read_text())
@@ -287,3 +288,32 @@ def test_the_quarters_tds_certificate_counts_what_no_statement_shows_once(tmp_pa
 
     assert any("shows less tax" in q.text for q in build("900.00").questions)
     assert any("its bank isn't confirmed" in q.text for q in build("1100.00", {}).questions)
+
+
+def test_taxes_accrued_claim_indias_year_that_ends_in_the_us_year(tmp_path: Path, workspace_home: Path, monkeypatch):
+    monkeypatch.setattr(fx, "_get", fake_get([]))
+    statements, rates = three_months(tmp_path, workspace_home)
+    assert cli.main(["bank", str(draw(tmp_path / "gramin-certificate.pdf", [CERTIFICATE]))]) == 0
+    certificates = [json.loads((workspace_home / "forms" / "certificate-3301-20260331.json").read_text())]
+    itr = {"file": "itr-2026-27.pdf", "financial_year": ["2025-04-01", "2026-03-31"], "kept": "1850.00",
+           "tax": {"aggregate": {"page": 3, "quote": "Total Taxes Paid"}}, "sales": []}
+    earlier = {**itr, "file": "itr-2025-26.pdf", "financial_year": ["2024-04-01", "2025-03-31"]}
+
+    def build(confirmed: dict, itrs: list[dict]) -> foreign.Foreign:
+        return foreign.build(2026, itrs=itrs, rates=rates, statements=statements, certificates=certificates,
+                             confirmed=confirmed, today=date(2026, 10, 25))
+
+    paid = build({}, [itr])  # unconfirmed: each TDS in the year withheld, and the box asked about
+    assert [t.kept.what for t in paid.taxes] == ["TDS on interest"]
+    assert any("--confirm method=paid|accrued" in q.text for q in paid.questions)
+
+    found = build({"method": "accrued"}, [earlier, itr])
+    (tax,) = found.taxes  # India's year ended March 31, 2026, as its return kept it, at 2026's rate
+    assert (tax.kept.what, tax.kept.amount, tax.file, tax.on) == ("tax kept", Decimal("1850.00"), "itr-2026-27.pdf", "")
+    assert tax.kept.rate.source == "FRED DEXINUS" and found.estimated  # the latest day's, till 2026's average is out
+    assert [(t.kept.amount, t.on) for t in found.tds] == [(Decimal("1100.00"), "2026-03-31")]  # kept apart
+    assert not any("method=" in q.text for q in found.questions)
+
+    waiting = build({"method": "accrued"}, [earlier])
+    assert not waiting.taxes and waiting.tds
+    assert any("its return for assessment year 2026-27 kept" in q.text for q in waiting.questions)

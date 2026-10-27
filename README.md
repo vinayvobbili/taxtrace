@@ -371,11 +371,11 @@ checked against their totals. India's quarters fall inside calendar quarters, so
 quarter's tax with the TDS it found for that bank (the statements' TDS rows and the interest certificate's): a match is
 noted, and tax left over is asked about, never counted on its own: it was taken where no statement shows it. Form
 26AS gives each deduction's day and account. Tax on interest credited in an earlier year (a certificate can list such
-credits) still counts in the year it was taken when Form 1116 claims taxes paid, its usual box. `foreign --confirm tds_<the quarter's last day, YYYYMMDD>=taken` then counts it once, as tax withheld on the
-quarter's last day and as interest the deposit's value never showed, and `=not` leaves it out. Less tax than was
-found is asked about too. The bank is matched
-by the name the certificate prints, from `foreign --confirm bank_<the statements' file name's first word>=<name>;
-<address>`.
+credits) still counts in the year it was taken when Form 1116 claims taxes paid, its usual box. `foreign --confirm
+tds_<the quarter's last day, YYYYMMDD>=taken` then counts it once, as tax withheld on the quarter's last day and as
+interest the deposit's value never showed, and `=not` leaves it out. Less tax than was found is asked about too. The
+bank is matched by the name the certificate prints, from `foreign --confirm bank_<the statements' file name's first
+word>=<name>; <address>`.
 
 `taxtrace fbar --year 2026` turns the foreign side into each spouse's FBAR (FinCEN Form 114), item by item:
 `<workspace>/foreign/fbar-2026.txt` is a checklist to type into the BSA e-filing form. Each account is in Part II
@@ -402,6 +402,14 @@ sale's, the cost at the purchase's, an improvement at the day it was paid. A cur
 leaves a dollar gain far smaller than the gain taxed abroad (or a loss, which on a personal home isn't deductible).
 The tax the other country kept, the taxes paid less the refund, goes to Form 1116 as passive category, at the rate
 of the day it was withheld (a refund is translated at the rate the tax was).
+
+Form 1116 claims taxes either paid or accrued, the box under its Part II, and last year's return shows which:
+`foreign --confirm method=paid|accrued`. Accrued, once chosen, binds every later year. Paid counts each tax in the
+year it was withheld, at that day's rate. Accrued counts India's tax for its year (April to March) in the US year that
+year ends in, as its return for that year finally kept it, at the IRS's average rate for the US year (section 986(a)):
+2026 claims the return for April 2025 to March 2026 (assessment year 2026-27). The TDS withheld during the US year is
+then kept apart (`tds` in the output), since that return credits it, and the TDS from April on belongs to next year's
+Form 1116.
 
 The rates are public and fetched once into `<workspace>/fx`, each kept with its source:
 

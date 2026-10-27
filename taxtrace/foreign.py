@@ -45,6 +45,9 @@ CONFIRMS = {
     # or "average": the dates aren't known, and each financial year's mean rate stands
     "use": USES,  # how the property was used, which matters when the dollar result is a loss
     "filing": FILINGS,  # for Form 8938's thresholds
+    # Form 1116's box: taxes paid (each in the year withheld) or accrued (India's year's tax in the US year it ends);
+    # accrued, once chosen, binds every later year
+    "method": ("paid", "accrued"),
 }
 # whose an account is, confirmed as account_<its last four digits>: "joint" is the two spouses
 HOLDERS = ("self", "spouse", "joint")
@@ -136,6 +139,8 @@ class Foreign:
     # TDS a quarterly certificate shows that no statement does, taken from a term deposit's interest: interest too
     withheld: list[Converted] = field(default_factory=list)
     reconciled: list[str] = field(default_factory=list)  # the quarters whose TDS certificate matches what was found
+    # with taxes accrued, the TDS withheld in the year: what India's return for its year credits, not Form 1116's
+    tds: list[ForeignTax] = field(default_factory=list)
     questions: list[Question] = field(default_factory=list)
 
     def ask(self, text: str, page: int = 0, quote: str = "") -> None:
@@ -217,15 +222,17 @@ def build(year: int, *, itrs: list[dict], rates: Rates, confirmed: dict | None =
     confirmed, statements, today = confirmed or {}, statements or [], today or date.today()
     certificates = certificates or []
     found = Foreign(year)
+    accrued = confirmed.get("method") == "accrued"
     for ret in itrs:
         mine = [(n, row) for n, row in enumerate(ret.get("sales", []), 1) if _day(row["sold"]).year == year]
         for n, row in mine:
             _sale(found, ret, n, row, rates, confirmed)
-        if mine:
+        if mine and not accrued:
             try:
                 _tax(found, ret, rates.daily(min(_day(row["sold"]) for _, row in mine)))
             except NoRate as err:
                 found.ask(f"India's tax: {err}")
+        if mine:
             _refund(found, ret, statements, rates)
     by_account: dict[str, list[dict]] = {}
     for s in statements:
@@ -235,9 +242,41 @@ def build(year: int, *, itrs: list[dict], rates: Rates, confirmed: dict | None =
                  confirmed.get(f"account_{mine[0].get('account', '')}", ""))
     for quarter in quarters or []:
         _quarter(found, quarter, confirmed, rates, today)
+    if accrued:
+        _accrued(found, itrs, rates, today)
+    elif found.taxes and "method" not in confirmed:
+        found.ask("Form 1116 claims taxes paid or accrued (its box under Part II; last year's return shows which, and "
+                  "accrued, once chosen, binds every later year): `taxtrace foreign --confirm method=paid|accrued`. "
+                  "Until then, each tax counts in the year it was withheld (paid)")
     if found.accounts:
         _reporting(found, confirmed)
     return found
+
+
+def _accrued(found: Foreign, itrs: list[dict], rates: Rates, today: date) -> None:
+    """Taxes accrued: Form 1116 claims India's tax for its year (April to March) in the US year that year ends in, as
+    its return for that year finally kept it (taxes paid less the refund), at the IRS's average rate for the US year
+    (section 986(a)). The TDS withheld in the year is what India's returns credit, kept apart: the year's TDS from
+    April on belongs to India's next year, a tax for next year's Form 1116."""
+    found.tds = [t for t in found.taxes if t.on]
+    found.taxes = [t for t in found.taxes if not t.on]
+    year = found.year
+    mine = [r for r in itrs if (r.get("financial_year") or [None, ""])[1][:4] == str(year)]
+    if not mine:
+        found.ask(f"Form 1116 claims taxes accrued: India's tax for its year April {year - 1} to March {year} is what "
+                  f"its return for assessment year {year}-{(year + 1) % 100:02d} kept (taxes paid less the refund). "
+                  "`taxtrace itr` reads that return; Form 26AS shows the TDS it credits")
+        return
+    try:
+        rate = rates.yearly(year)
+    except NoRate as err:
+        if year < today.year:
+            found.ask(f"India's tax accrued: {err}")
+            return
+        rate = rates.daily(today)  # the year's average comes out after it ends
+        found.estimated = True
+    for ret in mine:
+        _tax(found, ret, rate)
 
 
 def _bank(file: str) -> str:
@@ -282,14 +321,17 @@ def _quarter(found: Foreign, quarter: dict, confirmed: dict, rates: Rates, today
     if settled == "not":
         return
     if settled != "taken":
+        accrued = confirmed.get("method") == "accrued"
         earlier = sorted({p["on"][-4:] for p in quarter.get("payments", []) if statement_day(p["on"]) < start})
         found.ask(f"the TDS certificate for {period} shows more tax than the statements and the interest certificate: "
                   + (f"it lists interest credited in {', '.join(earlier)}, but tax counts in the year it was taken "
                      "when Form 1116 claims taxes paid (its usual box; accrued, once chosen, binds later years). "
-                     if earlier else "")
+                     if earlier and not accrued else "")
                   + "Form 26AS gives each deduction's day and account: if it was taken in the quarter from a term "
-                  f"deposit's interest, `taxtrace foreign --confirm tds_{end:%Y%m%d}=taken` counts it (Form 1116 and "
-                  f"Schedule B); `tds_{end:%Y%m%d}=not` leaves it out")
+                  f"deposit's interest, `taxtrace foreign --confirm tds_{end:%Y%m%d}=taken` counts it "
+                  + ("as interest the deposit's value never showed (Schedule B; with taxes accrued, Form 1116 takes "
+                     "India's return's tax instead)" if accrued else "(Form 1116 and Schedule B)")
+                  + f"; `tds_{end:%Y%m%d}=not` leaves it out")
         return
     try:
         daily = rates.daily(end)
@@ -361,7 +403,8 @@ def _sale(found: Foreign, ret: dict, n: int, row: dict, rates: Rates, confirmed:
 
 
 def _tax(found: Foreign, ret: dict, rate: Rate) -> None:
-    """The tax India kept on the whole return, at the rate of the day it was withheld: the buyer's TDS at the sale."""
+    """The tax India kept on the whole return: at the rate of the day it was withheld (the buyer's TDS at the sale)
+    when taxes are paid, at the US year's average when they're accrued."""
     kept = ret.get("kept")
     if kept is None or not Decimal(kept) > 0:
         return
