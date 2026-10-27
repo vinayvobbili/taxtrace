@@ -240,6 +240,16 @@ def words(path: Path, page: int, password: str | None = None) -> list[dict]:
             for w in found]
 
 
+def marks(path: Path, page: int, password: str | None = None) -> list[dict]:
+    """One PDF page's drawn shapes (boxes, lines, curves) with where they sit: a checkbox's tick is often drawn, not
+    printed as a letter, so the words alone can't say which box is checked."""
+    with _opened(path, password) as doc:
+        p = doc.pages[page - 1]
+        shapes = [("box", s) for s in p.rects] + [("line", s) for s in p.lines] + [("curve", s) for s in p.curves]
+        return [{"kind": kind, "x0": round(s["x0"], 1), "x1": round(s["x1"], 1), "top": round(s["top"], 1),
+                 "bottom": round(s["bottom"], 1), "filled": bool(s.get("fill"))} for kind, s in shapes]
+
+
 def headings(page: str, lines: int = 2) -> list[str]:
     """A page's first non-blank lines, which on a tax form name the form, with column gaps closed up."""
     return [" ".join(ln.split()) for ln in page.splitlines() if ln.strip()][:lines]

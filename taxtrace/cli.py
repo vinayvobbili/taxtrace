@@ -137,7 +137,18 @@ def cmd_words(args: argparse.Namespace) -> int:
             if many:
                 print(f"== {name} page {page}")
             _print_words(text.words(doc, page, password), args, terms)
+            if args.marks:
+                _print_marks(text.marks(doc, page, password), args)
     return status
+
+
+def _print_marks(marks: list[dict], args: argparse.Namespace) -> None:
+    """The page's drawn shapes in the region, top to bottom: a small filled box or a short crossing line inside a
+    checkbox is its tick."""
+    for m in sorted((m for m in marks if _within(m["x0"], args.x) and _within(m["top"], args.top)),
+                    key=lambda m: (m["top"], m["x0"])):
+        print(f"{m['top']:7.1f} mark {m['kind']} {m['x0']:.0f}-{m['x1']:.0f} x {m['top']:.0f}-{m['bottom']:.0f}"
+              + (" filled" if m["filled"] else ""))
 
 
 def _print_words(words: list[dict], args: argparse.Namespace, terms: list[str]) -> None:
@@ -1156,6 +1167,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--x", type=_range, metavar="MIN:MAX", help="only words starting in this range of points")
     p.add_argument("--top", type=_range, metavar="MIN:MAX", help="only words this far down the page, in points")
     p.add_argument("--rows", action="store_true", help="one line per row: each word as x:text")
+    p.add_argument("--marks", action="store_true",
+                   help="also the drawn shapes (boxes, lines, curves) in the region: which checkbox is ticked")
     p.set_defaults(func=cmd_words)
     p = sub.add_parser("prior", help="read filed returns' carryforwards: depreciation, unallowed passive losses",
                        description=cmd_prior.__doc__)

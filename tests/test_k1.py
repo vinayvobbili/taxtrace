@@ -394,6 +394,23 @@ def test_words_of_every_page_of_several_files_in_one_run(face_pdf: Path, tmp_pat
             cli.main(["words", str(face_pdf), "--page", bad])
 
 
+def test_words_marks_show_which_checkbox_is_ticked(tmp_path: Path, capsys):
+    from reportlab.lib.pagesizes import letter
+    from reportlab.pdfgen import canvas
+
+    path = tmp_path / "boxes.pdf"
+    c = canvas.Canvas(str(path), pagesize=letter)
+    c.setFont("Helvetica", 7)
+    for top, label in ((100, "(j) Paid"), (112, "(k) Accrued")):
+        c.drawString(80, letter[1] - top - 5.2, label)
+        c.rect(62, letter[1] - top - 8, 8, 8)  # the empty box
+    c.rect(63.5, letter[1] - 100 - 6.5, 5, 5, fill=1)  # Paid's tick
+    c.save()
+    assert cli.main(["words", str(path), "--marks", "--top", "90:130"]) == 0
+    out = [ln.split(maxsplit=1)[1] for ln in capsys.readouterr().out.splitlines() if " mark " in ln]
+    assert out == ["mark box 62-70 x 100-108", "mark box 64-68 x 102-106 filled", "mark box 62-70 x 112-120"]
+
+
 def test_a_name_that_is_not_a_path_is_looked_up_in_the_workspace(workspace_home: Path, capsys):
     draw(workspace_home / "2025" / "k1.pdf", [FACE])
     assert cli.main(["k1", "2025"]) == 0
