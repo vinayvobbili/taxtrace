@@ -205,10 +205,12 @@ def test_store_saves_an_entry_for_the_helper_and_notes_it(fake_gate: Path, monke
                         or subprocess.CompletedProcess(cmd, 0))
     assert not gate.adopted("taxtrace", "bankcert")
     assert cli.main(["keychain", "store", "bankcert"]) == 0
-    (cmd, kw), = ran
+    (stored, kw), (moved, _) = ran
     # `security` asks for the password on the terminal (no -w value, nothing captured): it never passes through here
-    assert cmd == ["security", "add-generic-password", "-U", "-s", "taxtrace", "-a", "bankcert", "-T", str(fake_gate),
-                   "-w"] and not kw
+    assert stored == ["security", "add-generic-password", "-U", "-s", "taxtrace", "-a", "bankcert", "-T", "", "-w"]
+    assert not kw
+    # then the helper saves it as its own: one `security` made would add macOS's prompt to every read
+    assert moved == [str(fake_gate), "--adopt", "taxtrace", "bankcert"]
     assert gate.adopted("taxtrace", "bankcert")  # so its reads go through the helper, one prompt each
     assert "taxtrace/bankcert: stored; its reads ask for Apple Watch or Touch ID" in capsys.readouterr().out
     assert cli.main(["keychain", "store"]) == 2

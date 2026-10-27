@@ -146,16 +146,15 @@ def _list(service: str, account: str) -> None:
 
 
 def store(service: str, account: str) -> bool:
-    """Store (or replace) an entry that trusts only the helper, and note it, so its reads take Apple Watch or Touch
-    ID. `security` asks the person for the password itself, unechoed, on the terminal this runs in: it never passes
-    through here."""
+    """Store (or replace) an entry, then move it over to the helper (`adopt`), so its reads take Apple Watch or Touch
+    ID alone. `security` asks the person for the password itself, unechoed, on the terminal this runs in: it never
+    passes through here. An entry `security` makes is `security`'s even when it lists the helper as trusted, and
+    macOS adds its own prompt to each of the helper's reads: only one the helper saved itself goes without it, so
+    the move costs one classic prompt (password, then Allow), now instead of on every read."""
     if not ready():
         raise GateError("the approval helper isn't built: run taxtrace keychain setup first")
-    run = subprocess.run(["security", "add-generic-password", "-U", "-s", service, "-a", account,
-                          "-T", str(helper_path()), "-w"])
-    if run.returncode == 0:
-        _list(service, account)
-    return run.returncode == 0
+    run = subprocess.run(["security", "add-generic-password", "-U", "-s", service, "-a", account, "-T", "", "-w"])
+    return run.returncode == 0 and adopt(service, account)
 
 
 def store_hint(service: str, account: str) -> str:
