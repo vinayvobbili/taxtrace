@@ -42,6 +42,8 @@ Early. What works today:
   [Forms 1099-DIV and 1099-INT](#forms-1099-div-and-1099-int)).
 - `taxtrace rental`: puts the rental's Schedule E together, line by line (see [Schedule E](#schedule-e)).
 - `taxtrace qbi`: Form 8995, the qualified business income deduction (see [Form 8995](#form-8995)).
+- `taxtrace paystub`: reads a pay stub's income tax withheld, and projects the year's (see
+  [Estimated tax](#estimated-tax)).
 - `taxtrace estimates`: the year's withholding and estimated payments against the safe harbor, quarter by quarter
   (see [Estimated tax](#estimated-tax)).
 - `taxtrace itr`: reads India's income tax return (ITR-2): a property sale, the interest, the tax India kept (see
@@ -420,8 +422,15 @@ The terminal gets which businesses are income or a loss, the checks and the ques
 
 ```bash
 taxtrace prior                                   # reads last year's Form 1040 and Carryover Worksheet
-taxtrace estimates --year 2026 --confirm withheld=24000 --confirm paid_2026-09-15=2500
+taxtrace paystub 2026/payslip.pdf                # the latest pay stub: the year's withholding, projected
+taxtrace estimates --year 2026 --confirm paid_2026-09-15=2500
 ```
+
+A pay stub's header row gives the pay period and the payment date, and its taxes table each tax's amount this
+paycheck and the year to date ("FIT Withheld", "SIT Withheld (NC)"). The year's withholding is the year to date's
+plus this paycheck's for each one left: the pay period's length says how often you're paid, and each later
+paycheck is paid as long after its period ends as this one was, so a December period paid in January counts next
+year. A bonus or a new W-4 changes that, so it's a question.
 
 No underpayment penalty is due when the year's payments reach the smaller of 90% of the year's own tax and 100%
 of last year's (110% when last year's adjusted gross income was over $150,000, $75,000 married filing separately).
@@ -433,7 +442,7 @@ Withholding counts as paid evenly through the year, however late, so more withho
 every quarter, and `estimates` says how much would. Last year's overpayment applied to this year counts in April.
 
 What only you know is kept in `estimates/<year>-confirmed.json`: `withheld=AMOUNT` (the year's federal tax
-withheld from every W-2 and 1099, the last paychecks included), `paid_YYYY-MM-DD=AMOUNT` (each estimated payment)
+withheld in all, in place of the pay stub's projection, when there's more than one job or a 1099 withholds too), `paid_YYYY-MM-DD=AMOUNT` (each estimated payment)
 and `tax=AMOUNT` (the year's own tax, once it's worked out). The terminal says which quarters are met or short;
 the amounts are in `estimates/<year>.json`.
 

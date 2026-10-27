@@ -689,6 +689,55 @@ def cmd_1099(args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+def cmd_paystub(args: argparse.Namespace) -> int:
+    """Read pay stubs into <workspace>/forms: the pay period, the payment date, and the federal and state income tax
+    withheld, this paycheck and the year to date, with what the year's paychecks will withhold in all
+    (`estimates` takes it).
+
+    The values go only to that folder. What's printed is masked: the payment date, how often you're paid, the
+    paychecks left in the year, which taxes were read, the checks and the questions. A locked document is skipped
+    without asking the Keychain unless --unlock is given.
+    """
+    from . import paystub
+
+    home = workspace.outside_git(workspace.home())
+    terms = workspace.redact_terms()
+    often = {"weekly": "weekly", "biweekly": "every two weeks", "semimonthly": "twice a month", "monthly": "monthly"}
+    out, written, failed = home / workspace.FORMS, 0, 0
+    for doc in _documents(args):
+        name = redact.redact(doc.name, terms, bare_years=True).text
+        if doc.suffix.lower() not in text.PDF_SUFFIXES:
+            continue
+        try:
+            _, password = _unlocked(doc, keychain=args.unlock)
+        except text.Locked as err:
+            print(f"{name}: skipped, {err}" if args.unlock else
+                  f"{name}: locked, skipped without asking the Keychain (--unlock to ask)")
+            continue
+        except text.UnsupportedDocument as err:
+            print(f"{name}: skipped, {err}")
+            continue
+        words = text.words(doc, 1, password)
+        if not paystub.is_form(words):
+            continue
+        stub = paystub.read(doc.name, words)
+        failed += bool(stub.failed)
+        paid = f"paid {stub.paid:%b} {stub.paid.day}, {stub.paid.year}" if stub.paid else "no payment date found"
+        print(f"{name}: {paid}, {often.get(stub.frequency, 'pay period not read')}, {stub.paychecks_left()} "
+              f"paychecks left in {stub.paid.year if stub.paid else '?'}; "
+              f"{' and '.join(stub.withheld) or 'no'} tax withheld; "
+              f"{len(stub.checks) - len(stub.failed)} of {len(stub.checks)} checks pass")
+        for c in stub.failed:
+            print(f"  failed: {c.what}")
+        for q in stub.questions:
+            print(f"  question: {q.text}")
+        out.mkdir(parents=True, exist_ok=True)
+        (out / f"{doc.stem}.json").write_text(json.dumps(stub.to_json(), indent=2) + "\n")
+        written += 1
+    print(f"wrote to {out}" if written else "no pay stubs found")
+    return 1 if failed else 0
+
+
 def cmd_itr(args: argparse.Namespace) -> int:
     """Read India's income tax returns (ITR-2) into <workspace>/forms: a sale of property in India, the interest
     India saw, and the tax India kept after the refund, for Form 8949 and Form 1116.
@@ -1131,11 +1180,17 @@ def cmd_estimates(args: argparse.Namespace) -> int:
                if not p.name.startswith("projected-")] if folder.exists() else []
     foreign_kept = home / workspace.FOREIGN / f"{year}-confirmed.json"
     filing = json.loads(foreign_kept.read_text()).get("filing", "") if foreign_kept.exists() else ""
-    plan = estimates.build(year, returns=returns, confirmed=confirmed, filing=filing)
+    forms_folder = home / workspace.FORMS
+    forms = [row for p in sorted(forms_folder.glob("*.json")) for rows in [json.loads(p.read_text())]
+             for row in (rows if isinstance(rows, list) else [rows])] if forms_folder.exists() else []
+    plan = estimates.build(year, returns=returns, confirmed=confirmed, filing=filing,
+                           stub=estimates.latest_stub(forms, year))
     print(f"{year} estimated tax: "
           + (f"the safe harbor is {plan.rate:.0%} of {year - 1}'s tax" if plan.rate else "no safe harbor yet")
           + (f"; {len(plan.payments)} estimated payments" if plan.rate else "")
           + (f"; an overpayment applied from {year - 1}" if plan.applied else ""))
+    if plan.withholding_from:
+        print(f"  withholding: {plan.withholding_from}")
     for k, q in enumerate(plan.quarters, 1):
         print(f"  quarter {k}, due {q.due:%b} {q.due.day}, {q.due.year}: "
               + (f"short {masked(f'{q.short:,.2f}')}" if q.short else "met"))
@@ -1505,6 +1560,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--unlock", action="store_true",
                    help="ask the Keychain for a locked document's password (default: skip locked ones)")
     p.set_defaults(func=cmd_1099)
+    p = sub.add_parser("paystub", help="read pay stubs: the income tax withheld, and what the year's will withhold",
+                       description=cmd_paystub.__doc__)
+    p.add_argument("paths", nargs="*", help=PATHS_HELP)
+    p.add_argument("--unlock", action="store_true",
+                   help="ask the Keychain for a locked document's password (default: skip locked ones)")
+    p.set_defaults(func=cmd_paystub)
     p = sub.add_parser("itr", help="read India's income tax returns: a property sale, interest, the tax India kept",
                        description=cmd_itr.__doc__)
     p.add_argument("paths", nargs="*", help=PATHS_HELP)

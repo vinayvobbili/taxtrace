@@ -11,9 +11,10 @@ earlier quarter. Tax withheld from pay counts as paid evenly through the year ho
 more withholding before the year ends makes up every quarter. Last year's overpayment applied to this year (its
 line 36) counts as paid on April 15.
 
-What only you know is kept with `--confirm`: `withheld=AMOUNT` (the year's federal tax withheld from every W-2 and
-1099, what's withheld so far and what the year's last paychecks will withhold), `paid_YYYY-MM-DD=AMOUNT` (an
-estimated payment and the day it was made) and `tax=AMOUNT` (the year's own tax, once it's known).
+The year's withholding is the latest pay stub's projection (`paystub`): its year to date's, and its paycheck's for
+each one left. What only you know is kept with `--confirm`: `withheld=AMOUNT` (the year's federal tax withheld in
+all, in place of the pay stub's projection: more W-2s, a 1099's), `paid_YYYY-MM-DD=AMOUNT` (an estimated payment and
+the day it was made) and `tax=AMOUNT` (the year's own tax, once it's known).
 """
 
 from __future__ import annotations
@@ -55,6 +56,7 @@ class Plan:
     rate: Decimal | None = None  # 100% or 110% of last year's tax
     required: Decimal | None = None  # the year's required payments in all
     withheld: Decimal | None = None
+    withholding_from: str = ""  # "confirmed", or the pay stub it's projected from
     applied: Decimal = Decimal(0)  # last year's overpayment applied to this year (its line 36)
     payments: dict[str, Decimal] = field(default_factory=dict)  # ISO day: an estimated payment
     quarters: list[Quarter] = field(default_factory=list)
@@ -99,8 +101,16 @@ def last_tax(filed: dict) -> tuple[Decimal | None, str]:
     return None, ""
 
 
-def build(year: int, *, returns: list[dict], confirmed: dict | None = None, filing: str = "") -> Plan:
-    """The year's estimated tax plan from last year's filed return (`prior`) and what's confirmed."""
+def latest_stub(forms: list[dict], year: int) -> dict | None:
+    """The year's last pay stub read (`taxtrace paystub`), by its payment date."""
+    stubs = [f for f in forms if f.get("form") == "paystub" and f.get("year") == year and f.get("paid")]
+    return max(stubs, key=lambda f: f["paid"], default=None)
+
+
+def build(year: int, *, returns: list[dict], confirmed: dict | None = None, filing: str = "",
+          stub: dict | None = None) -> Plan:
+    """The year's estimated tax plan from last year's filed return (`prior`), the year's latest pay stub
+    (`paystub`, whose projection is the year's withholding unless one is confirmed) and what's confirmed."""
     confirmed = confirmed or {}
     plan = Plan(year)
     filed = next((r for r in returns if r.get("year") == year - 1 and (r.get("f1040") or r.get("carryovers"))),
@@ -131,12 +141,17 @@ def build(year: int, *, returns: list[dict], confirmed: dict | None = None, fili
         plan.ask(f"{year}'s own tax isn't known yet: 90% of it is the safe harbor when that's less than last year's "
                  f"(`--confirm tax=AMOUNT` once the return is worked out)")
     plan.payments = {k[5:]: Decimal(v) for k, v in sorted(confirmed.items()) if k.startswith("paid_")}
-    if "withheld" not in confirmed:
-        plan.ask(f"how much federal tax {year}'s W-2s and 1099s withhold in all, both of you, the year's last "
-                 "paychecks included (`--confirm withheld=AMOUNT`): the pay stubs' year-to-date federal withholding, "
-                 "plus each paycheck's until December 31")
+    if "withheld" in confirmed:
+        plan.withheld, plan.withholding_from = Decimal(confirmed["withheld"]), "confirmed"
+    elif stub and stub.get("projected_federal") is not None:
+        plan.withheld = Decimal(stub["projected_federal"])
+        paid = date.fromisoformat(stub["paid"])
+        plan.withholding_from = (f"the pay stub paid {paid:%b} {paid.day}, {paid.year} and its "
+                                 f"{stub['paychecks_left']} paychecks left")
+    else:
+        plan.ask(f"how much federal tax {year}'s W-2s and 1099s withhold in all, the year's last paychecks "
+                 "included: read the latest pay stub (`taxtrace paystub`), or `--confirm withheld=AMOUNT`")
         return plan
-    plan.withheld = Decimal(confirmed["withheld"])
     for k, day in enumerate(due(year), 1):
         required = (plan.required * k / 4).quantize(CENT, ROUND_HALF_UP)
         paid = (plan.withheld * k / 4).quantize(CENT, ROUND_HALF_UP) + plan.applied + sum(
@@ -156,6 +171,7 @@ def to_json(plan: Plan) -> dict:
 
     return {"year": plan.year, "last_tax": plain(plan.last_tax), "last_agi": plain(plan.last_agi),
             "rate": plain(plan.rate), "required": plain(plan.required), "withheld": plain(plan.withheld),
+            "withholding_from": plan.withholding_from,
             "applied": plain(plan.applied), "payments": {d: str(v) for d, v in plan.payments.items()},
             "quarters": [{"due": q.due.isoformat(), "required": str(q.required), "paid": str(q.paid),
                           "short": str(q.short)} for q in plan.quarters],
