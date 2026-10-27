@@ -92,6 +92,21 @@ def test_outline_can_list_only_the_pages_naming_a_form(prior_return: Path, capsy
         cli.main(["outline", "--match", "(8582"])
 
 
+def test_show_opens_one_workspace_file_in_chrome_at_a_page(workspace_home: Path, capsys, monkeypatch):
+    for year in ("2024", "2025"):
+        make_pdf(workspace_home / "prior-returns" / f"{year} Quillfeather Client Copy.pdf", PRIOR_RETURN)
+    ran = []
+    monkeypatch.setattr(cli.subprocess, "run", lambda cmd, check: ran.append(cmd))
+    assert cli.main(["show", "prior-returns/2025*Client*", "--page", "19"]) == 0
+    [cmd] = ran
+    assert cmd[:3] == ["open", "-a", "Google Chrome"]
+    assert cmd[3].startswith("file:///") and cmd[3].endswith("/2025%20Quillfeather%20Client%20Copy.pdf#page=19")
+    out = capsys.readouterr()
+    assert "at page 19" in out.out and "Quillfeather" not in out.out
+    assert cli.main(["show", "prior-returns/*Client*"]) == 2 and len(ran) == 1
+    assert "matches 2 files" in capsys.readouterr().err
+
+
 def test_list_prints_masked_names_by_folder_without_opening(workspace_home: Path, capsys, monkeypatch):
     make_pdf(workspace_home / "2025" / "Quillfeather 2025 W2.pdf", PRIOR_RETURN)
     monkeypatch.setattr(cli, "_open", lambda doc: pytest.fail("list opened a document"))

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 import sys
 from decimal import Decimal
 from pathlib import Path
@@ -96,6 +97,23 @@ def cmd_list(args: argparse.Namespace) -> int:
             where = ""
         name = redact.redact(doc.name, terms, bare_years=True).text
         print(f"{where + '/' if where and where != '.' else ''}{name}")
+    return 0
+
+
+def cmd_show(args: argparse.Namespace) -> int:
+    """Open a document for you to read, in Chrome at a page: Claude never reads it, you type its password there.
+
+    The name can be a path, or a pattern in the workspace (`prior-returns/2025*Client*`) that matches one file."""
+    home = workspace.home()
+    path = Path(args.path)
+    found = [path] if path.exists() else sorted(home.glob(args.path))
+    terms = workspace.redact_terms()
+    if len(found) != 1:
+        names = ", ".join(redact.redact(p.name, terms, bare_years=True).text for p in found)
+        print(f"{args.path}: matches {len(found)} files{': ' + names if names else ''}; name one", file=sys.stderr)
+        return 2
+    subprocess.run(["open", "-a", "Google Chrome", f"{found[0].resolve().as_uri()}#page={args.page}"], check=True)
+    print(f"opened {redact.redact(found[0].name, terms, bare_years=True).text} at page {args.page}")
     return 0
 
 
@@ -1161,6 +1179,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--match", type=_pattern, metavar="REGEX",
                    help="only the pages whose masked heading matches, ignoring case (e.g. '1116|8582|4562')")
     p.set_defaults(func=cmd_outline)
+    p = sub.add_parser("show", help="open a document in Chrome at a page, for you to read",
+                       description=cmd_show.__doc__)
+    p.add_argument("path", help="a path, or a pattern in the workspace that matches one file")
+    p.add_argument("--page", type=int, default=1, help="the page to open at (default: 1)")
+    p.set_defaults(func=cmd_show)
     p = sub.add_parser("words", help="a page's masked words with their positions", description=cmd_words.__doc__)
     p.add_argument("paths", nargs="+", help="PDFs")
     p.add_argument("--page", type=_page, default="1", help="a page, pages and ranges (19-20,69), or all (default: 1)")
