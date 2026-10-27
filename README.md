@@ -151,8 +151,9 @@ taxtrace prior --layout   # also each line a value came from, masked
 
 Next year's return starts from last year's: each asset's depreciation so far, and each passive activity's loss
 that couldn't be taken yet. `prior` reads them from the preparer's own printouts: the federal depreciation
-schedule (Drake's "Federal Depreciation Schedule", or its older "Depreciation Detail Listing") and Form 8582's
-Worksheets 5 and 6. The values go to `<workspace>/carryforwards/<return>.json`, each with its page and the exact
+schedule (Drake's "Federal Depreciation Schedule", or its "Depreciation Detail Listing", whose land rows carry
+forward as cost with no depreciation) and Form 8582's Worksheets 5 and 6. Where the return prints "Next Year's
+Depreciation Worksheet", each asset's deduction there is checked against a year rolled forward. The values go to `<workspace>/carryforwards/<return>.json`, each with its page and the exact
 line it was read from. The terminal gets counts, failed checks and questions, masked like `redact`'s output.
 
 Nothing is taken on trust:
