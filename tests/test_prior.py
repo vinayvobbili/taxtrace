@@ -72,6 +72,28 @@ LISTING = [
     "      Totals              287,450                            287,450              4,766    10,452    15,218"
     "    10,452",
 ]
+# the listing as the later returns print it: dashed dates, a land row with no method, and next year's worksheet
+LISTING_2025 = [
+    "                                            Depreciation Detail Listing                      2025",
+    "   * Item is included in AMT",
+    f"     {NAME}                                        ###-##-4410",
+    "   No.   Description Date  Cost  Basis Adj  Business %  179  Bonus  Basis  Life Method Rate  Prior  Current"
+    "  Accumulated  AMT Current",
+    "    1 8813 WILLOWMERE LN    07-14-2017 268,400*    100.00          268,400 27.5 SL    MM  3.636  72,786   9,759"
+    "    82,545     9,759",
+    "    2 LAND                  07-14-2017  45,000     100.00                0      N/A",
+    "      Totals              313,400                            268,400             72,786     9,759    82,545"
+    "     9,759",
+    "      Land Amount          45,000",
+]
+NEXT_YEAR = [
+    "                          Next Year's Depreciation Worksheet",
+    "                                                    2025",
+    f"     {NAME}                                        ###-##-4410",
+    "   Form Multi-Form Description            Date        Basis   Method       Life   Deduction",
+    "   E    1 8813 WILLOWMERE LN              07-14-2017  268,400 SL     MM    27.5       9,759",
+    "        TOTAL                                                                          9,759",
+]
 WORKSHEET_5 = [
     "                                      Worksheet 5",
     "                               Allocation of Unallowed Losses",
@@ -185,6 +207,24 @@ def test_the_older_layout(tmp_path: Path):
     assert (rental.activity, rental.form_line, rental.loss, rental.ratio, rental.unallowed) == (
         "1", "E P1 22", 11204, 1, 9860)
     assert not found.failed, found.failed
+
+
+def test_the_later_listing_with_land_and_next_years_worksheet(tmp_path: Path):
+    found = read(make_pdf(tmp_path / "2025 Return.pdf", [LISTING_2025, NEXT_YEAR]))
+    house, land = found.assets
+    assert (house.placed_in_service, house.in_service().isoformat(), house.basis, house.prior, house.current) == (
+        "07-14-2017", "2017-07-14", 268400, 72786, 9759)
+    assert (land.description, land.cost, land.basis, land.accumulated, land.method) == ("LAND", 45000, 0, 0, "N/A")
+    assert not found.failed, found.failed
+    assert not found.questions
+    assert [c.what for c in found.checks if "next year" in c.what] == [
+        "asset 1: next year's depreciation worksheet (page 2) takes a full year at its rate, or what's left of its "
+        "basis", "next year's depreciation worksheet's rows add up to its total"]
+    off = [ln.replace("9,759", "9,795") for ln in NEXT_YEAR]
+    assert len(read(make_pdf(tmp_path / "2025 R.pdf", [LISTING_2025, off])).failed) == 1  # the rows still add up
+    # a row that's neither depreciated nor land is still asked about
+    odd = [ln.replace("0      N/A", "1,200  N/A") for ln in LISTING_2025]
+    assert any("can't split" in q.text for q in read(make_pdf(tmp_path / "2025 S.pdf", [odd])).questions)
 
 
 def test_cli_writes_the_values_and_prints_none(return_2021: Path, workspace_home: Path, capsys):

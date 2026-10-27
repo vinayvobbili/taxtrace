@@ -2,8 +2,9 @@
 
 Next year's return starts from these: each asset's depreciation so far, and each activity's loss that couldn't be
 taken yet. They're read from the preparer software's own printouts (Drake's two layouts so far: the "Federal
-Depreciation Schedule" and the older "Depreciation Detail Listing", and Form 8582's Worksheets 5 and 6), never
-from a model.
+Depreciation Schedule" and the "Depreciation Detail Listing", whose land rows carry no depreciation, and Form 8582's
+Worksheets 5 and 6), never from a model. "Next Year's Depreciation Worksheet", where printed, is checked against a
+year's depreciation rolled forward.
 
 Every value keeps its page and the exact line it came from, and `verify` checks each line is still on its page.
 Whatever doesn't add up (a row against the totals line, a ratio against the losses) is a failed check, and
@@ -21,7 +22,7 @@ from itertools import pairwise
 
 from . import text
 
-DATE = r"\d{1,2}/\d{1,2}/\d{2,4}|\d{8}"
+DATE = r"\d{1,2}/\d{1,2}/\d{2,4}|\d{1,2}-\d{1,2}-\d{2,4}|\d{8}"
 ROW = re.compile(rf"^\s*(?P<no>\d+)\s+(?P<desc>\S.*?)\s+(?P<acquired>{DATE})(?:\s+(?P<sold>{DATE}))?\s+(?P<rest>.+)$")
 METHOD = re.compile(r"^(?:S/L|SL|\d{3}DB|DB|MACRS|ADS|AMORT)$")
 CONVENTION = re.compile(r"^[A-Z]{2}$")  # MM, HY, MQ
@@ -47,6 +48,16 @@ def amount(token: str) -> Decimal:
     except InvalidOperation:
         raise ValueError(f"not an amount: {token!r}") from None
     return -value if negative else value
+
+
+def printed_date(printed: str) -> date | None:
+    """A date in any of the layouts' spellings ("7/22/16", "07-22-2016", "07222016")."""
+    for fmt in ("%m/%d/%y", "%m/%d/%Y", "%m-%d-%Y", "%m-%d-%y", "%m%d%Y"):
+        try:
+            return datetime.strptime(printed, fmt).date()
+        except ValueError:
+            continue
+    return None
 
 
 def _number(token: str) -> bool:
@@ -87,13 +98,7 @@ class Asset:
         return (self.basis * self.rate).quantize(CENT, ROUND_HALF_UP)
 
     def in_service(self) -> date | None:
-        """The date placed in service, from any of the layouts' spellings ("7/22/16", "07222016")."""
-        for fmt in ("%m/%d/%y", "%m/%d/%Y", "%m%d%Y"):
-            try:
-                return datetime.strptime(self.placed_in_service, fmt).date()
-            except ValueError:
-                continue
-        return None
+        return printed_date(self.placed_in_service)
 
     def key(self) -> tuple:
         return (self.number, self.description, self.placed_in_service, self.cost, self.basis, self.prior,
@@ -225,6 +230,10 @@ def read(name: str, pages: list[str], words: dict[int, list[dict]] | None = None
         found.check("depreciation rows end with a totals line", False, group[-1].page)
     _keep_one_copy(found, schedules)
     _against_projection(found, next_year)
+    if found.year:
+        for n, page in enumerate(pages, 1):
+            if "Next Year's Depreciation Worksheet" in " ".join(text.headings(page, 3)):
+                _next_year(found, n, page)
     from . import schedule_e  # it builds on this module's checks and amounts
 
     found.rentals = schedule_e.filed(name, pages, found.year)
@@ -343,6 +352,9 @@ def _listing(found: Carryforwards, n: int, page: str, group: list[Asset],
             continue
         tokens = m.group("rest").split()
         at = next((i for i, t in enumerate(tokens) if METHOD.match(t)), None)
+        if at is None and (land := _land(m, tokens, n, line)):
+            group.append(land)
+            continue
         if at is None or at < 3:
             found.ask("A depreciation row this reader can't split into its columns: read it by hand.", n, line)
             continue
@@ -370,6 +382,46 @@ def _listing(found: Carryforwards, n: int, page: str, group: list[Asset],
         _asset_checks(found, asset)
         group.append(asset)
     return group
+
+
+def _land(m: re.Match, tokens: list[str], n: int, line: str) -> Asset | None:
+    """A row that isn't depreciated (land): a cost, then nothing but the business use and zeros, and no method
+    ("N/A" or blank). Its cost is in the listing's totals; it carries forward as basis, never as depreciation."""
+    amounts = [t for t in tokens if _number(t)]
+    others = [t for t in tokens if not _number(t)]
+    if not amounts or len(others) > 1 or any(amount(t) for t in amounts[1:] if not PERCENT.match(t)):
+        return None
+    return Asset(m.group("no"), m.group("desc"), "", m.group("acquired"), amount(amounts[0]), Decimal(0), Decimal(0),
+                 Decimal(0), others[0] if others else "", "", Decimal(0), Decimal(0), n, line)
+
+
+def _next_year(found: Carryforwards, n: int, page: str) -> None:
+    """The preparer's Next Year's Depreciation Worksheet: each asset's deduction next year (form, asset number,
+    description, date, basis, method, convention, life, deduction), which should be a full year at its rate, or what
+    is left of its basis."""
+    by_asset = {(a.number, a.in_service()): a for a in found.assets}
+    total, seen = None, Decimal(0)
+    for line in page.splitlines():
+        if re.match(r"^\s*TOTAL\b", line):
+            nums = [amount(t) for t in line.split()[1:] if _number(t)]
+            total = nums[-1] if nums else None
+            continue
+        if not (m := re.match(rf"^\s*[A-Z]\s+(?P<no>\d+)\s+(?P<desc>\S.*?)\s+(?P<on>{DATE})\s+(?P<rest>.+)$", line)):
+            continue
+        tokens = m.group("rest").split()
+        if not (tokens and _number(tokens[-1]) and any(METHOD.match(t) for t in tokens)):
+            continue
+        deduction = amount(tokens[-1])
+        seen += deduction
+        if (asset := by_asset.get((m.group("no"), printed_date(m.group("on"))))) is None:
+            found.ask("Next year's depreciation worksheet has an asset that isn't on this year's listing: read it by "
+                      "hand.", n, line)
+            continue
+        (then,) = roll(asset, found.year, found.year + 1)
+        found.check(f"asset {asset.number}: next year's depreciation worksheet (page {n}) takes a full year at its "
+                    "rate, or what's left of its basis", abs(then.depreciation - deduction) <= CENT, n)
+    if total is not None:
+        found.check("next year's depreciation worksheet's rows add up to its total", abs(seen - total) <= CENT, n)
 
 
 def _prior_current(nums: list[Decimal]) -> tuple[Decimal, Decimal, Decimal] | None:
