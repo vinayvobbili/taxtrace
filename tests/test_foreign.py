@@ -62,7 +62,9 @@ def test_a_confirmation_must_be_one_the_foreign_side_takes():
         "improvement_dates", "2014-09-15,2015-01-02")
     assert foreign.confirmation("improvement_dates=Average") == ("improvement_dates", "average")
     assert foreign.confirmation("account_4410=Joint") == ("account_4410", "joint")
-    for bad in ("owner=cousin", "improvement_dates=15/09/2014", "rate=88", "account_4410=other", "account_44=self"):
+    assert foreign.confirmation("tds_20260331=Taken") == ("tds_20260331", "taken")
+    for bad in ("owner=cousin", "improvement_dates=15/09/2014", "rate=88", "account_4410=other", "account_44=self",
+                "tds_2026-03-31=taken", "tds_20260331=maybe"):
         with pytest.raises(ValueError):
             foreign.confirmation(bad)
 
@@ -264,7 +266,18 @@ def test_the_quarters_tds_certificate_counts_what_no_statement_shows_once(tmp_pa
     assert len(found.taxes) == 1 and not found.withheld
     assert found.reconciled == ["India's TDS certificate for 2026-01-01 to 2026-03-31 matches the TDS found"]
 
-    found = build("1500.00")  # 400 more taken where no statement shows it: a tax, and interest the value never showed
+    found = build("1500.00")  # 400 more than found: asked about, not counted, till Form 26AS says where it came from
+    assert len(found.taxes) == 1 and not found.withheld
+    (asked,) = [q.text for q in found.questions if "more tax" in q.text]
+    assert "--confirm tds_20260331=taken" in asked and "earlier year" not in asked
+    assert len(build("1500.00", {**confirmed, "tds_20260331": "not"}).taxes) == 1
+    early = {**quarter, "deducted": "1500.00", "payments": [{**quarter["payments"][0], "on": "02-07-2025"}]}
+    late = foreign.build(2026, itrs=[], rates=rates, statements=statements, certificates=certificates,
+                         quarters=[early], confirmed=confirmed, today=date(2026, 10, 25))
+    assert any("interest credited in 2025, so some may be tax on an earlier year's" in q.text for q in late.questions)
+
+    # Form 26AS says the 400 was taken in the quarter from a term deposit: a tax, and interest the value never showed
+    found = build("1500.00", {**confirmed, "tds_20260331": "taken"})
     assert [(t.kept.amount, t.on, t.file) for t in found.taxes][1:] == [
         (Decimal("400.00"), "2026-03-31", "gramintds-q4.pdf")]
     (extra,) = found.withheld

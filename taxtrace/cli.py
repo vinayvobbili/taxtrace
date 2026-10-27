@@ -1173,7 +1173,8 @@ def build_parser() -> argparse.ArgumentParser:
                    help="settle a question only you can answer, kept for later runs: owner=self|spouse|joint|other, "
                         "improvement_dates=YYYY-MM-DD,..., use=investment|personal|rental, "
                         "filing=joint|single|separate|head, joint_<last four>=yes|no (for the FBAR), "
-                        "bank_<statements' file name's first word>=<name>; <mailing address> (for the FBAR)")
+                        "bank_<statements' file name's first word>=<name>; <mailing address> (for the FBAR), "
+                        "tds_<a quarter's last day, YYYYMMDD>=taken|not (TDS beyond the statements', per Form 26AS)")
     p.set_defaults(func=cmd_foreign)
     p = sub.add_parser("fbar", help="each spouse's FBAR for a year, item by item, from the foreign side",
                        description=cmd_fbar.__doc__)

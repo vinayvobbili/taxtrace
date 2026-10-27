@@ -168,6 +168,13 @@ def confirmation(spec: str) -> tuple[str, str]:
         if not (len(key) == 10 and key[6:].isdigit()) or value.lower() not in ("yes", "no"):
             raise ValueError("whether an account is held jointly is joint_<its last four digits>=yes|no")
         return key, value.lower()
+    # a quarter's TDS beyond what the statements show: Form 26AS says it was taken in the quarter from a deposit's
+    # interest (count it), or not (leave it out)
+    if sep and key.startswith("tds_"):
+        if not re.fullmatch(r"tds_\d{8}", key) or value.lower() not in ("taken", "not"):
+            raise ValueError("a quarter's TDS beyond the statements' is tds_<the quarter's last day, YYYYMMDD>="
+                             "taken|not")
+        return key, value.lower()
     # for the FBAR: the bank whose statements' file names start so, and who else holds its joint accounts
     if sep and (key.startswith("bank_") or key.startswith("owner_")):
         name, semi, address = value.partition(";")
@@ -242,9 +249,10 @@ def _bank(file: str) -> str:
 
 def _quarter(found: Foreign, quarter: dict, confirmed: dict, rates: Rates, today: date) -> None:
     """A quarterly TDS certificate's tax against the TDS found for that bank in its quarter: the statements' TDS rows
-    and the interest certificate's. What's left was taken where no statement shows it, from a term deposit's
-    interest (at a renewal, or a quarter's end): a tax for Form 1116 at the quarter's last day's rate, and interest
-    the deposit's value never showed. Found more than the certificate's is asked about."""
+    and the interest certificate's. Tax left over was taken where no statement shows it, or not in the quarter at
+    all, so it's asked about, and Form 26AS (each deduction's day) settles it: `tds_<the quarter's last day>=taken`
+    counts it as tax withheld from a term deposit's interest, a tax for Form 1116 at the quarter's last day's rate
+    and interest the deposit's value never showed. Found more than the certificate's is asked about too."""
     if not (quarter.get("start") and quarter.get("end") and quarter.get("deducted") is not None):
         return
     start, end = statement_day(quarter["start"]), statement_day(quarter["end"])
@@ -269,6 +277,18 @@ def _quarter(found: Foreign, quarter: dict, confirmed: dict, rates: Rates, today
     if left < 0:
         found.ask(f"the TDS certificate for {period} shows less tax than the statements and interest certificate: "
                   "is a TDS row a reversal, or the interest certificate's tax from another quarter?")
+        return
+    settled = confirmed.get(f"tds_{end:%Y%m%d}")
+    if settled == "not":
+        return
+    if settled != "taken":
+        earlier = sorted({p["on"][-4:] for p in quarter.get("payments", []) if statement_day(p["on"]) < start})
+        found.ask(f"the TDS certificate for {period} shows more tax than the statements and the interest certificate: "
+                  + (f"it lists interest credited in {', '.join(earlier)}, so some may be tax on an earlier year's "
+                     "interest. " if earlier else "")
+                  + "Form 26AS gives each deduction's day and account: if it was taken in the quarter from a term "
+                  f"deposit's interest, `taxtrace foreign --confirm tds_{end:%Y%m%d}=taken` counts it (Form 1116 and "
+                  f"Schedule B); `tds_{end:%Y%m%d}=not` leaves it out")
         return
     try:
         daily = rates.daily(end)
