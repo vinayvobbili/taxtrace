@@ -399,7 +399,8 @@ def _next_year(found: Carryforwards, n: int, page: str) -> None:
     """The preparer's Next Year's Depreciation Worksheet: each asset's deduction next year (form, asset number,
     description, date, basis, method, convention, life, deduction), which should be a full year at its rate, or what
     is left of its basis."""
-    by_asset = {(a.number, a.in_service()): a for a in found.assets}
+    # land can share its building's number and date: only depreciated assets are on this worksheet
+    by_asset = {(a.number, a.in_service()): a for a in found.assets if a.annual}
     total, seen = None, Decimal(0)
     for line in page.splitlines():
         if re.match(r"^\s*TOTAL\b", line):

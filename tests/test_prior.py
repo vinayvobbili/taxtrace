@@ -222,6 +222,9 @@ def test_the_later_listing_with_land_and_next_years_worksheet(tmp_path: Path):
         "basis", "next year's depreciation worksheet's rows add up to its total"]
     off = [ln.replace("9,759", "9,795") for ln in NEXT_YEAR]
     assert len(read(make_pdf(tmp_path / "2025 R.pdf", [LISTING_2025, off])).failed) == 1  # the rows still add up
+    # land numbered like its building, as some preparers do, doesn't stand in for the building
+    shared = [ln.replace("    2 LAND", "    1 LAND") for ln in LISTING_2025]
+    assert not read(make_pdf(tmp_path / "2025 L.pdf", [shared, NEXT_YEAR])).failed
     # a row that's neither depreciated nor land is still asked about
     odd = [ln.replace("0      N/A", "1,200  N/A") for ln in LISTING_2025]
     assert any("can't split" in q.text for q in read(make_pdf(tmp_path / "2025 S.pdf", [odd])).questions)
