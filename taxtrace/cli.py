@@ -309,15 +309,15 @@ def cmd_prior(args: argparse.Namespace) -> int:
         except text.UnsupportedDocument as err:
             print(f"{name}: skipped, {err}")
             continue
-        words = {n: text.words(doc, n, password) for n, page in enumerate(pages, 1) if prior.has_activities(page)} \
+        words = {n: text.words(doc, n, password) for n, page in enumerate(pages, 1) if prior.needs_words(page)} \
             if doc.suffix.lower() in text.PDF_SUFFIXES else {}
         found = prior.read(doc.name, pages, words)
         if args.words and doc.suffix.lower() in text.PDF_SUFFIXES:  # in the same run: one Keychain approval
             for n in (n for n in _pages(args.words, len(pages)) if n <= len(pages)):
                 print(f"== {name} page {n}")
                 _print_words(text.words(doc, n, password), argparse.Namespace(x=None, top=None, rows=True), terms)
-        if not (found.assets or found.unallowed or found.activities or found.rentals):
-            print(f"{name}: no depreciation schedule or Form 8582 worksheets")
+        if not (found.assets or found.unallowed or found.activities or found.rentals or found.foreign_tax):
+            print(f"{name}: no depreciation schedule, Form 8582 worksheets or foreign tax carryover")
             continue
         problems = prior.verify(found, pages)
         returns.append(found)
@@ -336,7 +336,10 @@ def cmd_prior(args: argparse.Namespace) -> int:
               + "".join(f"; Schedule E p{r.lines[3].page if 3 in r.lines else '?'}: lines "
                         f"{', '.join(map(str, sorted(r.lines))) or 'none'}" + (f", line 19's {len(r.other)} items"
                                                                               if r.other else "")
-                        for r in found.rentals))
+                        for r in found.rentals)
+              # the years a carryover arose in, never its amount
+              + "".join(f"; {s.name()} p{s.pages}: carryover to {found.year + 1} from "
+                        f"{', '.join(map(str, sorted(s.following))) or 'no year'}" for s in found.foreign_tax))
         for c in bad:
             print(f"  failed, p{c.page}: {masked(c.what)}")
         for p in problems:
@@ -356,6 +359,10 @@ def cmd_prior(args: argparse.Namespace) -> int:
                 used = ", ".join(c for c, x in zip("abcde", (v.net_income, v.net_loss, v.prior_unallowed, v.gain,
                                                              v.loss), strict=True) if x)
                 print(f"  p{v.page} Worksheet {v.worksheet} activity, columns {used or 'none'}: {masked(v.quote)}")
+            for s in found.foreign_tax:
+                print(f"  p{s.pages} {s.name()}: " + "; ".join(
+                    f"line {n} from {', '.join(map(str, sorted(y for y, v in s.lines[n].items() if v)))}"
+                    for n in sorted(s.lines) if any(s.lines[n].values())))
     if links := prior.link(returns):
         bad = [c for c in links if not c.ok]
         failed += bool(bad)

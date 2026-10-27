@@ -1,4 +1,5 @@
-"""Carryforwards from a filed return: the depreciation schedule, and Form 8582's unallowed passive losses.
+"""Carryforwards from a filed return: the depreciation schedule, Form 8582's unallowed passive losses, and the
+foreign tax carried over on Schedule B (Form 1116) (read by `f1116b`).
 
 Next year's return starts from these: each asset's depreciation so far, and each activity's loss that couldn't be
 taken yet. They're read from the preparer software's own printouts (Drake's two layouts so far: the "Federal
@@ -162,6 +163,7 @@ class Carryforwards:
     skipped: list[int] = field(default_factory=list)  # AMT and book copies
     other_years: dict[int, int] = field(default_factory=dict)  # page: the year of a schedule for another year
     rentals: list = field(default_factory=list)  # the filed Schedule E's properties (`schedule_e.Rental`)
+    foreign_tax: list = field(default_factory=list)  # Schedule B (Form 1116) by category (`f1116b.Schedule`)
 
     def check(self, what: str, ok: bool, page: int) -> None:
         self.checks.append(Check(what, ok, page))
@@ -194,11 +196,20 @@ def has_activities(page: str) -> bool:
     return bool(re.search(r"^\s*Worksheet\s+[13]\b", page, re.MULTILINE))
 
 
+def needs_words(page: str) -> bool:
+    """Whether `read` wants a page's words (`text.words`): Form 8582's Worksheets 1 and 3, and Schedule B (Form
+    1116), whose amounts are placed by the column they sit in."""
+    from . import f1116b
+
+    return has_activities(page) or f1116b.is_page(page)
+
+
 def read(name: str, pages: list[str], words: dict[int, list[dict]] | None = None) -> Carryforwards:
     """The carryforwards in one return's pages. `name` is the file name, which usually gives the tax year.
 
-    With the words of the pages `has_activities` picks (`text.words`, by page number), Worksheets 1 and 3 are read
-    too: every passive activity's year, by the columns each amount sits in.
+    With the words of the pages `needs_words` picks (`text.words`, by page number), Worksheets 1 and 3 are read
+    too (every passive activity's year, by the columns each amount sits in), and Schedule B (Form 1116): the foreign
+    tax carried to next year, by the year it arose.
     """
     found = Carryforwards(file=name, year=_year(name, pages))
     schedules: list[list[Asset]] = []
@@ -240,6 +251,11 @@ def read(name: str, pages: list[str], words: dict[int, list[dict]] | None = None
     for rental in found.rentals:
         for c in rental.checks:
             found.check(f"Schedule E: {c.what}", c.ok, c.page)
+    from . import f1116b
+
+    found.foreign_tax, checks, questions = f1116b.read(found.year, pages, words or {})
+    found.checks += checks
+    found.questions += questions
     if found.year is None and (found.assets or found.unallowed):
         found.ask("Which tax year is this return? Its file name doesn't say.", 1, "")
     return found
@@ -610,9 +626,15 @@ def roll(asset: Asset, start: int, through: int) -> list[Year]:
 
 
 def link(returns: list[Carryforwards]) -> list[Check]:
-    """Each return's depreciation checked against an earlier one's, rolled forward over the years in between."""
-    dated = sorted((r for r in returns if r.year and r.assets), key=lambda r: r.year)
+    """Each return's depreciation checked against an earlier one's, rolled forward over the years in between, and
+    its foreign tax carryover against the year before's."""
+    from . import f1116b
+
     checks = []
+    taxed = sorted((r for r in returns if r.year and r.foreign_tax), key=lambda r: r.year)
+    for earlier, later in pairwise(taxed):
+        checks += f1116b.link(earlier.foreign_tax, earlier.year, later.foreign_tax, later.year)
+    dated = sorted((r for r in returns if r.year and r.assets), key=lambda r: r.year)
     for earlier, later in pairwise(dated):
         by_asset = {(a.in_service(), a.cost): a for a in earlier.assets if a.in_service()}
         for asset in later.assets:

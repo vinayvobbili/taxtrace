@@ -171,9 +171,16 @@ Nothing is taken on trust:
 - The alternative minimum tax and book copies are skipped. So is next year's projected schedule, which is
   checked to start from this year's accumulated depreciation.
 - A Section 179, bonus or salvage amount, or business use under 100%, is a question for you, not a guess.
+- Schedule B (Form 1116) gives the foreign tax carried to next year, per category of income (passive,
+  general...) and again for the alternative minimum tax, by the year each tax arose: its columns are the ten
+  years before this one, this year and a total. Each column's lines have to combine (line 3 is lines 1 and 2,
+  line 8 is lines 3 through 7), the subtotal has to carry from page 1 to page 2, and the total has to add up its
+  columns. The AMT copy's page 2 doesn't say it's the AMT copy, so it goes with the nearest page 1. A box
+  left unchecked is a question. The terminal shows only the years a carryover arose in.
 - Returns years apart are checked against each other. An asset's depreciation is rolled forward a full year
   at a time, and has to match the later return's prior depreciation. A miss says how far off it is in years
-  of depreciation (0.46 years is a first, partial year left out), with no amounts.
+  of depreciation (0.46 years is a first, partial year left out), with no amounts. A year's foreign tax
+  carried to the following year has to be the next year's carryover from the prior year, year by year.
 
 ```bash
 taxtrace prior --project 2025   # roll the latest schedule forward, for returns not in hand yet
