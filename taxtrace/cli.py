@@ -632,7 +632,8 @@ def cmd_1099(args: argparse.Namespace) -> int:
 
     The values go only to that folder. What's printed is masked: which boxes have amounts, the checks that failed
     and the questions (foreign tax, return of capital, tax-exempt interest), and with --layout each value's text
-    and where it sits.
+    and where it sits. Brokers' statements are seldom locked, so a locked document is skipped without asking the
+    Keychain unless --unlock is given: a folder's other locked files never prompt.
     """
     from . import f1099, k1
 
@@ -646,7 +647,11 @@ def cmd_1099(args: argparse.Namespace) -> int:
     for doc in _documents(args):
         name = redact.redact(doc.name, terms, bare_years=True).text
         try:
-            pages, password = _unlocked(doc)
+            pages, password = _unlocked(doc, keychain=args.unlock)
+        except text.Locked as err:
+            print(f"{name}: skipped, {err}" if args.unlock else
+                  f"{name}: locked, skipped without asking the Keychain (--unlock to ask)")
+            continue
         except text.UnsupportedDocument as err:
             print(f"{name}: skipped, {err}")
             continue
@@ -1440,6 +1445,8 @@ def build_parser() -> argparse.ArgumentParser:
                        description=cmd_1099.__doc__)
     p.add_argument("paths", nargs="*", help=PATHS_HELP)
     p.add_argument("--layout", action="store_true", help="also print each value's text and place, masked")
+    p.add_argument("--unlock", action="store_true",
+                   help="ask the Keychain for a locked document's password (default: skip locked ones)")
     p.set_defaults(func=cmd_1099)
     p = sub.add_parser("itr", help="read India's income tax returns: a property sale, interest, the tax India kept",
                        description=cmd_itr.__doc__)

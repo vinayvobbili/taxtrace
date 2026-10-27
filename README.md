@@ -327,7 +327,11 @@ four digits only), the account number and the calendar year are read by their la
 ```bash
 taxtrace 1099 2025            # every consolidated 1099 statement in <workspace>/2025
 taxtrace 1099 2025 --layout   # also the account and each box's label, with its value masked
+taxtrace 1099 2025 --unlock   # also ask the Keychain for locked documents' passwords
 ```
+
+Brokers' statements are seldom locked, so a locked document is skipped without asking the Keychain unless
+`--unlock` is given: the folder's other locked files (a W-2, a return) never prompt.
 
 A broker's consolidated statement prints each form as a column of rows under its title ("1099-DIV Dividends and
 Distributions - 2025 ..."), the forms side by side: a box's id, its label, and the amount well right of the label.

@@ -7,11 +7,11 @@ import json
 from decimal import Decimal
 from pathlib import Path
 
-from conftest import printed
+from conftest import make_pdf, printed
 from test_f1098 import FORM_1098
 from test_k1 import draw, edited
 
-from taxtrace import cli, f1099, k1, text
+from taxtrace import cli, f1099, k1, text, workspace
 
 BROKER = "Marlowe Brokerage"
 # (x, top, text): the 1099-INT's column at the left, the 1099-DIV's right of it; a box's id apart from its label
@@ -91,3 +91,14 @@ def test_cli_prints_no_amounts_or_names(tmp_path: Path, workspace_home: Path, ca
     assert [f["form"] for f in saved] == ["1099-INT", "1099-DIV"]
     box_5 = saved[1]["amounts"]["5"]
     assert (box_5["amount"], box_5["label"]) == ("64.18", "Section 199A Dividends")
+
+
+def test_a_locked_document_is_skipped_without_asking_the_keychain_unless_unlock(tmp_path: Path, workspace_home: Path,
+                                                                                 monkeypatch, capsys):
+    locked = make_pdf(tmp_path / "docs" / "W-2.pdf", [["Form W-2 Wage and Tax Statement"]], password="not-real")
+    asked = []
+    monkeypatch.setattr(workspace, "pdf_passwords", lambda path: asked.append(path) or ["not-real"])
+    assert cli.main(["1099", str(locked)]) == 0
+    assert asked == [] and "locked, skipped without asking the Keychain (--unlock to ask)" in printed(capsys)
+    assert cli.main(["1099", str(locked), "--unlock"]) == 0
+    assert asked == [locked]
