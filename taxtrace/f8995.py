@@ -23,8 +23,8 @@ FIRST = re.compile(r"\b8995\b(?!-A)\s+Qualified Business Income Deduction", re.I
 CONTINUED = re.compile(r"\b8995\b(?!-A)\s+\S+\s+Deduction,\s+Line 1\b", re.IGNORECASE)  # "Line 1, Continued"
 AMOUNT = r"\(\s*[\d,]*\s*\)|-?[\d,]*\d"
 LINE = re.compile(rf"(?<!\S)(?P<no>\d{{1,2}})\s+(?P<amount>{AMOUNT})\s*$")
-# an EIN, or an SSN printed whole or with all but its last four digits masked ("XXX-XX-1234")
-TIN = r"[\dX*]{2}-[\dX*]{3}\d{4}|[\dX*]{3}-[\dX*]{2}-\d{4}"
+# an EIN, or an SSN printed whole, with all but its last four digits masked ("XXX-XX-1234"), or all of them
+TIN = r"[\dX*]{2}-[\dX*]{3}\d{4}|[\dX*]{3}-[\dX*]{2}-[\dX*]{4}"
 BUSINESS = re.compile(rf"^\s*(?:(?:i|ii|iii|iv|v)\s+)?(?P<name>\S.*?)\s+\S*?(?P<tin>{TIN})\s+(?P<amount>{AMOUNT})\s*$")
 TWENTY = Decimal("0.20")
 

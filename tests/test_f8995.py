@@ -14,7 +14,7 @@ FORM_8995 = [  # under 80 characters a line: it's drawn on a portrait page too (
     "Name(s) shown on return                 Your taxpayer identification number",
     "Jordan B Quillfeather & Pat Quillfeather          ***-**-4410",
     "1 (a) Trade, business, or aggregation name  (b) TIN  (c) Qualified income",
-    "i   Schedule E: 8813 WILLOWMERE LN, ZENTONVILLE  XXX-XX-6789      4,210",
+    "i   Schedule E: 8813 WILLOWMERE LN, ZENTONVILLE  XXX-XX-XXXX      4,210",
     "ii  K1P: LARKSPUR RIDGE FUND LP              p12-3456789         64",
     "iii K1P: QUARRYSTONE HOMES LLC               23-4567890     (1,870)",
     "iv  K1P: ELM COURT AT HARBOR LLC             34-5678901        (55)",
@@ -56,7 +56,7 @@ def test_each_business_and_every_line(tmp_path: Path):
     found = read(make_pdf(tmp_path / "2025 Return.pdf", [FORM_8995]))
     filed = found.qbi
     assert [(b.name, b.tin, b.income) for b in filed.businesses] == [
-        ("Schedule E: 8813 WILLOWMERE LN, ZENTONVILLE", "XXX-XX-6789", 4210),  # the SSN printed masked
+        ("Schedule E: 8813 WILLOWMERE LN, ZENTONVILLE", "XXX-XX-XXXX", 4210),  # the client copy masks the SSN
         ("K1P: LARKSPUR RIDGE FUND LP", "12-3456789", 64),  # a watermark letter glued to the number is left off
         ("K1P: QUARRYSTONE HOMES LLC", "23-4567890", -1870),
         ("K1P: ELM COURT AT HARBOR LLC", "34-5678901", -55)]
