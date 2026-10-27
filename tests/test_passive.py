@@ -59,12 +59,24 @@ def test_last_years_empty_carryover_section_carries_nothing_in():
     older = {**RETURN_2024, "year": 2020, "file": "2020 Return.pdf"}
     copy = {"file": "2024 Return.pdf", "year": 2024, "carryover_sections": ["Credits", "Passive Activity"],
             "questions": []}
-    ledger = passive.build(2025, [older, copy], [LARKSPUR])
+    ledger = passive.build(2025, [older, copy], [LARKSPUR, face("Brindlewood Homes LLC", ("2", "", "-640"))])
+    assert ledger.lines[-1].activity == "Brindlewood Homes LLC"  # one the 2020 worksheets don't list
     assert {(line.carried, line.carried_from) for line in ledger.lines} == {(Decimal(0), 2024)}
     assert "prints its Passive Activity section empty" in ledger.questions[0].text
     listed = {**copy, "questions": [{"text": "The Carryover Worksheet lists something under Passive Activity: read "
                                              "it by hand.", "page": 9, "quote": ""}]}
     assert all(line.carried is None for line in passive.build(2025, [older, listed], [LARKSPUR]).lines)
+
+
+def test_losses_carried_on_that_the_next_years_carryover_worksheet_drops_are_asked():
+    older = {**RETURN_2024, "year": 2020, "file": "2020 Return.pdf"}
+    after = {"file": "2021 Return.pdf", "year": 2021, "carryover_sections": ["Passive Activity"], "questions": []}
+    asked = [q.text for q in passive.build(2025, [older, after], [LARKSPUR]).questions]
+    assert any(t.startswith("the 2020 return's Worksheet 5 carries passive losses into 2021, and the 2021 return's "
+                            "Carryover Worksheet lists none going on") for t in asked)
+    listed = {**after, "questions": [{"text": "The Carryover Worksheet lists something under Passive Activity: read "
+                                              "it by hand.", "page": 9, "quote": ""}]}
+    assert not any("lists none going on" in q.text for q in passive.build(2025, [older, listed], [LARKSPUR]).questions)
 
 
 def test_last_years_ledger_goes_on_without_what_was_sold():

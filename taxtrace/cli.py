@@ -392,7 +392,7 @@ def cmd_prior(args: argparse.Namespace) -> int:
         ending = sum(any(y["last"] for y in r["years"]) for r in rows)
         print(f"projected {len(rows)} assets from the {latest.year} return through {args.project}: {target.name}"
               + (f"; {ending} reach the end of their recovery period, check the final year" if ending else "")
-              + f". Confirm against the {args.project - 1} return when it arrives.")
+              + f". Confirm against the {args.project} return's schedule once it's filed.")
     print(f"wrote to {out}" if out.exists() else "nothing to write")
     return 1 if failed else 0
 
@@ -789,7 +789,7 @@ def cmd_rental(args: argparse.Namespace) -> int:
     and `prior --project` saved: the property's 1098, the latest filed Schedule E and the depreciation rolled
     forward. What's printed is masked: where each line comes from, the checks and the questions.
     """
-    from . import answers, policy, schedule_e
+    from . import answers, policy, prior, schedule_e
 
     home = workspace.outside_git(workspace.home())
     terms = workspace.redact_terms()
@@ -808,16 +808,27 @@ def cmd_rental(args: argparse.Namespace) -> int:
         found_answers += answers.read(doc.name, pages)
         if doc.suffix.lower() in text.PDF_SUFFIXES:
             policies += policy.read(doc.name, pages)
-    filed = []
+    filed, same, schedules = [], [], []
     for path in sorted((home / workspace.CARRYFORWARDS).glob("*.json")):
         row = json.loads(path.read_text())
-        if isinstance(row, dict) and (row.get("year") or year) < year:
+        if not isinstance(row, dict) or "file" not in row:  # a projection
+            continue
+        if (row.get("year") or year) < year:
             filed += [schedule_e.load(r) for r in row.get("rentals", [])]
+            if row.get("assets") and row.get("year"):
+                schedules.append(row)
+        elif row.get("year") == year:
+            same += [schedule_e.load(r) for r in row.get("rentals", [])]
     last = max(filed, key=lambda r: r.year or 0, default=None)
     forms = [f for path in sorted((home / workspace.FORMS).glob("*.json"))
              for rows in [json.loads(path.read_text())] for f in (rows if isinstance(rows, list) else [rows])]
+    # the latest filed depreciation schedule, rolled forward from what `prior` saved: no return is opened again
     projected_path = home / workspace.CARRYFORWARDS / f"projected-{year}.json"
     projected = json.loads(projected_path.read_text()) if projected_path.exists() else None
+    if schedules:
+        latest = prior.saved_schedule(max(schedules, key=lambda r: r["year"]))
+        if not (projected or {}).get("assets") or projected["assets"][0]["from"]["year"] < latest.year:
+            projected = {"through": year, "projected": True, "assets": prior.project(latest, year)}
     out = home / workspace.SCHEDULE_E
     kept = out / f"{year}-confirmed.json"  # what was confirmed on earlier runs stays confirmed
     confirmed = json.loads(kept.read_text()) if kept.exists() else {}
@@ -846,10 +857,17 @@ def cmd_rental(args: argparse.Namespace) -> int:
         print(f"  failed: {c.what}" + (f" ({masked(c.quote)})" if c.quote else ""))
     for q in rental.questions:
         print(f"  question: {q.text}" + (f" ({masked(q.quote)})" if q.quote else ""))
+    rehearsal = [c for r in same if schedule_e.same_place(r.address, rental.address)
+                 for c in schedule_e.against(rental, r)]
+    if rehearsal:  # the year's own return is in hand: the build, rehearsed against it
+        bad = [c for c in rehearsal if not c.ok]
+        print(f"  against the filed {year} Schedule E: {len(rehearsal) - len(bad)} of {len(rehearsal)} lines match")
+        for c in bad:
+            print(f"  failed: {c.what}")
     out.mkdir(parents=True, exist_ok=True)
     (out / f"{year}.json").write_text(json.dumps(rental.to_json(), indent=2) + "\n")
     print(f"wrote to {out / f'{year}.json'}")
-    return 1 if rental.failed else 0
+    return 1 if rental.failed or any(not c.ok for c in rehearsal) else 0
 
 
 def cmd_foreign(args: argparse.Namespace) -> int:

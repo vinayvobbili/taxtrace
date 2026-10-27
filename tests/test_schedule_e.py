@@ -10,6 +10,7 @@ from conftest import make_pdf, printed
 from test_f1098 import FORM_1098
 from test_k1 import draw
 from test_office import docx, para
+from test_prior import SCHEDULE
 
 from taxtrace import answers, cli, policy, prior, schedule_e, text
 
@@ -134,6 +135,22 @@ def test_cli_puts_the_year_together_and_asks_what_the_documents_cant_say(
     assert (saved["lines"]["9"]["amount"], saved["lines"]["19"]["amount"]) == ("1128.55", "1140")
     assert [q["text"].split(":")[0] for q in saved["questions"]] == [
         "line 18 is rolled forward from the 2020 depreciation schedule"]
+
+
+def test_last_years_schedule_rolls_on_and_the_years_own_return_rehearses_the_build(
+        tmp_path: Path, workspace_home: Path, capsys):
+    make_pdf(tmp_path / "2024 Return.pdf", [*FILED, [ln.replace("2021 Federal", "2024 Federal") for ln in SCHEDULE]])
+    make_pdf(tmp_path / "2025 Return.pdf", [[ln.replace("18 9,350.", "18 10,910.") for ln in FILED[0]], FILED[1]])
+    cli.main(["prior", str(tmp_path / "2024 Return.pdf"), str(tmp_path / "2025 Return.pdf")])
+    (docs := tmp_path / "2025").mkdir()
+    capsys.readouterr()
+    assert cli.main(["rental", str(docs), "--year", "2025"]) == 1  # no 1098 or answers: lines 3, 12, 16, 19 differ
+    out = printed(capsys)
+    assert "  line 18 depreciation expense or depletion: projected depreciation, 2024 Return.pdf p3" in out
+    assert "  against the filed 2025 Schedule E: 1 of 5 lines match" in out
+    assert "  failed: line 3, rents received, is the filed one's (taxtrace's is less)" in out
+    assert "line 18, depr" not in out
+    assert "10,910" not in out and "rolled forward" not in out  # last year's schedule: nothing to ask
 
 
 def test_a_confirmation_must_be_one_the_schedule_takes():

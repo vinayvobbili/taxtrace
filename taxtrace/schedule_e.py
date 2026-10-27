@@ -246,6 +246,21 @@ def build(year: int, *, last: Rental | None, answers: list[Answer], forms: list[
     return rental
 
 
+def against(rental: Rental, filed: Rental) -> list[Check]:
+    """This year's lines against the year's own filed Schedule E, once it's in hand: a rehearsal of the build. Each
+    check's quote is the filed line, so `what` holds no amount."""
+    checks = []
+    for n in sorted(set(rental.lines) | set(filed.lines)):
+        mine, theirs = rental.amount(n), filed.amount(n)
+        if mine or theirs:
+            ok = abs(mine - theirs) <= 1
+            checks.append(Check(f"line {n}, {LINES[n].lower()}, is the filed one's"
+                                + ("" if ok else f" (taxtrace's is {'more' if mine > theirs else 'less'})"), ok,
+                                filed.lines[n].page if n in filed.lines else 0,
+                                filed.lines[n].quote if n in filed.lines else ""))
+    return checks
+
+
 def _mortgage(rental: Rental, year: int, forms: list[dict]) -> None:
     mine = [f for f in forms if f.get("form") == "1098" and f.get("copy_of") is None and f.get("year") == year
             and same_place(f.get("address", ""), rental.address)]
@@ -308,7 +323,8 @@ def _depreciation(rental: Rental, year: int, projected: dict | None) -> None:
     a, _ = rows[0]
     rental.lines[18] = Line(18, sum((Decimal(y["depreciation"]) for _, y in rows), Decimal(0)),
                             "projected depreciation", a["from"]["file"], a["from"]["page"], a["from"]["quote"])
-    rental.ask(f"line 18 is rolled forward from the {a['from']['year']} depreciation schedule: check it against the "
-               f"{year - 1} return's when it arrives")
+    if a["from"]["year"] < year - 1:  # last year's schedule rolled one year on is how a preparer does it too
+        rental.ask(f"line 18 is rolled forward from the {a['from']['year']} depreciation schedule: the years between "
+                   f"aren't checked, and the {year - 1} return's schedule would be closer")
     if any(y.get("last") for _, y in rows):
         rental.ask(f"line 18: an asset's basis runs out in {year}, so its last year is smaller")

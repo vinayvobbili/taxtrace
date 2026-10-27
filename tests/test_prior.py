@@ -296,6 +296,12 @@ def test_cli_projects_the_missing_years(tmp_path: Path, workspace_home: Path, ca
     assert cli.main(["prior", str(folder), "--project", "2017"]) == 1
 
 
+def test_a_saved_schedule_rolls_forward_as_the_one_read(return_2021: Path):
+    found = read(return_2021)
+    again = prior.saved_schedule(json.loads(json.dumps(found.to_json())))
+    assert prior.project(again, 2025) == prior.project(found, 2025)
+
+
 # Form 8582's page 2 as Drake prints it: (x, top, text), each column's amounts right under its heading
 ACTIVITIES = [
     (37, 51, "Form 8582 (2020) Page 2"),

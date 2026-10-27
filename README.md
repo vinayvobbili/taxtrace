@@ -278,6 +278,8 @@ masked name, where its year comes from and whether it's income or a loss, never 
   Worksheet's Passive Activity section printed empty means nothing carries in; failing that, last year's ledger
   (activities sold last year dropped) and the Form 8582 `passive` worked out for it. Each is a note to confirm
   against the filed Worksheet 5, and with none of them what each carries in is left unknown.
+- A return whose Worksheet 5 carries losses on, followed by a return whose Carryover Worksheet lists none, is a
+  question: the next year's passive income allowed them all, or they were left off and lost to every later year.
 - The rental's year comes from Schedule E (`rental`), and a box 13 deduction whose code doesn't settle whether it's
   the activity's is a question.
 
@@ -334,8 +336,11 @@ taxtrace rental --year 2025    # reads the answers and policies in <workspace>/2
   description says taxes or insurance paid from escrow, on line 16 or 9.
 - Insurance (line 9) from the landlord policy's declarations page for the property: its annual premium. A policy new
   this year is a question: an earlier one's premium paid this year counts too.
-- Depreciation (line 18) from the schedule rolled forward by `prior --project`, a question until that year's return
-  confirms it.
+- Depreciation (line 18) from the latest filed depreciation schedule `prior` saved, rolled forward without opening
+  the return again (or `prior --project`'s, when it's newer). Rolled over more than one year, it's a question.
+
+When the year's own return has been filed and read, each line is checked against its Schedule E: a rehearsal that
+shows which lines the build and the preparer part on, and whether taxtrace's is more or less, never by how much.
 
 What only you know is settled with `--confirm`, kept in `schedule-e/<year>-confirmed.json` for every later run:
 `fair_rental_days=365`, `personal_use_days=0`, `rent_all_year=yes`, `earlier_policy=AMOUNT` (a premium paid this

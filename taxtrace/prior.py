@@ -704,6 +704,15 @@ def _gap(earlier: Asset, later: Asset, expected: Decimal) -> str:
             + (f"; the {' and '.join(changed)} changed between the returns" if changed else "") + ")")
 
 
+def saved_schedule(row: dict) -> Carryforwards:
+    """A saved return (`to_json`) with only its depreciation schedule: enough to roll it forward without opening
+    the return again."""
+    numbers = ("cost", "basis", "prior", "current", "life", "rate")
+    return Carryforwards(row["file"], row.get("year"), assets=[
+        Asset(**{k: Decimal(v) if k in numbers else v for k, v in a.items() if k != "accumulated"})
+        for a in row.get("assets", [])])
+
+
 def project(found: Carryforwards, through: int) -> list[dict]:
     """Every asset's depreciation rolled from `found`'s year through `through`, for a year whose return is missing."""
     if found.year is None:
