@@ -359,6 +359,14 @@ foreign side takes it as tax withheld that day (Form 1116) and as interest the v
 fits the fall in the deposit's value that day (at most the fall plus a quarter's interest). Tax taken earlier in
 India's year belongs to an earlier US year, so a certificate that doesn't fit is asked about, never counted whole.
 
+`taxtrace fbar --year 2026` turns the foreign side into each spouse's FBAR (FinCEN Form 114), item by item:
+`<workspace>/foreign/fbar-2026.txt` is a checklist to type into the BSA e-filing form. Each account is in Part II
+(held alone) or Part III (held with anyone else: its statement's mode of operation says, or `foreign --confirm
+joint_<last four>=yes|no`). Its maximum value is the highest balance at the Treasury's December 31 rate, rounded up to
+the dollar, and marked an estimate until the year is covered. The bank comes from `foreign --confirm
+bank_<the statements' file name's first word>=<name>; <address>`. Account numbers stay out of it: they're typed in
+from a statement.
+
 The checks: each balance is the one before plus the deposit or less the withdrawal, and the rows add up to the
 statement's grand totals (or, on a monthly statement, its opening and closing balances are the summary's, and its
 net interest is the interest less the TDS). A statement runs on India's year (April to March), so a calendar year usually needs two.

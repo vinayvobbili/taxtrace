@@ -27,6 +27,7 @@ held with someone outside the return (a parent) is theirs in full. Form 8938 on 
 
 from __future__ import annotations
 
+import re
 from dataclasses import asdict, dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
@@ -158,6 +159,15 @@ def confirmation(spec: str) -> tuple[str, str]:
         if not (len(key) == 12 and key[8:].isdigit()) or value.lower() not in HOLDERS:
             raise ValueError(f"an account's holder is account_<its last four digits>={'|'.join(HOLDERS)}")
         return key, value.lower()
+    if sep and key.startswith("joint_"):  # for the FBAR: held with anyone else (Part III), or alone (Part II)
+        if not (len(key) == 10 and key[6:].isdigit()) or value.lower() not in ("yes", "no"):
+            raise ValueError("whether an account is held jointly is joint_<its last four digits>=yes|no")
+        return key, value.lower()
+    if sep and key.startswith("bank_"):  # for the FBAR: the bank whose statements' file names start so
+        name, semi, address = value.partition(";")
+        if not (re.fullmatch(r"bank_[a-z]+", key.lower()) and name.strip() and semi and address.strip()):
+            raise ValueError("a bank is bank_<its statements' file name's first word>=<name>; <mailing address>")
+        return key.lower(), f"{name.strip()}; {address.strip()}"
     if not sep or key not in CONFIRMS:
         raise ValueError(f"--confirm takes one of {', '.join(CONFIRMS)}, as KEY=VALUE")
     if CONFIRMS[key] == "dates":

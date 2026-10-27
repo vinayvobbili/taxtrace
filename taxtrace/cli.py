@@ -838,6 +838,49 @@ def cmd_foreign(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_fbar(args: argparse.Namespace) -> int:
+    """Each spouse's FBAR (FinCEN Form 114) for a year, item by item, into <workspace>/foreign/fbar-<year>.txt (a
+    checklist to type into the BSA e-filing form) and fbar-<year>.json, from what `foreign` saved for the year.
+
+    The bank's name and address and whether an account is held jointly come from the statements and from
+    `foreign --confirm`. What's printed is masked: each filer's parts and accounts, whether each value is known or
+    an estimate, and what's still to settle.
+    """
+    from . import fbar
+
+    home = workspace.outside_git(workspace.home())
+    terms = workspace.redact_terms()
+
+    def masked(line: str) -> str:
+        return redact.redact(line, terms).text.strip()
+
+    out = home / workspace.FOREIGN
+    saved = out / f"{args.year}.json"
+    if not saved.exists():
+        print(f"no foreign side for {args.year} yet: run `taxtrace foreign --year {args.year}` first", file=sys.stderr)
+        return 1
+    kept = out / f"{args.year}-confirmed.json"
+    confirmed = json.loads(kept.read_text()) if kept.exists() else {}
+    statements = [s for path in sorted((home / workspace.FORMS).glob("bank-*.json"))
+                  for s in json.loads(path.read_text())]
+    found = fbar.build(args.year, json.loads(saved.read_text()), statements, confirmed)
+    print(f"{args.year} FBAR:")
+    for whose, items in found.filers.items():
+        due = {True: "due", False: "not due", None: "not settled yet"}[found.due.get(whose)]
+        print(f"  {'your' if whose == 'self' else 'your spouse’s'} FBAR, {due}: {len(items)} account(s)")
+        for item in items:
+            print(f"    Part {item.part or '?'}, account ending {masked(item.account)}: "
+                  + ("maximum value " + ("an estimate" if item.estimate else "known") if item.maximum is not None
+                     else "no maximum value yet")
+                  + ("; bank named" if item.bank else "; bank to name"))
+    for q in found.questions:  # they name an account by its place, never its number
+        print(f"  question: {q.text}")
+    (out / f"fbar-{args.year}.json").write_text(json.dumps(found.to_json(), indent=2, default=str) + "\n")
+    (out / f"fbar-{args.year}.txt").write_text(fbar.checklist(found))
+    print(f"wrote to {out / f'fbar-{args.year}.txt'}")
+    return 0
+
+
 def cmd_passive(args: argparse.Namespace) -> int:
     """Each passive activity's year into <workspace>/passive/<year>.json, from what `prior` and `k1` saved.
 
@@ -1095,8 +1138,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--confirm", action="append", default=[], metavar="KEY=VALUE",
                    help="settle a question only you can answer, kept for later runs: owner=self|spouse|joint|other, "
                         "improvement_dates=YYYY-MM-DD,..., use=investment|personal|rental, "
-                        "filing=joint|single|separate|head")
+                        "filing=joint|single|separate|head, joint_<last four>=yes|no (for the FBAR), "
+                        "bank_<statements' file name's first word>=<name>; <mailing address> (for the FBAR)")
     p.set_defaults(func=cmd_foreign)
+    p = sub.add_parser("fbar", help="each spouse's FBAR for a year, item by item, from the foreign side",
+                       description=cmd_fbar.__doc__)
+    p.add_argument("--year", type=int, required=True, help="the tax year")
+    p.set_defaults(func=cmd_fbar)
     p = sub.add_parser("passive", help="each passive activity's year, from the saved returns and K-1s",
                        description=cmd_passive.__doc__)
     p.add_argument("--year", type=int, help="the tax year (default: the latest year of the K-1s read)")
