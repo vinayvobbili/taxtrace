@@ -981,8 +981,10 @@ def cmd_qbi(args: argparse.Namespace) -> int:
     foreign_kept = home / workspace.FOREIGN / f"{year}-confirmed.json"
     filing = json.loads(foreign_kept.read_text()).get("filing", "") if foreign_kept.exists() else ""
     k1s = [row for rows in saved(workspace.K1) for row in (rows if isinstance(rows, list) else [rows])]
+    ledger_path = home / workspace.PASSIVE / f"{year}.json"
     form = qbi.build(year, k1s=k1s, rental=json.loads(rental_path.read_text()) if rental_path.exists() else None,
-                     returns=saved(workspace.CARRYFORWARDS), confirmed=confirmed, filing=filing)
+                     returns=saved(workspace.CARRYFORWARDS), confirmed=confirmed, filing=filing,
+                     worked_out=json.loads(ledger_path.read_text()).get("form_8582") if ledger_path.exists() else None)
     print(f"{year} Form 8995: {len(form.businesses)} businesses; lines {', '.join(map(str, sorted(form.lines)))}"
           + (f"; the simplified form if taxable income before the deduction is at most {form.threshold:,}"
              if form.threshold else "; the threshold needs the filing status (`foreign --confirm filing=`)"))
@@ -1063,7 +1065,7 @@ def cmd_passive(args: argparse.Namespace) -> int:
     this year's passive income or loss, and the loss it carries in. No document is opened. What's printed is masked:
     each activity's name, where its year comes from, whether it's income or a loss, and the questions.
     """
-    from . import passive
+    from . import f8582, passive
 
     home = workspace.outside_git(workspace.home())
     terms = workspace.redact_terms()
@@ -1081,16 +1083,36 @@ def cmd_passive(args: argparse.Namespace) -> int:
     if year is None:
         print("no K-1 has been read yet: run `taxtrace k1` first", file=sys.stderr)
         return 1
-    ledger = passive.build(year, returns, k1s)
     out = home / workspace.PASSIVE
+    kept = out / f"{year}-confirmed.json"
+    confirmed = json.loads(kept.read_text()) if kept.exists() else {}
+    try:
+        confirmed |= dict(map(passive.confirmation, args.confirm))
+    except ValueError as err:
+        print(err, file=sys.stderr)
+        return 2
     out.mkdir(parents=True, exist_ok=True)
-    (out / f"{year}.json").write_text(json.dumps(ledger.to_json(), indent=2) + "\n")
+    if args.confirm:
+        kept.write_text(json.dumps(confirmed, indent=2) + "\n")
+    rental_path = home / workspace.SCHEDULE_E / f"{year}.json"
+    rental = Decimal(json.loads(rental_path.read_text())["income_or_loss"]) if rental_path.exists() else None
+    foreign_kept = home / workspace.FOREIGN / f"{year}-confirmed.json"
+    filing = json.loads(foreign_kept.read_text()).get("filing", "") if foreign_kept.exists() else ""
+    last = out / f"{year - 1}.json"
+    ledger = passive.build(year, returns, k1s, json.loads(last.read_text()) if last.exists() else None)
+    activities, missing = passive.for_8582(ledger, rental)
+    form = f8582.compute(year, activities, filing=filing,
+                         magi=Decimal(confirmed["magi"]) if "magi" in confirmed else None,
+                         lived_apart=confirmed.get("lived_apart")) if activities else None
+    saved_ledger = ledger.to_json() | {"form_8582": form.to_json() if form else None, "waiting_on": missing}
+    (out / f"{year}.json").write_text(json.dumps(saved_ledger, indent=2, default=str) + "\n")
     print(f"{year}: {len(ledger.lines)} passive activities"
           + (f", starting from the {ledger.latest} return's Form 8582" if ledger.latest else "")
           + f"; {len(ledger.questions)} questions")
     for line in ledger.lines:
         source = {"k1": f"its K-1 ({masked(line.k1_file)} p{line.k1_page})",
-                  "schedule e": "Schedule E (not read yet)"}.get(line.source, "no source this year")
+                  "schedule e": "Schedule E" if line.current is not None else "Schedule E (`rental` not run yet)",
+                  "merged": "merged in an earlier year"}.get(line.source, "no source this year")
         current = (f"counted with {masked(line.merged_into)}" if line.merged_into else
                    "not known yet" if line.current is None else "income" if line.current > 0 else
                    "a loss" if line.current < 0 else "nothing")
@@ -1102,8 +1124,31 @@ def cmd_passive(args: argparse.Namespace) -> int:
               + ("; a final K-1: a full disposition frees what it carries" if line.final else ""))
     for q in ledger.questions:
         print(f"  question: {q.text}" + (f" ({masked(q.quote)})" if q.quote else ""))
+    if form is None:
+        print(f"  Form 8582 waits on {len(missing)} activities' year or carried loss")
+    else:  # what each activity's loss does, never how much
+        n = form.lines
+        print("  Form 8582: " + ("line 3 is zero or more: every loss is allowed" if n["3"] >= 0 else
+                                 "line 3 is a loss" + ("; a special allowance on line 9" if n["9"] else "")
+                                 + ": the rest carries to next year"))
+        for a in form.activities:
+            fate = ("a full disposition at an overall loss: allowed in full, off the form" if a.outside else
+                    "part of its loss carries to next year" if a.unallowed else
+                    "income" if a.overall >= 0 else "its loss is allowed")
+            print(f"    {masked(a.name)} (Part {a.part}): {fate}")
+        for q in form.questions:
+            print(f"  question: {q.text}")
+    bad = 0
+    for filed in sorted((r for r in returns if r.get("activities") and r.get("year")), key=lambda r: r["year"]):
+        _, checks = f8582.rehearse(filed)
+        bad += sum(not c.ok for c in checks)
+        print(f"  Form 8582 worked out again from the filed {filed['year']} return's Worksheets 1 and 3: "
+              f"{sum(c.ok for c in checks)} of {len(checks)} activities' unallowed loss match its Worksheet 5")
+        for c in checks:
+            if not c.ok:
+                print(f"    failed: {c.what} ({masked(c.quote)})")
     print(f"wrote to {out / f'{year}.json'}")
-    return 0
+    return 1 if bad else 0
 
 
 def cmd_ui(args: argparse.Namespace) -> int:
@@ -1360,6 +1405,9 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("passive", help="each passive activity's year, from the saved returns and K-1s",
                        description=cmd_passive.__doc__)
     p.add_argument("--year", type=int, help="the tax year (default: the latest year of the K-1s read)")
+    p.add_argument("--confirm", action="append", default=[], metavar="KEY=VALUE",
+                   help="settle what Form 8582's special allowance needs, kept for later runs: magi=AMOUNT "
+                        "(modified adjusted gross income), lived_apart=yes|no (married filing separately)")
     p.set_defaults(func=cmd_passive)
     p = sub.add_parser("keychain", help="approve Keychain reads with Apple Watch or Touch ID (macOS)",
                        description=cmd_keychain.__doc__)

@@ -3,8 +3,9 @@
 Each partnership's qualified business income is its K-1's passive income or loss, as `passive` adds it from the
 boxes (1, 2, 3 and 10, less 12): what the preparer's Form 8995 had, rather than the K-1's Section 199A statement
 total. The rental's is Schedule E's income or loss (`rental`). A passive loss Form 8582 doesn't allow isn't qualified
-business income until a later year allows it: with the year's Form 8582 filed and read, each activity's amount is
-what it let through; without it, the amounts are before that limit, and that's a question. Which businesses count
+business income until a later year allows it: each activity's amount is what the year's Form 8582 let through, the
+filed one when the year's return is read, otherwise the one `passive` worked out; with neither, the amounts are
+before that limit, and that's a question. Which businesses count
 follows last year's filed Form 8995 (`prior`): a partnership it listed (by the EIN's last four digits) that has
 income or a loss, and the rental if it listed a Schedule E. One it didn't list is a question, settled with `qbi
 --confirm`. Last year's losses carried on (its lines 16 and 17) come in on lines 3 and 7.
@@ -137,8 +138,9 @@ def _twenty(value: Decimal) -> Decimal:
 
 
 def build(year: int, *, k1s: list[dict], rental: dict | None, returns: list[dict], confirmed: dict | None = None,
-          filing: str = "") -> Form:
-    """The year's Form 8995 from the saved K-1s (`k1`), its Schedule E (`rental`) and the filed returns (`prior`)."""
+          filing: str = "", worked_out: dict | None = None) -> Form:
+    """The year's Form 8995 from the saved K-1s (`k1`), its Schedule E (`rental`), the filed returns (`prior`) and
+    the year's Form 8582 as `passive` worked it out (`worked_out`), used when the year's own isn't filed and read."""
     confirmed = confirmed or {}
     form = Form(year)
     if year in THRESHOLDS and filing:
@@ -152,8 +154,11 @@ def build(year: int, *, k1s: list[dict], rental: dict | None, returns: list[dict
               if not b["name"].startswith("Schedule E")}
     rental_listed = any(b["name"].startswith("Schedule E") for b in (last or {}).get("businesses", []))
     filed_8582 = next((r for r in returns if r.get("year") == year and r.get("activities")), None)
-    limits = allowed(filed_8582) if filed_8582 else {}
-    if filed_8582 is None:
+    if filed_8582:
+        limits = allowed(filed_8582)
+    else:  # taxtrace's own, as `passive` worked it out
+        limits = {a["name"]: Decimal(a["allowed"]) for a in (worked_out or {}).get("activities", [])}
+    if not limits:
         form.ask(f"{year}'s Form 8582 isn't worked out yet: a passive loss it doesn't allow isn't qualified business "
                  "income until a later year allows it, and an earlier loss it frees is, so each business's amount here "
                  "is before that limit")

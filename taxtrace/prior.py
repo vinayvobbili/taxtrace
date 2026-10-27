@@ -165,6 +165,7 @@ class Carryforwards:
     rentals: list = field(default_factory=list)  # the filed Schedule E's properties (`schedule_e.Rental`)
     foreign_tax: list = field(default_factory=list)  # Schedule B (Form 1116) by category (`f1116b.Schedule`)
     carryovers: list = field(default_factory=list)  # the Carryover Worksheet's rows (`carryover.Item`)
+    carryover_sections: list[str] = field(default_factory=list)  # every section it prints, empty ones too
     qbi: object | None = None  # the filed Form 8995 (`f8995.Filed`)
 
     def check(self, what: str, ok: bool, page: int) -> None:
@@ -277,6 +278,7 @@ def _carryovers(found: Carryforwards, pages: list[str], words: dict[int, list[di
             continue
         items, questions = carryover.read(n, words[n])
         found.carryovers += items
+        found.carryover_sections += carryover.sections(words[n])
         found.questions += questions
         if found.year:
             found.check(f"the Carryover Worksheet carries to {found.year + 1}",

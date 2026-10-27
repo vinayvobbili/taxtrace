@@ -274,10 +274,29 @@ masked name, where its year comes from and whether it's income or a loss, never 
 
 - An activity with no K-1 this year is a question: sold, ended, or missing from the folder? A full disposition (a
   final K-1) frees the loss it carries.
-- When the latest return isn't last year's, what each activity carries in is left unknown, and the gap is a
-  question: the years between changed it.
-- The rental's year comes from Schedule E, and a box 13 deduction whose code doesn't settle whether it's the
-  activity's is a question.
+- What each activity carries in comes from last year's Worksheet 5. When last year's copy has none, its Carryover
+  Worksheet's Passive Activity section printed empty means nothing carries in; failing that, last year's ledger
+  (activities sold last year dropped) and the Form 8582 `passive` worked out for it. Each is a note to confirm
+  against the filed Worksheet 5, and with none of them what each carries in is left unknown.
+- The rental's year comes from Schedule E (`rental`), and a box 13 deduction whose code doesn't settle whether it's
+  the activity's is a question.
+
+With every activity's year and carried loss known, `passive` works the year's Form 8582 out and saves it with the
+ledger:
+
+- Each activity goes in Part IV (rental real estate with active participation: the latest return's Worksheet 1) or
+  Part V (every other one, a partnership's new activity too). Line 3 adds them up; zero or more, and every loss is
+  allowed.
+- Part II's special allowance (up to $25,000, phased out between $100,000 and $150,000 of modified adjusted gross
+  income) needs `--confirm magi=AMOUNT`; married filing separately also needs `lived_apart=yes|no`. It goes to the
+  Part IV activities first (Part VI).
+- The rest of line 3's loss is unallowed, shared by the activities with an overall loss in proportion to their losses
+  (Part VII), and carries to next year. An activity disposed of in full at an overall loss is off the form: its
+  losses, carried ones too, are allowed in full.
+- Every filed return whose worksheets were read is worked out again from its own Worksheets 1 and 3 and checked
+  against its Worksheet 5: the same arithmetic, rehearsed on the preparer's numbers.
+
+The terminal says what each activity's loss does (allowed, part carried on, off the form), never how much.
 
 ## Form 1098
 
@@ -339,9 +358,10 @@ taxtrace qbi --year 2025 --confirm k1_4567=business --confirm rental=not
 - Each partnership's qualified business income is its K-1's passive income or loss (boxes 1, 2, 3 and 10, less 12),
   the figure a preparer's Form 8995 carries, rather than the Section 199A statement's own total.
 - The rental's is Schedule E's net from `rental`.
-- A passive loss Form 8582 doesn't allow isn't qualified business income until a later year allows it. With the
-  year's Form 8582 filed and read, each activity's amount is what it let through (its overall gain or loss, less
-  what Worksheet 5 carried on); without it the amounts are before that limit, and that's a question.
+- A passive loss Form 8582 doesn't allow isn't qualified business income until a later year allows it. Each
+  activity's amount is what the year's Form 8582 let through (its overall gain or loss, less what it carried on):
+  the filed one when the year's return is read, otherwise the one `passive` worked out. With neither, the amounts
+  are before that limit, and that's a question.
 - Which businesses count follows last year's filed Form 8995: a partnership it listed (by its EIN's last four
   digits) that has income or a loss this year, and the rental if it listed a Schedule E. One it didn't list is a
   question for `--confirm k1_<last four>=business|not` (or `rental=`), kept in `qbi/<year>-confirmed.json`.

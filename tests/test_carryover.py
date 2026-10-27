@@ -79,6 +79,12 @@ def test_another_year_and_a_passive_row_are_caught(tmp_path: Path):
     assert all(i.section != "Passive Activity" for i in found.carryovers)
 
 
+def test_every_section_is_kept_empty_ones_too(tmp_path: Path):
+    found = read(draw(tmp_path / "2025 Return.pdf", [WORKSHEET]))
+    assert {"Passive Activity", "At Risk Limitations"} <= set(found.carryover_sections)
+    assert len(found.carryover_sections) == len(set(found.carryover_sections))
+
+
 def test_cli_shows_the_labels_never_the_amounts(tmp_path: Path, workspace_home: Path, capsys):
     path = draw(tmp_path / "2025 Return.pdf", [REGULAR_1, REGULAR_2, AMT_2, AMT_1, WORKSHEET, FORM_8995])
     assert cli.main(["prior", str(path), "--layout"]) == 0

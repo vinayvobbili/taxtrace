@@ -16,6 +16,7 @@ import re
 from dataclasses import asdict, dataclass, field
 from decimal import Decimal
 
+from . import f8582
 from .prior import Question
 
 # a K-1's passive income (loss): the business, the rental real estate and other rentals, and section 1231 gain
@@ -33,7 +34,7 @@ class Line:
     """One activity's year."""
 
     activity: str  # as the latest return's worksheet names it, or as its K-1 does for a new one
-    source: str = ""  # "k1" or "schedule e"
+    source: str = ""  # "k1", "schedule e", or "merged" (into another activity, in an earlier year)
     current: Decimal | None = None  # this year's net income (positive) or loss (negative); None: not known yet
     carried: Decimal | None = None  # the unallowed loss it brings in; None: the year before's return isn't in hand
     carried_from: int | None = None  # the return whose Worksheet 5 gave it
@@ -96,33 +97,44 @@ def passive_amount(items: list[dict]) -> tuple[Decimal, list[str]]:
     return total, left_out
 
 
-def build(year: int, returns: list[dict], k1s: list[dict]) -> Ledger:
-    """The ledger for `year` from the saved carryforwards (`prior` JSON) and K-1s (`k1` JSON, federal faces)."""
+def build(year: int, returns: list[dict], k1s: list[dict], previous: dict | None = None) -> Ledger:
+    """The ledger for `year` from the saved carryforwards (`prior` JSON) and K-1s (`k1` JSON, federal faces).
+
+    What each activity carries in comes from last year's return: its Worksheet 5, or, when its copy has no Form 8582
+    worksheets, its Carryover Worksheet's Passive Activity section printed empty (nothing carries in). Without
+    either, last year's ledger (`previous`, as this function saved it) gives the activities, and its worked-out Form
+    8582 what each carries in."""
     ledger = Ledger(year)
     earlier = [r for r in returns if r.get("year") and r["year"] < year and (r.get("activities") or r.get("unallowed"))]
     latest = max(earlier, key=lambda r: r["year"], default=None)
     faces = [f for f in k1s if "form" not in f and f.get("year") == year and f.get("copy_of") is None
              and not f.get("retirement_plan")]
-    if latest is None:
+    if previous is not None and previous.get("year") != year - 1:
+        previous = None
+    if latest is not None and latest["year"] == year - 1:
+        previous = None  # last year's own worksheets are better than a ledger built before they were read
+    if latest is None and previous is None:
         ledger.ask(f"no return before {year} with Form 8582's worksheets has been read: run `taxtrace prior` on last "
                    "year's return, and each activity's carried loss comes from it")
-    else:
+    if latest is not None:
         ledger.latest = latest["year"]
-        if latest["year"] < year - 1:
-            ledger.ask(f"the latest return with Form 8582 is {latest['year']}'s: the {latest['year'] + 1} to "
-                       f"{year - 1} returns changed what each activity carries, so the losses carried into {year} "
-                       f"come from the {year - 1} return's Worksheet 5")
-        carried = {u["activity"]: Decimal(u["unallowed"]) for u in latest.get("unallowed", [])}
+    if previous is not None:  # every activity still going last year, as last year's ledger has it
+        for p in previous.get("lines", []):
+            if not p.get("final"):
+                ledger.lines.append(Line(p["activity"], worksheet=p.get("worksheet", ""),
+                                         merged_into=p.get("merged_into", "")))
+    elif latest is not None:
         names = [a["activity"] for a in latest.get("activities", [])]
-        names += [n for n in carried if n not in names]  # a Worksheet 5 row whose Worksheet 3 row wasn't read
+        names += [u["activity"] for u in latest.get("unallowed", [])
+                  if u["activity"] not in names]  # a Worksheet 5 row whose Worksheet 3 row wasn't read
         sheet = {a["activity"]: a["worksheet"] for a in latest.get("activities", [])}
-        for name in names:
-            line = Line(name, worksheet=sheet.get(name, ""), carried_from=latest["year"])
-            if latest["year"] == year - 1:
-                line.carried = carried.get(name, Decimal(0))
-            ledger.lines.append(line)
+        ledger.lines = [Line(name, worksheet=sheet.get(name, "")) for name in names]
+    _carried_in(ledger, latest, previous, returns)
     taken: dict[int, Line] = {}
     for line in ledger.lines:
+        if line.merged_into:  # merged in an earlier year: its year is counted with the one it merged into
+            line.source = "merged"
+            continue
         scores = sorted(((similar(line.activity, f.get("partnership", "")), i) for i, f in enumerate(faces)
                          if i not in taken), reverse=True)
         if scores and scores[0][0] >= MATCH:
@@ -157,6 +169,72 @@ def build(year: int, returns: list[dict], k1s: list[dict]) -> Ledger:
                 ledger.ask(f"box {box}: whether this deduction is part of the passive activity's loss isn't settled "
                            "by its code", line.activity)
     return ledger
+
+
+def _carried_in(ledger: Ledger, latest: dict | None, previous: dict | None, returns: list[dict]) -> None:
+    """Each line's carried loss and the return (or ledger) it comes from, or the question of where it would."""
+    year = ledger.year
+    if latest is not None and latest["year"] == year - 1:
+        carried = {u["activity"]: Decimal(u["unallowed"]) for u in latest.get("unallowed", [])}
+        for line in ledger.lines:
+            line.carried, line.carried_from = carried.get(line.activity, Decimal(0)), year - 1
+        return
+    last = next((r for r in returns if r.get("year") == year - 1 and r.get("carryover_sections")), None)
+    listed = last is not None and any("under Passive Activity" in q["text"] for q in last.get("questions", []))
+    if last is not None and "Passive Activity" in last["carryover_sections"] and not listed:
+        for line in ledger.lines:
+            line.carried, line.carried_from = Decimal(0), year - 1
+        ledger.ask(f"the {year - 1} return's Carryover Worksheet prints its Passive Activity section empty, so no "
+                   f"activity carries a loss into {year}: its Form 8582 Worksheet 5 would confirm it")
+        return
+    form = (previous or {}).get("form_8582")
+    if form:
+        unallowed = {a["name"]: Decimal(a["unallowed"]) for a in form.get("activities", [])}
+        for line in ledger.lines:  # a merged activity's loss went on with the one it merged into
+            line.carried, line.carried_from = unallowed.get(line.activity, Decimal(0)), year - 1
+        ledger.ask(f"what each activity carries into {year} is taxtrace's own {year - 1} Form 8582, not a filed one: "
+                   f"the {year - 1} return's Worksheet 5 would confirm it")
+        return
+    since = latest["year"] if latest else None
+    if since is not None or previous is not None:
+        ledger.ask(f"what each activity carries into {year} comes from the {year - 1} return's Form 8582 Worksheet 5"
+                   + (f" (the latest read is {since}'s, and the years between changed it)" if since else "")
+                   + ", or its Carryover Worksheet: neither is read yet")
+
+
+def confirmation(spec: str) -> tuple[str, object]:
+    """'magi=180000' (Decimal, as a string to keep), or 'lived_apart=yes' (bool)."""
+    key, sep, value = (s.strip() for s in spec.partition("="))
+    key = key.lower()
+    try:
+        if sep and key == "magi":
+            return key, str(Decimal(value.replace(",", "")))
+        if sep and key == "lived_apart" and value.lower() in ("yes", "no"):
+            return key, value.lower() == "yes"
+    except ArithmeticError:
+        pass
+    raise ValueError("--confirm takes magi=AMOUNT or lived_apart=yes|no")
+
+
+def for_8582(ledger: Ledger, rental: Decimal | None) -> tuple[list[f8582.Activity], list[str]]:
+    """The ledger's activities as Form 8582 takes them, and the names of those whose year or carried loss isn't
+    known yet (the form waits for them). The rental's year is Schedule E's net (`rental`); a merged activity's
+    carried loss goes on with the one it merged into; an activity new this year is in Part V, since a partnership
+    interest's rental isn't one the partner actively participates in."""
+    for line in ledger.lines:
+        if line.source == "schedule e":
+            line.current = rental
+    carried = {line.activity: line.carried for line in ledger.lines}
+    for line in ledger.lines:
+        if line.merged_into and line.carried is not None and carried.get(line.merged_into) is not None:
+            carried[line.merged_into] += line.carried
+    missing = [line.activity for line in ledger.lines
+               if (line.current is None and not line.merged_into) or line.carried is None]
+    if missing:
+        return [], missing
+    return [f8582.Activity(line.activity, "IV" if line.worksheet == "1" else "V", line.current,
+                           carried[line.activity], line.final)
+            for line in ledger.lines if not line.merged_into], []
 
 
 def _from_k1(line: Line, face: dict) -> None:

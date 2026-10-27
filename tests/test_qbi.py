@@ -80,6 +80,14 @@ def test_form_8582s_limit_sets_each_activitys_amount():
     assert not [q for q in form.questions if "Form 8582" in q.text]
 
 
+def test_passives_worked_out_form_8582_sets_each_activitys_amount_when_none_is_filed():
+    worked_out = {"activities": [{"name": "LARKSPUR RIDGE FUND LP", "allowed": "-400"},
+                                 {"name": "RENTAL PROPERTY", "allowed": "2150"}]}
+    form = build(k1s=[LARKSPUR], worked_out=worked_out)
+    assert [b.income for b in form.businesses] == [Decimal(-400), Decimal(2150)]
+    assert not [q for q in form.questions if "Form 8582" in q.text]
+
+
 def test_the_rehearsal_names_the_figure_a_filed_form_used():
     filed = {"file": "2025 Return.pdf", "year": 2025, "qbi": {
         "businesses": [{"name": "K1P: LARKSPUR RIDGE FUND LP", "tin": "88-1234567", "income": "-2000"},

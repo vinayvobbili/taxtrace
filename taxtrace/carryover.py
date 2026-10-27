@@ -11,6 +11,7 @@ Anything under Passive Activity or At Risk Limitations is asked about: no copy s
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator
 from dataclasses import dataclass
 
 from . import text
@@ -43,24 +44,41 @@ def to_year(page: str) -> int | None:
     return int(m.group(1)) if m else None
 
 
-def read(n: int, words: list[dict]) -> tuple[list[Item], list[Question]]:
-    items: list[Item] = []
-    questions: list[Question] = []
-    section = ""
+def _walk(words: list[dict]) -> Iterator[tuple[str, list[dict] | None]]:
+    """(section, row) for each row under the "Carryover Amount" heading, and (section, None) as each section
+    starts: the first beside that heading, the rest at the left margin."""
     started = False
     for row in _rows(words):
         texts = [w["text"] for w in row]
         if not started:
             started = "Carryover" in texts and "Amount" in texts
             if started:
-                section = " ".join(w["text"] for w in row if w["x0"] < LEFT)
+                yield " ".join(w["text"] for w in row if w["x0"] < LEFT), None
             continue
         if len(row) == 1 and len(texts[0]) == 1:
             continue  # a letter of the "Client Copy" watermark
         if row[0]["x0"] < 50:  # a section's heading, or the form's id at the foot ("WK_CARRY.LD")
             if all(t.isalpha() for t in texts):
-                section = " ".join(texts)
+                yield " ".join(texts), None
             continue
+        yield "", row
+
+
+def sections(words: list[dict]) -> list[str]:
+    """The sections the worksheet prints, with rows or without: an empty Passive Activity section says no passive
+    loss carries to next year."""
+    return [section for section, row in _walk(words) if row is None]
+
+
+def read(n: int, words: list[dict]) -> tuple[list[Item], list[Question]]:
+    items: list[Item] = []
+    questions: list[Question] = []
+    section = ""
+    for heading, row in _walk(words):
+        if row is None:
+            section = heading
+            continue
+        texts = [w["text"] for w in row]
         label, amounts = _split(row)
         quote = " ".join(texts)
         if section in UNREAD:
