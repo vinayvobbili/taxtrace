@@ -25,7 +25,7 @@ def plan(**confirmed) -> estimates.Plan:
 def test_withholding_that_reaches_110_percent_meets_every_quarter():
     p = plan(withheld=35200)
     assert (p.last_tax, p.rate, p.required) == (Decimal(32000), Decimal("1.10"), Decimal("35200.00"))
-    assert p.short == [] and p.more_withholding == 0 and p.january == 0
+    assert p.short == [] and p.more_withholding == 0 and p.january == 0 and p.margin == 0
     assert [c.ok for c in p.checks] == [True]
     assert [q.text.split(" ")[0] for q in p.questions] == ["2026's"]  # the year's own tax isn't known yet
 
@@ -42,6 +42,8 @@ def test_last_years_overpayment_applied_counts_in_april_and_the_years_own_tax_ca
     applied = {**FILED, "f1040": {"lines": {**FILED["f1040"]["lines"], "34": "9000", "36": "9000"}}}
     p = estimates.build(2026, returns=[applied], confirmed={"withheld": "26200"})
     assert p.short == [] and p.applied == Decimal(9000)
+    # the applied 9,000 counts whole from April, so the first quarter has room to spare: the last one binds
+    assert p.quarters[0].paid - p.quarters[0].required == Decimal(6750) and p.margin == 0
     p = plan(withheld=27000, tax=30000)  # 90% of 30,000 is 27,000, less than 110% of last year's
     assert p.required == Decimal("27000.00") and p.short == [] and not p.questions
 

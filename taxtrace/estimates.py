@@ -8,7 +8,9 @@ Form 2210 uses, or else the filed Form 1040's total tax (line 24) less its refun
 That amount is due in four quarters, a quarter of it each by April 15, June 15, September 15 and January 15, and
 each quarter is checked on its own: a payment counts on the day it's made, so a January payment can't make up an
 earlier quarter. Tax withheld from pay counts as paid evenly through the year however late it was withheld, so
-more withholding before the year ends makes up every quarter. Last year's overpayment applied to this year (its
+more withholding before the year ends makes up every quarter, and less takes from every quarter: the margin is
+what it could fall by with each still met. Deferring the 401(k)'s room left (`paystub`) withholds less, about 24
+cents a dollar, so that's checked against the margin. Last year's overpayment applied to this year (its
 line 36) counts as paid on April 15.
 
 The year's withholding is the latest pay stub's projection (`paystub`): its year to date's, and its paycheck's for
@@ -31,6 +33,7 @@ NINETY = Decimal("0.90")
 HIGHER = Decimal("1.10")  # last year's tax, when its AGI was over the threshold
 THRESHOLD = {"separate": Decimal(75000)}  # last year's AGI past which 110% applies; $150,000 for every other filing
 OVER = Decimal(150000)
+DEFERRAL_WITHHOLDING = Decimal("0.24")  # a pre-tax dollar's withholding at the 24% bracket's rate: on the safe side
 LIABILITY = "federal tax liability for"  # the Carryover Worksheet's row: "Federal tax liability for 2025 calculation"
 
 
@@ -62,6 +65,8 @@ class Plan:
     quarters: list[Quarter] = field(default_factory=list)
     more_withholding: Decimal = Decimal(0)  # more withheld before the year ends that meets every quarter
     january: Decimal = Decimal(0)  # a January payment that meets the last quarter (only it)
+    margin: Decimal = Decimal(0)  # what the withholding could fall by with every quarter still met
+    deferral_cut: Decimal | None = None  # what filling the 401(k)'s room would take off the withholding
     checks: list[Check] = field(default_factory=list)
     questions: list[Question] = field(default_factory=list)
 
@@ -162,6 +167,12 @@ def build(year: int, *, returns: list[dict], confirmed: dict | None = None, fili
     plan.more_withholding = max((q.short * 4 / k for k, q in enumerate(plan.quarters, 1)),
                                 default=Decimal(0)).quantize(CENT, ROUND_UP)
     plan.january = plan.quarters[-1].short
+    # and less withholding takes a quarter of itself from each: what it could fall by with every quarter still met
+    plan.margin = max(Decimal(0), min((q.paid - q.required) * 4 / k for k, q in enumerate(plan.quarters, 1))
+                      ).quantize(CENT, ROUND_HALF_UP)
+    if stub and stub.get("deferral_room"):
+        # deferring the 401(k)'s room left takes it out of the taxable wages the paychecks left withhold on
+        plan.deferral_cut = (Decimal(stub["deferral_room"]) * DEFERRAL_WITHHOLDING).quantize(CENT, ROUND_HALF_UP)
     return plan
 
 
@@ -176,5 +187,6 @@ def to_json(plan: Plan) -> dict:
             "quarters": [{"due": q.due.isoformat(), "required": str(q.required), "paid": str(q.paid),
                           "short": str(q.short)} for q in plan.quarters],
             "more_withholding": str(plan.more_withholding), "january": str(plan.january),
+            "margin": str(plan.margin), "deferral_cut": plain(plan.deferral_cut),
             "checks": [{"what": c.what, "ok": c.ok} for c in plan.checks],
             "questions": [q.text for q in plan.questions]}

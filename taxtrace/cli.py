@@ -1207,6 +1207,14 @@ def cmd_estimates(args: argparse.Namespace) -> int:
         print(f"  more withholding before December 31 of {masked(f'{plan.more_withholding:,.2f}')} meets every quarter"
               + (f"; a January payment of {masked(f'{plan.january:,.2f}')} meets quarter 4 only" if plan.january
                  else ""))
+    elif plan.quarters:
+        print(f"  the withholding could fall by {masked(f'{plan.margin:,.2f}')} and still meet every quarter")
+    if plan.deferral_cut is not None and plan.quarters:
+        fits = plan.deferral_cut <= plan.margin
+        print(f"  filling the 401(k)'s room withholds about {masked(f'{plan.deferral_cut:,.2f}')} less: every "
+              + ("quarter is still met" if fits else
+                 f"quarter isn't met; {masked(f'{plan.deferral_cut - plan.margin:,.2f}')} more withheld (a W-4 "
+                 "extra amount) makes it up"))
     bad = [c for c in plan.checks if not c.ok]
     for c in bad:
         print(f"  failed: {c.what}")

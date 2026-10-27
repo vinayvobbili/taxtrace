@@ -87,4 +87,8 @@ def test_cli_prints_no_amounts_and_estimates_takes_the_projection(tmp_path: Path
     out = printed(capsys)
     assert "withholding: the pay stub paid Oct 31, 2026 and its 4 paychecks left" in out
     assert "quarter 4, due Jan 15, 2027: met" in out
+    # 27,839.46 withheld against 26,400 due leaves 1,439.46; 24% of the 8,000 room is 1,920
+    assert "the withholding could fall by #,###.## and still meet every quarter" in out
+    assert "filling the 401(k)'s room withholds about #,###.## less: every quarter isn't met; ###.## more withheld " \
+           "(a W-4 extra amount) makes it up" in out
     assert json.loads((workspace_home / "estimates" / "2026.json").read_text())["withheld"] == "27839.46"
