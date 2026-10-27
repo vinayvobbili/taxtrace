@@ -28,7 +28,7 @@ STATEMENTS = [{"account": "5520", "operation": "SINGLE", "end": "28-02-2026"},
               {"account": "5520", "operation": "FORMER OR SURVIVOR", "end": "31-03-2026"},
               {"account": "4402", "operation": "SINGLE", "end": "31-03-2026"}]
 CONFIRMED = {"bank_godavari": "Godavari Grameena Bank; 12 Tank Bund Road, Vennelapadu 533999, India",
-             "joint_3301": "no"}
+             "joint_3301": "no", "owner_godavari": "Kanakadurga Peddireddi; 9-3 Lotus Lane, Vennelapadu 533999, India"}
 
 
 def test_each_spouses_accounts_their_parts_and_maximum_values():
@@ -49,6 +49,17 @@ def test_each_spouses_accounts_their_parts_and_maximum_values():
     assert "Your FBAR (due): 3 account(s)" in sheet and "Your spouse’s FBAR (not due): 2 account(s)" in sheet
     assert "  Part II, account ending 3301: Bank, INR\n    maximum value $1,835\n" in sheet
     assert "maximum value $250 (an estimate so far)" in sheet and "Still to settle:" in sheet
+    assert [(i.owners, i.principal[:11]) for i in mine] == [(None, ""), (1, "Kanakadurga"), (1, "spouse")]
+    assert ("joint owners besides you: 1; principal joint owner: Kanakadurga Peddireddi; 9-3 Lotus Lane, "
+            "Vennelapadu 533999, India") in sheet
+    assert "joint owners besides you: 1; principal joint owner: the other spouse" in sheet
+
+
+def test_an_account_held_with_someone_unnamed_asks_who():
+    found = fbar.build(2026, FOUND, STATEMENTS, {k: v for k, v in CONFIRMED.items() if k != "owner_godavari"})
+    assert found.filers["self"][1].owners is None
+    assert any(q.text.startswith("account 2: held with someone else: their name and address for Part III")
+               for q in found.questions)
 
 
 def test_an_account_no_statement_or_confirmation_calls_joint_is_asked_about():

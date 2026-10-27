@@ -163,10 +163,12 @@ def confirmation(spec: str) -> tuple[str, str]:
         if not (len(key) == 10 and key[6:].isdigit()) or value.lower() not in ("yes", "no"):
             raise ValueError("whether an account is held jointly is joint_<its last four digits>=yes|no")
         return key, value.lower()
-    if sep and key.startswith("bank_"):  # for the FBAR: the bank whose statements' file names start so
+    # for the FBAR: the bank whose statements' file names start so, and who else holds its joint accounts
+    if sep and (key.startswith("bank_") or key.startswith("owner_")):
         name, semi, address = value.partition(";")
-        if not (re.fullmatch(r"bank_[a-z]+", key.lower()) and name.strip() and semi and address.strip()):
-            raise ValueError("a bank is bank_<its statements' file name's first word>=<name>; <mailing address>")
+        if not (re.fullmatch(r"(bank|owner)_[a-z]+", key.lower()) and name.strip() and semi and address.strip()):
+            raise ValueError("a bank is bank_<its statements' file name's first word>=<name>; <mailing address>, "
+                             "and the other holder of its joint accounts owner_<the same word>=<name>; <address>")
         return key.lower(), f"{name.strip()}; {address.strip()}"
     if not sep or key not in CONFIRMS:
         raise ValueError(f"--confirm takes one of {', '.join(CONFIRMS)}, as KEY=VALUE")

@@ -4,7 +4,9 @@ Each spouse whose accounts together passed $10,000 at any time in the year files
 in their name: an account held with the other spouse is on both, one held with anyone else (a parent) is theirs in
 full. Per account the form asks the bank's name and mailing address, the account's type and number, and its maximum
 value: the highest balance, at the Treasury's December 31 rate, rounded up to the next whole dollar. An account
-held alone goes in Part II, one held with anyone else in Part III, with how many own it.
+held alone goes in Part II, one held with anyone else in Part III, with how many own it besides the filer and the
+principal joint owner: the other spouse, when they hold it, or else the person confirmed for that bank
+(owner_<the statements' file name's first word>; one other owner).
 
 What's read here is `taxtrace foreign`'s saved year, the statements' mode of operation ("SINGLE", "FORMER OR
 SURVIVOR") for whether an account is held jointly, and what was confirmed: each bank's name and address
@@ -36,6 +38,8 @@ class Item:
     joint: bool | None  # held with anyone else: Part III; alone: Part II; None until a statement or confirmation says
     part: str  # "II" or "III", "" while `joint` isn't known
     estimate: bool  # the year isn't covered yet, or its December 31 rate isn't out
+    owners: int | None = None  # Part III: how many own it besides the filer, once known
+    principal: str = ""  # Part III: the principal joint owner, "<name>; <address>", or "spouse"
 
 
 @dataclass
@@ -85,6 +89,15 @@ def build(year: int, found: dict, statements: list[dict], confirmed: dict) -> Fb
         item = Item(a.get("account", ""), name, address, "Bank", a.get("currency", ""), maximum, joint,
                     {True: "III", False: "II"}.get(joint, ""),
                     bool(a.get("missing")) or bool(found.get("estimated")) or maximum is None)
+        if a.get("holder") == "joint":  # the spouses': each other's principal joint owner
+            item.owners, item.principal = 1, "spouse"
+        elif joint:
+            item.principal = confirmed.get(f"owner_{_issuer(a.get('files', []))}", "")
+            item.owners = 1 if item.principal else None
+            if not item.principal:
+                fbar.questions.append(Question(f"account {n}: held with someone else: their name and address for Part "
+                                               "III (`taxtrace foreign --confirm owner_<the statements' file name's "
+                                               "first word>=<name>; <address>`)", 0, ""))
         for whose in filers:
             fbar.filers.setdefault(whose, []).append(item)
     fbar.due = {whose: found.get("reporting", {}).get(key) for whose, key in FILERS.items() if whose in fbar.filers}
@@ -102,8 +115,12 @@ def checklist(fbar: Fbar) -> str:
             lines += [f"  Part {item.part or '?'}, account ending {item.account}: {item.type}, {item.currency}",
                       f"    maximum value {value}" + (" (an estimate so far)" if item.estimate else ""),
                       f"    bank: {item.bank or '?'}; {item.address or '?'}",
-                      "    account number: type it in from a statement"
-                      + ("; Part III also asks how many own it and the principal joint owner" if item.joint else "")]
+                      "    account number: type it in from a statement"]
+            if item.joint:
+                other = ("the other spouse" if item.principal == "spouse"
+                         else item.principal or "? (name; address)")
+                lines.append(f"    joint owners besides you: {item.owners or '?'}; principal joint owner: {other} "
+                             "(TIN: leave blank if they have no US one)")
         lines.append("")
     if fbar.questions:
         lines += ["Still to settle:", *(f"  {q.text}" for q in fbar.questions)]

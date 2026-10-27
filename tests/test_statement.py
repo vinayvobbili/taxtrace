@@ -158,9 +158,12 @@ BALANCES = [*TOP,
 DEPOSITS = [*TOP,
     (10, 159, "FIXED DEPOSITS"), (502, 185, "CURRENCY: INR"),
     (10, 213, "Account Type"), (88, 208, "Account Number"), (166, 208, "Principal"), (377, 213, "Interest Accrued"),
+    (254, 218, "Operation"),
+    (257, 245, "EITHER OR"),
     (12, 249, "TERM DEPOSIT"), (70, 249, "XXXXXXX3301"), (126, 249, "15-07-25"), (166, 249, "150000.00"),
     (227, 249, "P"), (310, 249, "6.80"), (346, 249, "0.00"), (396, 249, "7546.30"), (459, 249, "172010.00"),
     (514, 249, "15-07-27"), (560, 249, "Yes"),
+    (258, 253, "SURVIVOR"),
     (257, 275, "EITHER OR"),
     (12, 279, "TERM DEPOSIT"), (70, 279, "XXXXXXX3302"), (126, 279, "02-01-26"), (166, 279, "100000.00"),
     (227, 279, "P"), (310, 279, "7.00"), (346, 279, "0.00"), (396, 279, "1706.85"), (459, 279, "114888.00"),
@@ -213,6 +216,8 @@ def test_a_statement_of_every_account_reads_as_one_statement_each(tmp_path: Path
     assert (first.opening, first.closing, second.closing) == (Decimal("157546.30"), Decimal("157546.30"),
                                                               Decimal("101706.85"))
     assert (savings.operation, quiet.operation) == ("FORMER OR SURVIVOR", "SINGLE")
+    # each deposit's mode prints around its row, the one below's line close to the next row's
+    assert (first.operation, second.operation) == ("EITHER OR SURVIVOR", "EITHER OR SURVIVOR")
     assert [(str(r.deposit), str(r.withdrawal), str(r.balance), r.kind, r.description) for r in savings.rows] == [
         ("379.65", "0", "52379.65", "interest", "INTEREST CREDIT"),
         ("0", "15.00", "52364.65", "", "SMS CHG JAN-MAR QTR"),
@@ -240,7 +245,8 @@ def test_cli_saves_each_account_of_a_statement_of_every_account(tmp_path: Path, 
     out = printed(capsys)
     for secret in ["Lalitha", "Vemulapati", "3301", "5520", "52361.95", "150000.00", "CIF00004417"]:
         assert secret not in out
-    assert ("term deposit ending #### in INR, opened 15-07-2025, matures 15-07-2027, 01-03-2026 to 31-03-2026; "
+    assert ("term deposit ending #### in INR, either or survivor, opened 15-07-2025, matures 15-07-2027, "
+            "01-03-2026 to 31-03-2026; "
             "0 rows") in out
     assert "savings account ending #### in INR, former or survivor, 01-03-2026 to 31-03-2026; 3 rows (1 interest" in out
     saved = sorted(p.name for p in (workspace_home / "forms").glob("bank-*.json"))

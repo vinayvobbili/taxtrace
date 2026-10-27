@@ -250,8 +250,10 @@ def _transaction(row: list[dict], columns: dict[str, float], n: int, text: str) 
 
 def _deposits(name: str, n: int, rows: list[list[dict]], start: str, end: str, currency: str) -> list[Statement]:
     """The term deposits' page: a row each, its account, opening day, principal, holding, rate, lien, interest
-    accrued, maturity amount and maturity day."""
+    accrued, maturity amount and maturity day. The mode of operation prints in two lines around the row ("EITHER OR",
+    then "SURVIVOR"), under the "Operation" header."""
     found = []
+    mode_x = next((w["x0"] for r in rows for w in r if w["text"] == "Operation"), None)
     for row in rows:
         texts = [w["text"] for w in row]
         days = [i for i, t in enumerate(texts) if SHORT_DAY.match(t)]
@@ -260,6 +262,10 @@ def _deposits(name: str, n: int, rows: list[list[dict]], start: str, end: str, c
         amounts = [money(t) for t in texts[days[0] + 1:days[1]] if MONEY.match(t)]
         s = Statement(name, account, currency, start, end, kind="term deposit")
         s.balance_page, s.balance_quote = n, " ".join(texts)
+        if mode_x is not None:
+            near = [w for r in rows if r is not row and abs(r[0]["top"] - row[0]["top"]) <= 6 for w in r
+                    if mode_x - 10 <= w["x0"] < mode_x + 50 and w["text"].isalpha()]
+            s.operation = " ".join(w["text"] for w in sorted(near, key=lambda w: (w["top"], w["x0"])))
         found.append(s)
         if len(amounts) != 5:
             s.questions.append(Question(f"term deposit {account}'s row doesn't read as principal, rate, lien, interest "
