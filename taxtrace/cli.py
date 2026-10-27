@@ -626,6 +626,63 @@ def cmd_1098(args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+def cmd_1099(args: argparse.Namespace) -> int:
+    """Read the 1099-DIVs and 1099-INTs on brokers' consolidated 1099 statements into <workspace>/forms: each box,
+    the payer and the year.
+
+    The values go only to that folder. What's printed is masked: which boxes have amounts, the checks that failed
+    and the questions (foreign tax, return of capital, tax-exempt interest), and with --layout each value's text
+    and where it sits.
+    """
+    from . import f1099, k1
+
+    home = workspace.outside_git(workspace.home())
+    terms = workspace.redact_terms()
+
+    def masked(line: str) -> str:
+        return redact.redact(line, terms).text.strip()
+
+    out, written, failed = home / workspace.FORMS, 0, 0
+    for doc in _documents(args):
+        name = redact.redact(doc.name, terms, bare_years=True).text
+        try:
+            pages, password = _unlocked(doc)
+        except text.UnsupportedDocument as err:
+            print(f"{name}: skipped, {err}")
+            continue
+        forms = [n for n, page in enumerate(pages, 1) if f1099.is_form(page)]
+        if not forms or doc.suffix.lower() not in text.PDF_SUFFIXES:
+            continue
+        words = {n: text.words(doc, n, password) for n in forms}
+        found = f1099.read(doc.name, words)
+        for f in found:
+            problems = k1.verify(f, words[f.page])
+            failed += bool(f.failed or problems)
+            print(f"{name} p{f.page}: {f.year or '?'} Form {f.form} from {masked(f.payer_tin) or 'no payer TIN found'}"
+                  f", amounts in boxes {', '.join(f.amounts) or 'none'}; {len(f.checks) - len(f.failed)} of "
+                  f"{len(f.checks)} checks pass, {len(f.questions)} questions"
+                  + ("; corrected" if f.corrected else "")
+                  + (f"; a second copy of p{f.copy_of}'s, counted once" if f.copy_of else ""))
+            for c in f.failed:
+                print(f"  failed: {c.what}" + (f" ({masked(c.quote)})" if c.quote else ""))
+            for p in problems:
+                print(f"  failed: {masked(p)}")
+            for q in f.questions:
+                print(f"  question: {q.text}" + (f" ({masked(q.quote)})" if q.quote else ""))
+            if args.layout:
+                print(f"  account {masked(f.account) or 'not found'}")
+                for box, label in f.labels.items():
+                    v = f.amounts.get(box)
+                    print(f"  box {box} {masked(label)}: " + (f"{masked(v.quote)} at {v.top}, {v.x0}" if v else
+                                                              masked(f.words.get(box, "")) or "blank"))
+        if found:
+            out.mkdir(parents=True, exist_ok=True)
+            (out / f"{doc.stem}.json").write_text(json.dumps([f.to_json() for f in found], indent=2) + "\n")
+            written += 1
+    print(f"wrote to {out}" if written else "no 1099-DIVs or 1099-INTs found")
+    return 1 if failed else 0
+
+
 def cmd_itr(args: argparse.Namespace) -> int:
     """Read India's income tax returns (ITR-2) into <workspace>/forms: a sale of property in India, the interest
     India saw, and the tax India kept after the refund, for Form 8949 and Form 1116.
@@ -1002,7 +1059,9 @@ def cmd_qbi(args: argparse.Namespace) -> int:
     ledger_path = home / workspace.PASSIVE / f"{year}.json"
     form = qbi.build(year, k1s=k1s, rental=json.loads(rental_path.read_text()) if rental_path.exists() else None,
                      returns=saved(workspace.CARRYFORWARDS), confirmed=confirmed, filing=filing,
-                     worked_out=json.loads(ledger_path.read_text()).get("form_8582") if ledger_path.exists() else None)
+                     worked_out=json.loads(ledger_path.read_text()).get("form_8582") if ledger_path.exists() else None,
+                     forms=[row for rows in saved(workspace.FORMS)
+                            for row in (rows if isinstance(rows, list) else [rows])])
     print(f"{year} Form 8995: {len(form.businesses)} businesses; lines {', '.join(map(str, sorted(form.lines)))}"
           + (f"; the simplified form if taxable income before the deduction is at most {form.threshold:,}"
              if form.threshold else "; the threshold needs the filing status (`foreign --confirm filing=`)"))
@@ -1377,6 +1436,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("paths", nargs="*", help=PATHS_HELP)
     p.add_argument("--layout", action="store_true", help="also print each value's text and place, masked")
     p.set_defaults(func=cmd_1098)
+    p = sub.add_parser("1099", help="read the 1099-DIVs and 1099-INTs on brokers' consolidated 1099 statements",
+                       description=cmd_1099.__doc__)
+    p.add_argument("paths", nargs="*", help=PATHS_HELP)
+    p.add_argument("--layout", action="store_true", help="also print each value's text and place, masked")
+    p.set_defaults(func=cmd_1099)
     p = sub.add_parser("itr", help="read India's income tax returns: a property sale, interest, the tax India kept",
                        description=cmd_itr.__doc__)
     p.add_argument("paths", nargs="*", help=PATHS_HELP)
@@ -1393,7 +1457,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--year", type=int, required=True, help="the tax year")
     p.add_argument("--confirm", action="append", default=[], metavar="KEY=VALUE",
                    help="settle a question only you can answer, kept for later runs: fair_rental_days=365, "
-                        "personal_use_days=0, rent_all_year=yes, earlier_policy=AMOUNT (0: none), dues=AMOUNT")
+                        "personal_use_days=0, rent_all_year=yes, rent=AMOUNT, earlier_policy=AMOUNT (0: none), "
+                        "dues=AMOUNT, cleaning=AMOUNT, repairs=AMOUNT")
     p.set_defaults(func=cmd_rental)
     p = sub.add_parser("qbi", help="a year's Form 8995, the qualified business income deduction",
                        description=cmd_qbi.__doc__)

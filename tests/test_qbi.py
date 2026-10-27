@@ -99,7 +99,20 @@ def test_the_rehearsal_names_the_figure_a_filed_form_used():
                       "the business with EIN ending 4567: its income is the filed Form 8995's (the filed one is its "
                       "Section 199A statement's qualified business income and its aggregated group's qualified "
                       "business income)"]
-    assert len(form.checks) == 10
+    assert len(form.checks) == 11
+
+
+def test_the_years_1099_div_box_5_is_line_6_and_answers_last_years_line_6():
+    last = {**RETURN_2024, "qbi": {**RETURN_2024["qbi"], "lines": {**RETURN_2024["qbi"]["lines"], "6": "40"}}}
+    assert [q for q in qbi.build(2025, k1s=[], rental=None, returns=[last]).questions if "(line 6)" in q.text]
+
+    def div(amount: str, year: int = 2025, copy_of: int | None = None) -> dict:
+        return {"form": "1099-DIV", "year": year, "copy_of": copy_of, "amounts": {"5": {"amount": amount}}}
+
+    forms = [div("64.18"), div("64.18", copy_of=1), div("12.00", year=2024), {"form": "1098", "year": 2025}]
+    form = qbi.build(2025, k1s=[], rental=None, returns=[last], forms=forms)
+    assert (form.lines[6], form.lines[8], form.lines[9]) == (Decimal("64.18"), Decimal("64.18"), Decimal(13))
+    assert not [q for q in form.questions if "(line 6)" in q.text]
 
 
 def test_confirmation_takes_the_rental_or_an_eins_last_four():

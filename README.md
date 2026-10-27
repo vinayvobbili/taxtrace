@@ -38,6 +38,8 @@ Early. What works today:
 - `taxtrace passive`: each passive activity's year and the loss it carries in (see
   [Passive activities](#passive-activities)).
 - `taxtrace 1098`: reads each Form 1098 mortgage interest statement (see [Form 1098](#form-1098)).
+- `taxtrace 1099`: reads the 1099-DIVs and 1099-INTs on brokers' consolidated 1099 statements (see
+  [Forms 1099-DIV and 1099-INT](#forms-1099-div-and-1099-int)).
 - `taxtrace rental`: puts the rental's Schedule E together, line by line (see [Schedule E](#schedule-e)).
 - `taxtrace qbi`: Form 8995, the qualified business income deduction (see [Form 8995](#form-8995)).
 - `taxtrace itr`: reads India's income tax return (ITR-2): a property sale, the interest, the tax India kept (see
@@ -320,6 +322,28 @@ four digits only), the account number and the calendar year are read by their la
 - Box 8's address, or box 7's mark, says which property the interest is for: a rental's goes on Schedule E line 12,
   a home's on Schedule A. A 1098 with neither is a question.
 
+## Forms 1099-DIV and 1099-INT
+
+```bash
+taxtrace 1099 2025            # every consolidated 1099 statement in <workspace>/2025
+taxtrace 1099 2025 --layout   # also the account and each box's label, with its value masked
+```
+
+A broker's consolidated statement prints each form as a column of rows under its title ("1099-DIV Dividends and
+Distributions - 2025 ..."), the forms side by side: a box's id, its label, and the amount well right of the label.
+A box id printed a little under its label's line is on that row. The year is the title's; the payer's TIN and the
+account number are read by their labels. A statement printed twice counts once. The values go to
+`<workspace>/forms/<document>.json`; the terminal gets which boxes hold amounts, the checks and the questions.
+
+- The form's own arithmetic is checked: qualified dividends (1b), section 897 ordinary dividends (2e) and section
+  199A dividends (5) are each part of the ordinary dividends (1a), and 2b, 2c, 2d and 2f part of the capital gain
+  distributions (2a).
+- Box 5 is Form 8995 line 6 (`qbi`).
+- The boxes that change where an amount goes are questions: foreign tax paid (with box 8's country), a return of
+  capital (box 3), tax withheld, liquidation distributions, exempt-interest dividends, and on a 1099-INT the early
+  withdrawal penalty, Treasury interest (North Carolina doesn't tax it), tax-exempt interest and bond premium. So is
+  a corrected form.
+
 ## Schedule E
 
 ```bash
@@ -372,7 +396,8 @@ taxtrace qbi --year 2025 --confirm k1_4567=business --confirm rental=not
 - Which businesses count follows last year's filed Form 8995: a partnership it listed (by its EIN's last four
   digits) that has income or a loss this year, and the rental if it listed a Schedule E. One it didn't list is a
   question for `--confirm k1_<last four>=business|not` (or `rental=`), kept in `qbi/<year>-confirmed.json`.
-- Last year's losses carried on (lines 16 and 17) come in on lines 3 and 7. Lines 11 to 15 need taxable income, so
+- Line 6 is the K-1s' REIT dividends and PTP income and the year's 1099-DIVs' section 199A dividends (box 5, from
+  `taxtrace 1099`). Last year's losses carried on (lines 16 and 17) come in on lines 3 and 7. Lines 11 to 15 need taxable income, so
   the deduction is known only when line 10 is zero. The threshold for the simplified form follows the filing status
   `foreign --confirm filing=` kept; above it Form 8995-A applies, which taxtrace doesn't do yet.
 

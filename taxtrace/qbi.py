@@ -137,10 +137,16 @@ def _twenty(value: Decimal) -> Decimal:
     return (value * TWENTY).quantize(CENT, ROUND_HALF_UP)
 
 
+def dividends(forms: list[dict], year: int) -> list[dict]:
+    """The year's 1099-DIVs (`taxtrace 1099`), each once."""
+    return [f for f in forms if f.get("form") == "1099-DIV" and f.get("year") == year and f.get("copy_of") is None]
+
+
 def build(year: int, *, k1s: list[dict], rental: dict | None, returns: list[dict], confirmed: dict | None = None,
-          filing: str = "", worked_out: dict | None = None) -> Form:
-    """The year's Form 8995 from the saved K-1s (`k1`), its Schedule E (`rental`), the filed returns (`prior`) and
-    the year's Form 8582 as `passive` worked it out (`worked_out`), used when the year's own isn't filed and read."""
+          filing: str = "", worked_out: dict | None = None, forms: list[dict] | None = None) -> Form:
+    """The year's Form 8995 from the saved K-1s (`k1`), its Schedule E (`rental`), the filed returns (`prior`), the
+    year's Form 8582 as `passive` worked it out (`worked_out`), used when the year's own isn't filed and read, and
+    the 1099-DIVs among the forms read (`forms`), whose box 5 is line 6."""
     confirmed = confirmed or {}
     form = Form(year)
     if year in THRESHOLDS and filing:
@@ -204,14 +210,16 @@ def build(year: int, *, k1s: list[dict], rental: dict | None, returns: list[dict
     elif choice == "":
         form.ask("the rental: is it a qualified business on Form 8995 (a trade or business, or the 250-hour safe "
                  "harbor)? `taxtrace qbi --confirm rental=business|not`")
-    _lines(form, last, reit)
+    divs = dividends(forms or [], year)
+    reit += sum((Decimal(f["amounts"]["5"]["amount"]) for f in divs if "5" in f.get("amounts", {})), Decimal(0))
+    _lines(form, last, reit, bool(divs))
     filed = next((r["qbi"] for r in returns if r.get("year") == year and r.get("qbi")), None)
     if filed:
         _rehearse(form, filed)
     return form
 
 
-def _lines(form: Form, last: dict | None, reit: Decimal) -> None:
+def _lines(form: Form, last: dict | None, reit: Decimal, dividends_read: bool) -> None:
     carried = {int(k): Decimal(v) for k, v in (last or {}).get("lines", {}).items()}
     zero = Decimal(0)
     n = form.lines
@@ -219,7 +227,7 @@ def _lines(form: Form, last: dict | None, reit: Decimal) -> None:
     n[3] = carried.get(16, zero)
     n[4] = max(zero, n[2] + n[3])
     n[5] = _twenty(n[4])
-    n[6] = reit  # the K-1s' REIT dividends and PTP income; 1099-DIV box 5 isn't read yet
+    n[6] = reit  # the K-1s' REIT dividends and PTP income, and the 1099-DIVs' section 199A dividends (box 5)
     n[7] = carried.get(17, zero)
     n[8] = max(zero, n[6] + n[7])
     n[9] = _twenty(n[8])
@@ -231,15 +239,15 @@ def _lines(form: Form, last: dict | None, reit: Decimal) -> None:
     else:
         form.ask(f"lines 11 to 15: the deduction is the smaller of line 10 and 20% of taxable income less net capital "
                  f"gain, which needs {form.year}'s taxable income")
-    if carried.get(6):
-        form.ask("last year's Form 8995 had qualified REIT dividends or PTP income (line 6): 1099-DIV box 5 isn't "
-                 "read yet")
+    if carried.get(6) and not dividends_read:
+        form.ask(f"last year's Form 8995 had qualified REIT dividends or PTP income (line 6): no {form.year} "
+                 "1099-DIV has been read (`taxtrace 1099`), and its box 5 goes there")
 
 
 def _rehearse(form: Form, filed: dict) -> None:
     """Each line against the year's filed Form 8995, and each business by its EIN's last four digits."""
     lines = {int(k): Decimal(v) for k, v in filed.get("lines", {}).items()}
-    for n in (2, 3, 4, 5, 10, 15, 16, 17):
+    for n in (2, 3, 4, 5, 6, 10, 15, 16, 17):
         if n in form.lines:
             form.checks.append(Check(f"line {n} is the filed Form 8995's", abs(form.lines[n] - lines.get(n, 0)) <= CENT,
                                      0))
