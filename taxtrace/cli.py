@@ -944,6 +944,75 @@ def cmd_foreign(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_qbi(args: argparse.Namespace) -> int:
+    """A year's Form 8995 (the qualified business income deduction) into <workspace>/qbi/<year>.json, from the K-1s
+    `k1` saved, the year's Schedule E (`rental`) and last year's filed Form 8995 (`prior`).
+
+    What's printed is masked: each business and whether it's income or a loss, the lines worked out, how a year
+    whose own return was filed compares with it, and the questions. The filing status for the threshold is the one
+    `foreign --confirm filing=` kept.
+    """
+    from . import k1, qbi
+
+    home = workspace.outside_git(workspace.home())
+    terms = workspace.redact_terms()
+
+    def masked(line: str) -> str:
+        return redact.redact(line, terms).text.strip()
+
+    def saved(folder: str) -> list[dict]:
+        return [json.loads(p.read_text()) for p in sorted((home / folder).glob("*.json"))
+                if not p.name.startswith("projected-") and not p.name.endswith("-confirmed.json")] \
+            if (home / folder).exists() else []
+
+    year = args.year
+    out = home / workspace.QBI
+    kept = out / f"{year}-confirmed.json"
+    confirmed = json.loads(kept.read_text()) if kept.exists() else {}
+    try:
+        confirmed |= dict(map(qbi.confirmation, args.confirm))
+    except ValueError as err:
+        print(err, file=sys.stderr)
+        return 2
+    if args.confirm:
+        out.mkdir(parents=True, exist_ok=True)
+        kept.write_text(json.dumps(confirmed, indent=2) + "\n")
+    rental_path = home / workspace.SCHEDULE_E / f"{year}.json"
+    foreign_kept = home / workspace.FOREIGN / f"{year}-confirmed.json"
+    filing = json.loads(foreign_kept.read_text()).get("filing", "") if foreign_kept.exists() else ""
+    k1s = [row for rows in saved(workspace.K1) for row in (rows if isinstance(rows, list) else [rows])]
+    form = qbi.build(year, k1s=k1s, rental=json.loads(rental_path.read_text()) if rental_path.exists() else None,
+                     returns=saved(workspace.CARRYFORWARDS), confirmed=confirmed, filing=filing)
+    print(f"{year} Form 8995: {len(form.businesses)} businesses; lines {', '.join(map(str, sorted(form.lines)))}"
+          + (f"; the simplified form if taxable income before the deduction is at most {form.threshold:,}"
+             if form.threshold else "; the threshold needs the filing status (`foreign --confirm filing=`)"))
+    for b in form.businesses:
+        print(f"  {masked(b.name)}: {'income' if b.income >= 0 else 'a loss'} ({b.source})")
+    print("  " + ("a loss carried to next year (line 16)" if form.lines.get(16) else "no loss carried on")
+          + ("; no deduction (line 15 is zero)" if form.lines.get(15) == 0 else ""))
+    bad = [c for c in form.checks if not c.ok]
+    if form.checks:
+        print(f"  against the filed {year} Form 8995: {len(form.checks) - len(bad)} of {len(form.checks)} match")
+    for c in bad:  # built from line numbers and an EIN's last four digits, never amounts
+        print(f"  failed: {c.what}")
+    for q in form.questions:
+        print(f"  question: {masked(q.text)}")
+    if args.layout:  # each K-1's Section 199A statement rows: what each is and its sign, never its amount
+        for face in qbi.faces(k1s, year):
+            print(f"  {masked(face.get('partnership', '') or face['file'])} (EIN ending "
+                  f"{qbi.last_four(face.get('ein', '')) or '?'}):")
+            for s in face.get("statement", []):
+                if s.get("business") or s.get("aggregate") or "199A" in s.get("section", ""):
+                    sign = "+" if Decimal(s["amount"]) > 0 else "-" if Decimal(s["amount"]) < 0 else "0"
+                    print(f"    {sign} [{k1.qbi_kind(s['description']) or 'other'}"
+                          + (", aggregate" if s.get("aggregate") else "") + f"] {masked(s['description'])}"
+                          + (f" / {masked(s['business'])}" if s.get("business") else ""))
+    out.mkdir(parents=True, exist_ok=True)
+    (out / f"{year}.json").write_text(json.dumps(form.to_json(), indent=2, default=str) + "\n")
+    print(f"wrote to {out / f'{year}.json'}")
+    return 1 if bad else 0
+
+
 def cmd_fbar(args: argparse.Namespace) -> int:
     """Each spouse's FBAR (FinCEN Form 114) for a year, item by item, into <workspace>/foreign/fbar-<year>.txt (a
     checklist to type into the BSA e-filing form) and fbar-<year>.json, from what `foreign` saved for the year.
@@ -1263,6 +1332,15 @@ def build_parser() -> argparse.ArgumentParser:
                    help="settle a question only you can answer, kept for later runs: fair_rental_days=365, "
                         "personal_use_days=0, rent_all_year=yes, earlier_policy=AMOUNT (0: none), dues=AMOUNT")
     p.set_defaults(func=cmd_rental)
+    p = sub.add_parser("qbi", help="a year's Form 8995, the qualified business income deduction",
+                       description=cmd_qbi.__doc__)
+    p.add_argument("--year", type=int, required=True, help="the tax year")
+    p.add_argument("--confirm", action="append", default=[], metavar="KEY=VALUE",
+                   help="whether a business counts, kept for later runs: rental=business|not, "
+                        "k1_<the EIN's last four digits>=business|not")
+    p.add_argument("--layout", action="store_true",
+                   help="also each K-1's Section 199A statement rows: what each is and its sign, masked")
+    p.set_defaults(func=cmd_qbi)
     p = sub.add_parser("foreign", help="a year's foreign side in dollars: a property sold abroad, the tax kept there, "
                                        "the accounts' interest and balances", description=cmd_foreign.__doc__)
     p.add_argument("--year", type=int, required=True, help="the tax year")

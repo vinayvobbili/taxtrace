@@ -91,15 +91,17 @@ class StatementItem:
     @property
     def kind(self) -> str:
         """Which Section 199A amount this is: qbi, wages, ubia, reit or ptp ("" for another amount)."""
-        text = self.description.upper()
-        for kind, words in QBI_KINDS:
-            if any(w in text for w in words):
-                return kind
-        return ""
+        return qbi_kind(self.description)
 
 
 QBI_KINDS = (("wages", ("W-2 WAGES",)), ("ubia", ("UBIA", "UNADJUSTED BASIS")), ("reit", ("REIT DIVIDENDS",)),
              ("ptp", ("PUBLICLY TRADED PARTNERSHIP",)), ("qbi", ("QUALIFIED BUSINESS INCOME",)))
+
+
+def qbi_kind(description: str) -> str:
+    """A statement line's Section 199A kind, from its description: also for one read back from saved JSON."""
+    text = description.upper()
+    return next((kind for kind, words in QBI_KINDS if any(w in text for w in words)), "")
 
 
 @dataclass

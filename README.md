@@ -39,6 +39,7 @@ Early. What works today:
   [Passive activities](#passive-activities)).
 - `taxtrace 1098`: reads each Form 1098 mortgage interest statement (see [Form 1098](#form-1098)).
 - `taxtrace rental`: puts the rental's Schedule E together, line by line (see [Schedule E](#schedule-e)).
+- `taxtrace qbi`: Form 8995, the qualified business income deduction (see [Form 8995](#form-8995)).
 - `taxtrace itr`: reads India's income tax return (ITR-2): a property sale, the interest, the tax India kept (see
   [India's return](#indias-return)).
 - `taxtrace bank`: reads a foreign bank's statement of account: interest, a tax refund, balances (see
@@ -324,6 +325,34 @@ year for a policy before the one read, `0` for none) and `dues=AMOUNT` (associat
 A document goes with the property when its address has the same house number and street. A line the latest filed
 Schedule E had that this year has nothing for (association dues on line 19) is a question, as are the fair rental
 and personal use days. Locked documents are skipped without a Keychain prompt: answers and policies aren't locked.
+
+## Form 8995
+
+```bash
+taxtrace qbi --year 2025            # writes qbi/2025.json from what k1, rental and prior saved
+taxtrace qbi --year 2025 --layout   # also each K-1's Section 199A statement rows: what each is and its sign
+taxtrace qbi --year 2025 --confirm k1_4567=business --confirm rental=not
+```
+
+`qbi` puts the simplified Form 8995 together from what's been saved, opening no document:
+
+- Each partnership's qualified business income is its K-1's passive income or loss (boxes 1, 2, 3 and 10, less 12),
+  the figure a preparer's Form 8995 carries, rather than the Section 199A statement's own total.
+- The rental's is Schedule E's net from `rental`.
+- A passive loss Form 8582 doesn't allow isn't qualified business income until a later year allows it. With the
+  year's Form 8582 filed and read, each activity's amount is what it let through (its overall gain or loss, less
+  what Worksheet 5 carried on); without it the amounts are before that limit, and that's a question.
+- Which businesses count follows last year's filed Form 8995: a partnership it listed (by its EIN's last four
+  digits) that has income or a loss this year, and the rental if it listed a Schedule E. One it didn't list is a
+  question for `--confirm k1_<last four>=business|not` (or `rental=`), kept in `qbi/<year>-confirmed.json`.
+- Last year's losses carried on (lines 16 and 17) come in on lines 3 and 7. Lines 11 to 15 need taxable income, so
+  the deduction is known only when line 10 is zero. The threshold for the simplified form follows the filing status
+  `foreign --confirm filing=` kept; above it Form 8995-A applies, which taxtrace doesn't do yet.
+
+When the year's own return has been filed and read, every line and business is checked against its Form 8995. A
+business whose amount disagrees names the other figure the filed one matches (the Section 199A statement's total,
+an aggregated group's, the filed Schedule E's net), so a rehearsal shows where a build and the preparer part ways.
+The terminal gets which businesses are income or a loss, the checks and the questions, never an amount.
 
 ## India's return
 
