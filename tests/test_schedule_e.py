@@ -147,6 +147,15 @@ def test_the_rent_every_tenant_paid_settles_line_3():
     assert schedule_e.confirmation("rent=25,800") == ("rent", "25800")
 
 
+def test_a_years_cleaning_and_repairs_added_up_from_receipts_replace_the_answers():
+    found = answers.read("q.docx", ["\n".join(["Rental property:", "Repairs expenses = $640/year",
+                                               "Cleaning expense = $300/year"])])
+    rental = schedule_e.build(2026, last=None, answers=found, forms=[], policies=[], projected=None,
+                              address="2208 Quenby Mill Road", confirmed={"cleaning": "410", "repairs": "212.40"})
+    assert {n: (rental.amount(n), rental.lines[n].source) for n in (7, 14)} == {
+        7: (410, "confirmed"), 14: (Decimal("212.40"), "confirmed")}
+
+
 def test_a_label_printed_with_a_split_word_is_read(tmp_path: Path):
     split = [ln.replace("19 Other (list)", "19 O ther (list)") for ln in FILED[0]]
     (rental,) = schedule_e.filed("2021 Return.pdf", text.pages(make_pdf(tmp_path / "2021 Return.pdf", [split])), 2021)

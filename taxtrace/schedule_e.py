@@ -48,7 +48,10 @@ CONFIRMS = {  # what a person can settle with `rental --confirm`, and its kind
     "rent": Decimal,  # the rent actually received this year, every tenant's together: line 3
     "earlier_policy": Decimal,  # a premium paid this year for a policy before the one the declarations show
     "dues": Decimal,  # association (HOA) dues paid this year: line 19
+    "cleaning": Decimal,  # cleaning and maintenance paid this year, receipts added up: line 7
+    "repairs": Decimal,  # repairs paid this year, a tenant's paid out of the rent too: line 14
 }
+TOTALS = {"cleaning": 7, "repairs": 14}  # a confirmed year's total, in place of the answers' line
 ESCROWED = ((16, ("TAX",)), (9, ("INS", "HAZARD")))  # box 10's words, for what the lender paid from escrow
 
 
@@ -240,6 +243,9 @@ def build(year: int, *, last: Rental | None, answers: list[Answer], forms: list[
     _depreciation(rental, year, projected)
     if dues := Decimal(confirmed.get("dues", "0")):
         rental.lines[19] = Line(19, dues, "confirmed", "", 0, "", "Association dues")
+    for key, n in TOTALS.items():
+        if key in confirmed:
+            rental.lines[n] = Line(n, Decimal(confirmed[key]), "confirmed", "", 0, "", LINES[n])
     if last:
         for n, old in last.lines.items():
             if n == 19 and "dues" in confirmed:
