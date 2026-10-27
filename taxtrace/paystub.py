@@ -10,6 +10,10 @@ What the year's paychecks will withhold in all is the year to date's plus this p
 pay period's length says how often you're paid (weekly, every two weeks, twice a month, monthly), and each later
 paycheck is paid as long after its period ends as this one was. A bonus, a stock vesting or a new W-4 changes that,
 so it's a question.
+
+The 401(k) deferrals ("401k Before-Tax", "401(k) Roth"; not a loan's repayment) are read the same way, with the
+salary row, so what's left under the year's limit after the paychecks left is known, and the pre-tax percentage of
+salary that would fill it: a pre-tax deferral lowers the year's taxable wages dollar for dollar.
 """
 
 from __future__ import annotations
@@ -26,6 +30,8 @@ from .prior import Check, Question, _rows, amount
 MONEY = re.compile(r"^\(?-?\$?(?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2}\)?$")
 DATES = ("%d-%b-%Y", "%m/%d/%Y", "%Y-%m-%d")
 TAXES = {"federal": (("FIT",), ("Federal", "Income", "Tax")), "state": (("SIT",), ("State", "Income", "Tax"))}
+RETIREMENT = re.compile(r"^401\(?k\)?$", re.IGNORECASE)  # "401k Before-Tax", "401(k) Roth"; not "401k Loan Repay"
+LIMITS = {2025: Decimal(23500), 2026: Decimal(24500)}  # a 401(k)'s elective deferrals in a year, before age 50
 SLACK = 1.5
 
 
@@ -43,6 +49,8 @@ class Paystub:
     period_end: date | None = None
     paid: date | None = None
     withheld: dict[str, Taxed] = field(default_factory=dict)  # "federal", "state"
+    deferred: dict[str, Taxed] = field(default_factory=dict)  # a 401(k)'s "pretax" and "roth" deferrals
+    salary: Taxed | None = None  # the earnings table's "Salary" row, what a deferral's percentage is of
     checks: list[Check] = field(default_factory=list)
     questions: list[Question] = field(default_factory=list)
 
@@ -75,13 +83,40 @@ class Paystub:
         t = self.withheld.get(tax)
         return None if t is None else t.year_to_date + t.current * self.paychecks_left()
 
+    def deferral_room(self) -> Decimal | None:
+        """What more the year's 401(k) limit takes past the year to date's deferrals and this paycheck's for each
+        left; None when there's no deferral row or no limit for the year."""
+        if not (self.deferred and self.paid and self.paid.year in LIMITS):
+            return None
+        left = self.paychecks_left()
+        planned = sum((d.year_to_date + d.current * left for d in self.deferred.values()), Decimal(0))
+        return max(Decimal(0), LIMITS[self.paid.year] - planned)
+
+    def deferral_rates(self) -> tuple[Decimal, Decimal] | None:
+        """The pre-tax deferral as a percentage of salary now, and what it would be to fill the room left over the
+        paychecks left; None when it can't be worked out."""
+        room, left = self.deferral_room(), self.paychecks_left()
+        pretax = self.deferred.get("pretax")
+        if room is None or not left or pretax is None or not self.salary or not self.salary.current:
+            return None
+        now = pretax.current / self.salary.current * 100
+        return now.quantize(Decimal(1)), ((pretax.current + room / left) / self.salary.current * 100).quantize(
+            Decimal(1))
+
     def to_json(self) -> dict:
+        def pair(t: Taxed) -> dict:
+            return {"current": str(t.current), "year_to_date": str(t.year_to_date), "label": t.label}
+
+        rates = self.deferral_rates()
         return {"form": "paystub", "file": self.file, "year": self.paid.year if self.paid else None,
                 "period_start": _iso(self.period_start), "period_end": _iso(self.period_end),
                 "paid": _iso(self.paid), "frequency": self.frequency, "paychecks_left": self.paychecks_left(),
-                "withheld": {k: {"current": str(t.current), "year_to_date": str(t.year_to_date), "label": t.label}
-                             for k, t in self.withheld.items()},
-                "projected_federal": str(p) if (p := self.projected()) is not None else None}
+                "withheld": {k: pair(t) for k, t in self.withheld.items()},
+                "projected_federal": str(p) if (p := self.projected()) is not None else None,
+                "deferred": {k: pair(t) for k, t in self.deferred.items()},
+                "salary": pair(self.salary) if self.salary else None,
+                "deferral_room": str(r) if (r := self.deferral_room()) is not None else None,
+                "deferral_percent": {"now": str(rates[0]), "to_fill": str(rates[1])} if rates else None}
 
 
 def _iso(day: date | None) -> str | None:
@@ -128,14 +163,29 @@ def read(name: str, words: list[dict]) -> Paystub:
             # the label can share its row with another column's words left of it: what's right of it is the tax's
             at = next((j for label in labels for j in range(len(texts)) if texts[j:j + len(label)] == list(label)),
                       None)
-            if tax in stub.withheld or at is None:
-                continue
-            amounts = [t for t in texts[at:] if MONEY.match(t)]
-            if len(amounts) >= 2:
-                stub.withheld[tax] = Taxed(amount(amounts[0]), amount(amounts[-1]),
-                                           " ".join(t for t in texts[at:] if not MONEY.match(t)))
+            if tax not in stub.withheld and at is not None and (taxed := _after(texts, at)):
+                stub.withheld[tax] = taxed
+        for j, t in enumerate(texts):
+            if RETIREMENT.match(t) and (deferred := _after(texts, j)) and "loan" not in deferred.label.lower():
+                stub.deferred.setdefault("roth" if "roth" in deferred.label.lower() else "pretax", deferred)
+            elif t == "Salary" and stub.salary is None and j + 1 < len(texts) and MONEY.match(texts[j + 1]):
+                stub.salary = _after(texts, j)
     _checks(stub)
     return stub
+
+
+def _after(texts: list[str], at: int) -> Taxed | None:
+    """The label starting at `at` and the two amounts after it, this paycheck's and the year to date's, up to the
+    next column's words."""
+    end = next((k for k in range(at, len(texts)) if MONEY.match(texts[k])), len(texts))
+    amounts = []
+    for t in texts[end:]:
+        if not MONEY.match(t):
+            break
+        amounts.append(t)
+    if len(amounts) < 2:
+        return None
+    return Taxed(amount(amounts[0]), amount(amounts[-1]), " ".join(texts[at:end]))
 
 
 def _checks(stub: Paystub) -> None:
@@ -149,7 +199,15 @@ def _checks(stub: Paystub) -> None:
     for tax, t in stub.withheld.items():
         check(f"the {tax} income tax withheld this paycheck is part of the year to date's",
               0 <= t.current <= t.year_to_date)
+    for kind, d in stub.deferred.items():
+        check(f"the {kind} 401(k) deferral this paycheck is part of the year to date's",
+              0 <= d.current <= d.year_to_date)
     if stub.paid:
         stub.questions.append(Question(
             f"the paychecks left in {stub.paid.year} are taken to withhold what this one did: a bonus, a stock "
             "vesting or a new W-4 before December 31 changes that", 1, ""))
+    if stub.deferral_room():
+        stub.questions.append(Question(
+            "the 401(k) has room left this year: each pre-tax dollar deferred before December 31 isn't taxed this "
+            "year (the plan may cap the percentage, and net pay has to cover the other deductions); age 50 or over, "
+            "the catch-up allows $8,000 more", 1, ""))

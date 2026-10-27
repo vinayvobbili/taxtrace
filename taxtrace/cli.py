@@ -702,6 +702,9 @@ def cmd_paystub(args: argparse.Namespace) -> int:
 
     home = workspace.outside_git(workspace.home())
     terms = workspace.redact_terms()
+    def masked(line: str) -> str:
+        return redact.redact(line, terms).text.strip()
+
     often = {"weekly": "weekly", "biweekly": "every two weeks", "semimonthly": "twice a month", "monthly": "monthly"}
     out, written, failed = home / workspace.FORMS, 0, 0
     for doc in _documents(args):
@@ -727,6 +730,12 @@ def cmd_paystub(args: argparse.Namespace) -> int:
               f"paychecks left in {stub.paid.year if stub.paid else '?'}; "
               f"{' and '.join(stub.withheld) or 'no'} tax withheld; "
               f"{len(stub.checks) - len(stub.failed)} of {len(stub.checks)} checks pass")
+        if (room := stub.deferral_room()) is not None:  # percentages of salary, the amounts masked
+            rates = stub.deferral_rates()
+            print(f"  401(k): {', '.join(stub.deferred)} deferrals; room left under the {stub.paid.year} limit "
+                  f"{masked(f'{room:,.2f}')}" + (f"; pre-tax is {rates[0]}% of salary now, {rates[1]}% for the "
+                                                  f"{stub.paychecks_left()} paychecks left fills it"
+                                                  if rates and room else ""))
         for c in stub.failed:
             print(f"  failed: {c.what}")
         for q in stub.questions:
