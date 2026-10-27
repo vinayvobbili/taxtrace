@@ -25,6 +25,7 @@ SCHEDULE_E = "schedule-e"
 FOREIGN = "foreign"
 FX = "fx"  # public exchange rates, fetched once
 QBI = "qbi"  # Form 8995, the qualified business income deduction
+ESTIMATES = "estimates"  # the year's estimated tax against the safe harbor, quarter by quarter
 # taxtrace's own files and folders in the workspace, never read back as documents: its output and its settings
 DERIVED = {OCR_CACHE, REDACTED, MANIFEST, TERMS_FILE, CARRYFORWARDS, K1, PASSIVE, FORMS, SCHEDULE_E, FOREIGN, FX, QBI}
 KEYCHAIN_SERVICE = "taxtrace"

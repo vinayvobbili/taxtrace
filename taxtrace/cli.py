@@ -317,7 +317,7 @@ def cmd_prior(args: argparse.Namespace) -> int:
                 print(f"== {name} page {n}")
                 _print_words(text.words(doc, n, password), argparse.Namespace(x=None, top=None, rows=True), terms)
         if not (found.assets or found.unallowed or found.activities or found.rentals or found.foreign_tax
-                or found.carryovers or found.qbi):
+                or found.carryovers or found.qbi or found.f1040):
             print(f"{name}: no depreciation schedule, Form 8582 worksheets, foreign tax or other carryover")
             continue
         problems = prior.verify(found, pages)
@@ -344,7 +344,8 @@ def cmd_prior(args: argparse.Namespace) -> int:
               + (f"; Carryover Worksheet p{sorted({i.page for i in found.carryovers})}: "
                  f"{len(found.carryovers)} items" if found.carryovers else "")
               + (f"; Form 8995 p{found.qbi.pages}: {len(found.qbi.businesses)} businesses, "
-                 f"{'a loss carried on' if found.qbi.line(16) else 'no loss carried on'}" if found.qbi else ""))
+                 f"{'a loss carried on' if found.qbi.line(16) else 'no loss carried on'}" if found.qbi else "")
+              + (f"; Form 1040 p{found.f1040.pages}: lines {', '.join(found.f1040.lines)}" if found.f1040 else ""))
         for c in bad:
             print(f"  failed, p{c.page}: {masked(c.what)}")
         for p in problems:
@@ -1097,6 +1098,62 @@ def cmd_qbi(args: argparse.Namespace) -> int:
     return 1 if bad else 0
 
 
+def cmd_estimates(args: argparse.Namespace) -> int:
+    """A year's estimated tax against the safe harbor, quarter by quarter, into <workspace>/estimates/<year>.json,
+    from last year's filed return (`prior`) and what's confirmed: the year's withholding and estimated payments.
+
+    What's printed is masked: which quarters are met or short, and what makes up a shortfall (more withholding
+    before the year ends, which counts toward every quarter, or a January payment, which counts toward the last
+    only). The amounts are in the file. The filing status is the one `foreign --confirm filing=` kept.
+    """
+    from . import estimates
+
+    home = workspace.outside_git(workspace.home())
+    terms = workspace.redact_terms()
+
+    def masked(line: str) -> str:
+        return redact.redact(line, terms).text.strip()
+
+    year = args.year
+    out = home / workspace.ESTIMATES
+    kept = out / f"{year}-confirmed.json"
+    confirmed = json.loads(kept.read_text()) if kept.exists() else {}
+    try:
+        confirmed |= dict(map(estimates.confirmation, args.confirm))
+    except ValueError as err:
+        print(err, file=sys.stderr)
+        return 2
+    if args.confirm:
+        out.mkdir(parents=True, exist_ok=True)
+        kept.write_text(json.dumps(confirmed, indent=2) + "\n")
+    folder = home / workspace.CARRYFORWARDS
+    returns = [json.loads(p.read_text()) for p in sorted(folder.glob("*.json"))
+               if not p.name.startswith("projected-")] if folder.exists() else []
+    foreign_kept = home / workspace.FOREIGN / f"{year}-confirmed.json"
+    filing = json.loads(foreign_kept.read_text()).get("filing", "") if foreign_kept.exists() else ""
+    plan = estimates.build(year, returns=returns, confirmed=confirmed, filing=filing)
+    print(f"{year} estimated tax: "
+          + (f"the safe harbor is {plan.rate:.0%} of {year - 1}'s tax" if plan.rate else "no safe harbor yet")
+          + (f"; {len(plan.payments)} estimated payments" if plan.rate else "")
+          + (f"; an overpayment applied from {year - 1}" if plan.applied else ""))
+    for k, q in enumerate(plan.quarters, 1):
+        print(f"  quarter {k}, due {q.due:%b} {q.due.day}, {q.due.year}: "
+              + (f"short {masked(f'{q.short:,.2f}')}" if q.short else "met"))
+    if plan.short:
+        print(f"  more withholding before December 31 of {masked(f'{plan.more_withholding:,.2f}')} meets every quarter"
+              + (f"; a January payment of {masked(f'{plan.january:,.2f}')} meets quarter 4 only" if plan.january
+                 else ""))
+    bad = [c for c in plan.checks if not c.ok]
+    for c in bad:
+        print(f"  failed: {c.what}")
+    for q in plan.questions:  # built from the year and the rule's own figures, never an amount read
+        print(f"  question: {q.text}")
+    out.mkdir(parents=True, exist_ok=True)
+    (out / f"{year}.json").write_text(json.dumps(estimates.to_json(plan), indent=2) + "\n")
+    print(f"wrote to {out / f'{year}.json'}")
+    return 1 if bad else 0
+
+
 def cmd_fbar(args: argparse.Namespace) -> int:
     """Each spouse's FBAR (FinCEN Form 114) for a year, item by item, into <workspace>/foreign/fbar-<year>.txt (a
     checklist to type into the BSA e-filing form) and fbar-<year>.json, from what `foreign` saved for the year.
@@ -1476,6 +1533,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--layout", action="store_true",
                    help="also each K-1's Section 199A statement rows: what each is and its sign, masked")
     p.set_defaults(func=cmd_qbi)
+    p = sub.add_parser("estimates", help="a year's estimated tax against the safe harbor, quarter by quarter",
+                       description=cmd_estimates.__doc__)
+    p.add_argument("--year", type=int, required=True, help="the tax year")
+    p.add_argument("--confirm", action="append", default=[], metavar="KEY=VALUE",
+                   help="kept for later runs: withheld=AMOUNT (the year's federal withholding, the last paychecks "
+                        "included), paid_YYYY-MM-DD=AMOUNT (an estimated payment), tax=AMOUNT (the year's own tax)")
+    p.set_defaults(func=cmd_estimates)
     p = sub.add_parser("foreign", help="a year's foreign side in dollars: a property sold abroad, the tax kept there, "
                                        "the accounts' interest and balances", description=cmd_foreign.__doc__)
     p.add_argument("--year", type=int, required=True, help="the tax year")

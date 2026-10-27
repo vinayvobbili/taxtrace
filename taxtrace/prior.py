@@ -167,6 +167,7 @@ class Carryforwards:
     carryovers: list = field(default_factory=list)  # the Carryover Worksheet's rows (`carryover.Item`)
     carryover_sections: list[str] = field(default_factory=list)  # every section it prints, empty ones too
     qbi: object | None = None  # the filed Form 8995 (`f8995.Filed`)
+    f1040: object | None = None  # the filed Form 1040's lines next year's estimated tax goes by (`f1040.Filed`)
 
     def check(self, what: str, ok: bool, page: int) -> None:
         self.checks.append(Check(what, ok, page))
@@ -262,6 +263,10 @@ def read(name: str, pages: list[str], words: dict[int, list[dict]] | None = None
     from . import f8995
 
     found.qbi, checks = f8995.read(pages)
+    found.checks += checks
+    from . import f1040
+
+    found.f1040, checks = f1040.read(pages)
     found.checks += checks
     _carryovers(found, pages, words or {})
     if found.year is None and (found.assets or found.unallowed):
