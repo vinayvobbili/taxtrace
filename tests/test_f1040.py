@@ -11,6 +11,8 @@ from conftest import make_pdf
 from taxtrace import f1040, prior, text
 
 PAGE_1 = [
+    "Your first name and middle initial      Last name           Your social security number",
+    "Jordan Q.                               Quillfeather        XXX-XX-4410",
     "Form 1040   Department of the Treasury-Internal Revenue Service",
     "U.S. Individual Income Tax Return 2025",
     "Filing Status   X Married filing jointly",
@@ -19,7 +21,7 @@ PAGE_1 = [
     "11a Subtract line 10 from line 9. This is your adjusted gross income ......  11a  211,875",
 ]
 PAGE_2 = [
-    "Form 1040 (2025)   Jordan Q. Quillfeather                  Page 2",
+    "Form 1040 (2025)   Jordan Q. Quillfeather   XXX-XX-4410    Page 2",
     "Tax and  11b Amount from line 11a (adjusted gross income) ...........  11b  211,875",
     "24  Add lines 22 and 23. This is your total tax ....................  24   31,906",
     "a Form(s) W-2 ...................................  25a  33,120",
@@ -35,12 +37,15 @@ PAGE_2 = [
 ]
 WORKSHEET = ["Form 1040   Explanation Worksheet (This page is not filed with the return.)",
              "11. QBI amount carried to Form 8995 ..........  11  4,410"]
+SCHEDULE_3 = ["Schedule 3 (Form 1040) 2025   Jordan Q. Quillfeather   Page 2",
+              "11  Excess social security and tier 1 RRTA tax withheld ......  11  410",
+              "15  Add lines 9 through 12 and 14. Enter here and on Form 1040, line 31 ....  15  410"]
 
 
 def test_each_line_is_read_by_its_number_and_label(tmp_path: Path):
-    path = make_pdf(tmp_path / "2025 Return.pdf", [PAGE_1, PAGE_2, WORKSHEET])
+    path = make_pdf(tmp_path / "2025 Return.pdf", [PAGE_1, PAGE_2, SCHEDULE_3, WORKSHEET])
     filed, checks = f1040.read(text.pages(path))
-    assert filed.pages == [1, 2]
+    assert filed.pages == [1, 2]  # a schedule's page 2 and the preparer's worksheet aren't the form
     assert filed.lines == {"11a": 211875, "11b": 211875, "24": 31906, "25d": 33120, "32": 0, "33": 33120,
                            "34": 1214, "36": 300}
     assert filed.agi == Decimal(211875) and filed.line("26") == 0
