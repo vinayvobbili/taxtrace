@@ -123,7 +123,7 @@ def filed(name: str, pages: list[str], year: int | None) -> list[Rental]:
                 rental.kind, rental.fair_rental_days = row.group("type"), int(row.group("fair"))
                 rental.personal_use_days = int(row.group("personal")) if row.group("personal") else None
             elif (m := LINE.match(ln)) and int(m.group("no")) in LINES and \
-                    m.group("label").startswith(LINES[int(m.group("no"))].split()[0]):
+                    m.group("label").replace(" ", "").startswith(LINES[int(m.group("no"))].split()[0]):  # "O ther"
                 rental.lines[int(m.group("no"))] = Line(int(m.group("no")), amount(m.group("amount")),
                                                         "filed return", name, n, ln)
         if 20 in rental.lines:

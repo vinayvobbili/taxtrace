@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from decimal import Decimal
 from pathlib import Path
 
@@ -65,6 +66,13 @@ def test_each_business_and_every_line(tmp_path: Path):
     assert sorted(filed.lines) == list(range(2, 18))
     assert found.failed == [], found.failed
     assert sum(c.what.startswith("Form 8995") for c in found.checks) == 11
+
+
+def test_an_older_print_ends_each_amount_with_a_period(tmp_path: Path):
+    older = [re.sub(r"(\d)( \))?$", r"\1.\2", ln) for ln in FORM_8995]
+    filed = read(make_pdf(tmp_path / "2020 Return.pdf", [older])).qbi
+    assert [b.income for b in filed.businesses] == [4210, 64, -1870, -55]
+    assert sorted(filed.lines) == list(range(2, 18)) and filed.line(16) == -12345
 
 
 def test_a_continued_page_and_a_sum_that_misses(tmp_path: Path):

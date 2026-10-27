@@ -137,6 +137,12 @@ def test_cli_puts_the_year_together_and_asks_what_the_documents_cant_say(
         "line 18 is rolled forward from the 2020 depreciation schedule"]
 
 
+def test_a_label_printed_with_a_split_word_is_read(tmp_path: Path):
+    split = [ln.replace("19 Other (list)", "19 O ther (list)") for ln in FILED[0]]
+    (rental,) = schedule_e.filed("2021 Return.pdf", text.pages(make_pdf(tmp_path / "2021 Return.pdf", [split])), 2021)
+    assert rental.amount(19) == 1265 and rental.failed == []
+
+
 def test_last_years_schedule_rolls_on_and_the_years_own_return_rehearses_the_build(
         tmp_path: Path, workspace_home: Path, capsys):
     make_pdf(tmp_path / "2024 Return.pdf", [*FILED, [ln.replace("2021 Federal", "2024 Federal") for ln in SCHEDULE]])
