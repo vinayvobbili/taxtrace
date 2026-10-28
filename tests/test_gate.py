@@ -216,6 +216,71 @@ def test_store_saves_an_entry_for_the_helper_and_notes_it(fake_gate: Path, monke
     assert cli.main(["keychain", "store"]) == 2
 
 
+class FakeSecurity:
+    """Stands in for /usr/bin/security over a dict of entries: the chat's key is the helper's, under account `me`."""
+
+    def __init__(self, refuse_delete: bool = False):
+        self.entries = {("anthropic", "me"): "helper's"}
+        self.argv: list[list[str]] = []
+        self.refuse_delete = refuse_delete
+
+    def __call__(self, cmd, input=None, **kw):
+        if Path(cmd[0]).name != "security":  # by its full path or bare: the real one would show a Keychain prompt
+            return self.real(cmd, input=input, **kw)
+        self.argv.append(cmd)
+        if cmd[1] == "-i":  # add-generic-password -U -s S -a A -T T -w SECRET
+            words = input.split()
+            self.entries[(words[3], words[5])] = words[9]
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+        service = cmd[cmd.index("-s") + 1]
+        account = cmd[cmd.index("-a") + 1] if "-a" in cmd else None
+        found = [k for k in self.entries if k[0] == service and account in (None, k[1])]
+        if cmd[1] == "delete-generic-password":
+            if not found or (self.refuse_delete and service == "anthropic"):
+                return subprocess.CompletedProcess(cmd, 44, "", "")
+            del self.entries[found[0]]
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+        if "-w" in cmd:
+            return subprocess.CompletedProcess(cmd, 0 if found else 44, self.entries[found[0]] if found else "", "")
+        return subprocess.CompletedProcess(cmd, 0 if found else 44, f'    "acct"<blob>="{found[0][1]}"\n' if found
+                                           else "", "")
+
+
+def test_release_moves_the_chat_key_back_to_reading_without_a_prompt(fake_gate: Path, monkeypatch, capsys):
+    security = FakeSecurity()
+    security.real = subprocess.run
+    monkeypatch.setattr(subprocess, "run", security)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    assert cli.main(["keychain", "release", "anthropic"]) == 0
+    assert "anthropic: released; it reads without a prompt" in capsys.readouterr().out
+    # saved again by `security` under the same account, trusting it; the backup copy is gone
+    assert security.entries == {("anthropic", "me"): "sk-not-a-real-key"}
+    assert not any("sk-not-a-real-key" in " ".join(cmd) for cmd in security.argv)  # only ever on stdin
+    assert not gate.adopted("anthropic", "") and gate.adopted("taxtrace", "default")  # documents stay gated
+    monkeypatch.setattr(gate, "read", lambda *a: pytest.fail("the chat's key still went through the helper"))
+    assert chat.api_key("anthropic") == "sk-not-a-real-key"  # the classic read, which no longer asks
+    assert cli.main(["keychain", "release", "anthropic"]) == 1  # already released
+
+
+def test_release_changes_nothing_when_the_entry_cant_be_removed(fake_gate: Path, monkeypatch):
+    security = FakeSecurity(refuse_delete=True)
+    security.real = subprocess.run
+    monkeypatch.setattr(subprocess, "run", security)
+    with pytest.raises(gate.GateError, match="nothing changed"):
+        gate.release("anthropic", "", "test")
+    assert security.entries == {("anthropic", "me"): "helper's"} and gate.adopted("anthropic", "")
+
+
+def test_release_leaves_document_passwords_and_refused_reads_alone(fake_gate: Path, monkeypatch, capsys):
+    monkeypatch.setattr(gate, "release", lambda *a: pytest.fail("a document password was released"))
+    assert cli.main(["keychain", "release", "taxtrace"]) == 2
+    assert cli.main(["keychain", "release"]) == 2
+    monkeypatch.undo()
+    monkeypatch.setattr(gate, "read", lambda *a: None)  # the approval was declined
+    assert cli.main(["keychain", "release", "anthropic"]) == 1
+    assert "the read wasn't approved; nothing changed" in capsys.readouterr().out
+
+
 @pytest.mark.skipif(sys.platform != "darwin" or not shutil.which("swiftc"), reason="needs macOS and swiftc")
 def test_the_helper_builds_signs_and_refuses_bad_usage(no_real_gate: Path):
     no_real_gate.parent.mkdir(parents=True)

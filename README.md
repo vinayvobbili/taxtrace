@@ -142,6 +142,12 @@ taxtrace keychain read anthropic --for jobwatch   # the secret on stdout, once a
 The prompt names the item and the tool. The secret goes to the program that runs the command, never to a
 terminal, and an entry `setup` didn't move isn't read this way.
 
+A tool that reads the key unattended (a background service after a restart) has nobody there to approve, and the
+approval times out. For a key that guards little, such as one with a spend limit, `taxtrace keychain release
+anthropic` moves it back for good: one approval, then `security` saves it again (the secret on its stdin, never
+in a command line) and it reads without any prompt, taxtrace's chat included. The document passwords can't be
+released.
+
 When a read asks for the password instead of Apple Watch or Touch ID (a Watch out of range, asleep or locked
 falls back to it), `taxtrace keychain check` says which ways macOS offers right now and why not, and
 `check --try` shows one Watch / Touch ID prompt and prints what came back. Neither rebuilds the helper or touches

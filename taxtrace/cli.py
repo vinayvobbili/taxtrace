@@ -1501,6 +1501,9 @@ def cmd_keychain(args: argparse.Namespace) -> int:
     `read ITEM --for TOOL` lets another tool read an entry that setup moved over, such as an API key: the person
     approves with Apple Watch or Touch ID (the prompt names the item and the tool), and the secret goes to stdout for
     the calling process, never to a terminal. The entry still trusts only the helper.
+
+    `release ITEM` moves such an entry back for good: one approval, then it reads without any prompt. For a key a
+    tool reads unattended and that guards little (a spend-limited API key); never the document passwords.
     """
     from . import chat, gate
 
@@ -1547,6 +1550,23 @@ def cmd_keychain(args: argparse.Namespace) -> int:
             return 1
         sys.stdout.write(secret)
         return 0
+    if args.action == "release":
+        if not args.item:
+            print("taxtrace: keychain release takes the item, such as anthropic", file=sys.stderr)
+            return 2
+        if args.item == workspace.KEYCHAIN_SERVICE:  # what opens tax documents stays behind an approval
+            print(f"taxtrace: {args.item} entries hold document passwords and stay gated", file=sys.stderr)
+            return 2
+        account = args.account[0] if args.account else ""
+        try:
+            released = gate.release(args.item, account, f"move the Keychain item {args.item} back to reading "
+                                                        "without a prompt")
+        except gate.GateError as err:
+            print(f"taxtrace: {err}", file=sys.stderr)
+            return 1
+        print(f"{args.item}: " + ("released; it reads without a prompt (security), and taxtrace's chat reads it "
+                                  "that way too" if released else "the read wasn't approved; nothing changed"))
+        return 0 if released else 1
     if args.action == "status":  # asks the Keychain for attributes only: no prompt, no secret
         built = "built, current" if gate.current() else "built, out of date: run setup" if gate.ready() else "not built"
         print(f"helper: {built}")
@@ -1741,15 +1761,16 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_passive)
     p = sub.add_parser("keychain", help="approve Keychain reads with Apple Watch or Touch ID (macOS)",
                        description=cmd_keychain.__doc__)
-    p.add_argument("action", choices=["setup", "status", "read", "check", "store"],
+    p.add_argument("action", choices=["setup", "status", "read", "check", "store", "release"],
                    help="setup: build the helper and move entries over; status: how each entry is read now; "
                         "read: give another tool an entry setup moved, once approved; check: which ways of "
                         "approving (Touch ID, Apple Watch, password) macOS offers now; store: save a document "
-                        "password (asked for unechoed) as an entry read with Apple Watch or Touch ID")
+                        "password (asked for unechoed) as an entry read with Apple Watch or Touch ID; release: "
+                        "move an API key back to reading without a prompt (one approval)")
     p.add_argument("--try", dest="attempt", action="store_true",
                    help="check: also show one Touch ID / Apple Watch prompt and print what came back")
-    p.add_argument("item", nargs="?", help="read: the Keychain item (e.g. anthropic); store: the entry's name (a file "
-                                           "name, its issuer, or default)")
+    p.add_argument("item", nargs="?", help="read, release: the Keychain item (e.g. anthropic); store: the entry's name "
+                                           "(a file name, its issuer, or default)")
     p.add_argument("--for", dest="caller", metavar="TOOL", help="read: the tool asking, named in the prompt")
     p.add_argument("--keychain", default="anthropic", help="the chat's API key item to include (default: anthropic)")
     p.add_argument("--account", action="append", default=[], metavar="FILE NAME",

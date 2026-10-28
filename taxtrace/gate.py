@@ -11,12 +11,16 @@ again. `setup` rebuilds only when the source changed.
 A read goes through the helper only for an entry `setup` moved over to this build of it (`adopted`). Any other
 entry doesn't trust the helper, and reading it through the helper would ask twice: the approval, then the
 classic prompt. Those are read the classic way, with its one prompt.
+
+`release` undoes the move for a secret that guards little and that a tool reads unattended: an API key with a
+spend limit, say. It goes back to trusting `security`, and reads without any prompt.
 """
 
 from __future__ import annotations
 
 import hashlib
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -155,6 +159,66 @@ def store(service: str, account: str) -> bool:
         raise GateError("the approval helper isn't built: run taxtrace keychain setup first")
     run = subprocess.run(["security", "add-generic-password", "-U", "-s", service, "-a", account, "-T", "", "-w"])
     return run.returncode == 0 and adopt(service, account)
+
+
+SECURITY = "/usr/bin/security"
+# what `security -i` takes unquoted in its command stream; anything else is refused rather than escaped
+PLAIN = re.compile(r"[A-Za-z0-9._@+=:/-]+")
+ACCOUNT = re.compile(r'"acct"<blob>="([^"]*)"')
+
+
+def release(service: str, account: str, reason: str) -> bool:
+    """Store a moved entry back the classic way, trusting `security`, so it reads without any prompt: for a secret
+    that guards little, such as an API key with a spend limit, that a tool running unattended needs (an approval
+    nobody is there to give times out). One approval reads it, then `security` saves it again, the secret going in
+    on stdin (its `-i` command stream), never in a command line. A backup copy is kept until the new entry is saved,
+    so a failure can't lose it. False if the read wasn't approved."""
+    if not adopted(service, account):
+        raise GateError(f"{service} isn't read with Apple Watch or Touch ID: nothing to release")
+    secret = read(service, account, reason)
+    if secret is None:
+        return False
+    owner = account or _account(service)
+    if not (PLAIN.fullmatch(secret) and PLAIN.fullmatch(service) and PLAIN.fullmatch(owner)):
+        raise GateError("the entry has characters security's command stream would need quoted; nothing changed")
+    backup = f"{service}.taxtrace-backup"
+    _add(backup, owner, secret)
+    removed = subprocess.run([SECURITY, "delete-generic-password", "-s", service, "-a", owner], capture_output=True,
+                             text=True)
+    if removed.returncode:
+        subprocess.run([SECURITY, "delete-generic-password", "-s", backup, "-a", owner], capture_output=True)
+        raise GateError(f"security couldn't remove the entry ({removed.returncode}); nothing changed")
+    try:
+        _add(service, owner, secret)
+    except GateError as err:
+        raise GateError(f"{err}; the secret is in {backup}") from None
+    subprocess.run([SECURITY, "delete-generic-password", "-s", backup, "-a", owner], capture_output=True)
+    _unlist(service, account)
+    return True
+
+
+def _account(service: str) -> str:
+    """The account of the service's first entry, from its attributes: no prompt."""
+    found = subprocess.run([SECURITY, "find-generic-password", "-s", service], capture_output=True, text=True)
+    if found.returncode or not (match := ACCOUNT.search(found.stdout)):
+        raise GateError(f"no {service} entry in the Keychain")
+    return match.group(1)
+
+
+def _add(service: str, account: str, secret: str) -> None:
+    """Save (or replace) an entry trusting `security`, the secret on stdin; checked by its attributes after."""
+    run = subprocess.run([SECURITY, "-i"], input=f"add-generic-password -U -s {service} -a {account} -T {SECURITY} "
+                                                 f"-w {secret}\n", capture_output=True, text=True)
+    saved = subprocess.run([SECURITY, "find-generic-password", "-s", service, "-a", account], capture_output=True)
+    if run.returncode or saved.returncode:
+        raise GateError(f"security couldn't save {service}")  # its output can hold the command, so it isn't shown
+
+
+def _unlist(service: str, account: str) -> None:
+    listed = _adopted_list()
+    if listed.exists():
+        kept = [line for line in listed.read_text().splitlines() if line != f"{service}\t{account}"]
+        listed.write_text("".join(f"{line}\n" for line in kept))
 
 
 def store_hint(service: str, account: str) -> str:
