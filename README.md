@@ -2,6 +2,8 @@
 
 <!-- mcp-name: io.github.vinayvobbili/taxtrace -->
 
+[![vinayvobbili/taxtrace MCP server](https://glama.ai/mcp/servers/vinayvobbili/taxtrace/badges/score.svg)](https://glama.ai/mcp/servers/vinayvobbili/taxtrace)
+
 **Prepare a US federal and state return from your own documents, on your own machine, with every
 number traced to the page it came from.**
 
