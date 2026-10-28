@@ -1339,6 +1339,30 @@ def cmd_ira(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_todo(args: argparse.Namespace) -> int:
+    """The open items in <workspace>/todo.md by due date, undated last, each with its section. With `--due`, only the
+    overdue ones and those due in the next DAYS days (7 if none is given). The page shows the same list.
+
+    The file is `## Section` headings over `- [ ] text` items, a leading bold date (**Wed 10/28**) as the due date,
+    indented `  - text` notes and indented `  - [ ] text` sub-tasks.
+    """
+    from . import todo
+
+    workspace.outside_git(workspace.home())
+    on = todo.today()
+    items = todo.load(on)
+    if items is None:
+        print(f"no {workspace.TODO} in {workspace.home()}; create one with `## Section` headings and "
+              "`- [ ] text` items", file=sys.stderr)
+        return 1
+    shown = todo.ordered(items) if args.due is None else todo.due_within(items, on, args.due)
+    for item in shown:
+        print(todo.row(item))
+    if not shown:
+        print("nothing open" if args.due is None else f"nothing due in the next {args.due} days")
+    return 0
+
+
 def cmd_fbar(args: argparse.Namespace) -> int:
     """Each spouse's FBAR (FinCEN Form 114) for a year, item by item, into <workspace>/foreign/fbar-<year>.txt (a
     checklist to type into the BSA e-filing form) and fbar-<year>.json, from what `foreign` saved for the year.
@@ -1760,6 +1784,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--confirm", action="append", default=[], metavar="KEY=VALUE",
                    help="kept for later runs: other=AMOUNT (the year's income besides the wages)")
     p.set_defaults(func=cmd_ira)
+    p = sub.add_parser("todo", help="the money and tax to-dos in todo.md, by due date", description=cmd_todo.__doc__)
+    p.add_argument("--due", type=int, nargs="?", const=7, default=None, metavar="DAYS",
+                   help="only the overdue items and those due in the next DAYS days (default: 7)")
+    p.set_defaults(func=cmd_todo)
     p = sub.add_parser("foreign", help="a year's foreign side in dollars: a property sold abroad, the tax kept there, "
                                        "the accounts' interest and balances", description=cmd_foreign.__doc__)
     p.add_argument("--year", type=int, required=True, help="the tax year")

@@ -27,8 +27,10 @@ FX = "fx"  # public exchange rates, fetched once
 QBI = "qbi"  # Form 8995, the qualified business income deduction
 ESTIMATES = "estimates"  # the year's estimated tax against the safe harbor, quarter by quarter
 IRA = "ira"  # the year's IRA deductions and Roth IRA limit at its projected income
+TODO = "todo.md"  # the money and tax to-do list, written by hand
 # taxtrace's own files and folders in the workspace, never read back as documents: its output and its settings
-DERIVED = {OCR_CACHE, REDACTED, MANIFEST, TERMS_FILE, CARRYFORWARDS, K1, PASSIVE, FORMS, SCHEDULE_E, FOREIGN, FX, QBI}
+DERIVED = {OCR_CACHE, REDACTED, MANIFEST, TERMS_FILE, CARRYFORWARDS, K1, PASSIVE, FORMS, SCHEDULE_E, FOREIGN, FX, QBI,
+           TODO}
 KEYCHAIN_SERVICE = "taxtrace"
 KEYCHAIN_DEFAULT = "default"  # tried after the file's own entry: one password for every return a preparer sends
 

@@ -478,6 +478,33 @@ year's income from the pay stub's federal taxable wages to December 31, as they 
 filled (which lowers it), plus last year's interest, dividends and Schedule 1 income, and gives each spouse's
 deduction and the Roth IRA's limit in both cases. The income itself is masked.
 
+## To do
+
+```bash
+taxtrace todo            # open items by due date, undated last
+taxtrace todo --due      # overdue, plus what's due in the next 7 days
+taxtrace todo --due 14   # ... the next 14 days
+```
+
+The list is `todo.md` at the root of the workspace, written by hand (taxtrace never reads it as a tax document).
+The page shows it above the documents, in groups (overdue, today, this week, later, no date), and a card's checkbox
+marks it done.
+
+```markdown
+## Estimated tax
+Any line that isn't an item, like this one, is ignored.
+- [ ] **Thu 1/14/2027** Pay the fourth-quarter estimate, from `estimates`
+  - the amount is in estimates/2026.json
+  - [ ] check the account balance
+- [ ] **Wed 10/28, time TBD** Call the plan administrator about the **rollover**
+- [x] Order the tax software
+```
+
+An item is `- [ ] text` (open) or `- [x] text` (done) under a `## Section`. A leading bold date is its due date, with
+a year (`**Fri 1/15/2027**`) or without (`**Wed 10/28**`, the date from 2 months back to 10 months ahead); undated
+items are fine. Indented `  - text` lines are notes and indented `  - [ ] text` lines sub-tasks. Marking an item done
+changes that line's `[ ]` to `[x]` and nothing else, and refuses if the line was edited since the page loaded.
+
 ## India's return
 
 ```bash

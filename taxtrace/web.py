@@ -18,7 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib import resources
 from urllib.parse import urlparse
 
-from . import __version__, chat, text, workspace
+from . import __version__, chat, text, todo, workspace
 
 APP_HOST = "taxtrace.localhost"  # browsers and macOS send every *.localhost name to this machine, never the web
 PORT = 8766  # jobwatch's is 8765
@@ -126,6 +126,20 @@ def make_handler(settings: chat.Settings, token: str, port_ref: list[int]):
                 body = json.loads(self.rfile.read(length) or b"{}") if length else {}
                 if method == "GET" and url.path == "/api/status":
                     return self._json(HTTPStatus.OK, {"models": chat.status(settings), "workspace": overview()})
+                if method == "GET" and url.path == "/api/todo":
+                    on = todo.today()
+                    items = todo.load(on)
+                    return self._json(HTTPStatus.OK, {"items": todo.to_json(items or [], on),
+                                                      "path": str(todo.path()), "exists": items is not None})
+                if method == "POST" and url.path == "/api/todo/done":
+                    line, expect = int(body.get("line", 0)), str(body.get("text", ""))
+                    try:
+                        todo.mark_done(todo.path(), line, expect)
+                    except FileNotFoundError:
+                        return self._json(HTTPStatus.CONFLICT, {"error": "todo.md is gone. Reload the page."})
+                    except ValueError as e:  # the line changed since the page loaded
+                        return self._json(HTTPStatus.CONFLICT, {"error": str(e)})
+                    return self._json(HTTPStatus.OK, {"ok": True})
                 if method == "POST" and url.path == "/api/chat":
                     messages = chat.clean(body.get("messages"), settings.max_turns)
                     return self._stream(chat.answer(messages, settings, masked=body.get("masked") is True))

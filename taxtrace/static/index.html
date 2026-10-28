@@ -123,6 +123,51 @@ h2::before { content: ""; width: 14px; height: 3px; border-radius: 2px; backgrou
   background: color-mix(in srgb, var(--c) 14%, transparent); color: var(--c); }
 .empty { padding: 34px; text-align: center; color: var(--muted); }
 
+/* to do */
+.todo { margin-bottom: 30px; }
+.todo-stats { grid-template-columns: repeat(5, minmax(0, 1fr)); margin-bottom: 20px; }
+.todo-stats .stat { border-left: 4px solid var(--g); }
+.todo-stats .stat .num { color: var(--g); }
+.todo-stats .stat:nth-child(5) { animation-delay: 240ms; }
+.tgroup { margin-bottom: 20px; }
+.tgroup h3 { display: flex; align-items: center; gap: 9px; margin: 0 0 10px; font-size: 12.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.tgroup h3::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--g); box-shadow: 0 0 0 4px color-mix(in srgb, var(--g) 22%, transparent); }
+.tgroup h3 .n { background: var(--chip); color: var(--chip-text); border-radius: 99px; padding: 0 9px; font-size: 12px; }
+.tcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 12px; align-items: start; }
+.tcard { padding: 13px 15px 11px 18px; position: relative; overflow: hidden; animation: rise .45s cubic-bezier(.2, .7, .2, 1) both;
+  transition: transform .2s, box-shadow .2s, border-color .2s, opacity .3s; }
+.tcard::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 5px; background: var(--g); }
+.tcard:hover { transform: translateY(-3px); box-shadow: var(--shadow-hover); border-color: color-mix(in srgb, var(--g) 35%, var(--line)); }
+.tcard.gone { opacity: 0; transform: translateX(24px) scale(.97); }
+.tcard .row { display: flex; gap: 12px; align-items: flex-start; }
+.tcard .chk { appearance: none; -webkit-appearance: none; flex: none; width: 22px; height: 22px; margin: 2px 0 0; border-radius: 7px; border: 2px solid var(--g);
+  cursor: pointer; display: grid; place-items: center; background: none; transition: background .15s, transform .15s; }
+.tcard .chk:hover { transform: scale(1.12); background: color-mix(in srgb, var(--g) 18%, transparent); }
+.tcard .chk:checked { background: var(--g); }
+.tcard .chk:checked::after { content: ""; width: 6px; height: 11px; border: solid #fff; border-width: 0 2.5px 2.5px 0; transform: rotate(45deg) translate(-1px, -1px); }
+.tcard .chk:focus-visible { outline: 3px solid var(--accent-soft); outline-offset: 2px; }
+.tcard .body { flex: 1; min-width: 0; }
+.tcard .tags { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 5px; }
+.tag { font-size: 11.5px; font-weight: 700; padding: 2px 10px; border-radius: 99px; white-space: nowrap; }
+.tag.sec { background: var(--chip); color: var(--chip-text); }
+.tag.due { color: #fff; background: var(--g); }
+.tcard .title { overflow-wrap: anywhere; }
+.tcard .title b { font-weight: 750; }
+.tcard details { margin-top: 8px; }
+.tcard summary { cursor: pointer; font-size: 12.5px; font-weight: 650; color: var(--accent); list-style: none; user-select: none; }
+.tcard summary::-webkit-details-marker { display: none; }
+.tcard summary::before { content: "\25B8"; display: inline-block; margin-right: 6px; transition: transform .15s; }
+.tcard details[open] summary::before { transform: rotate(90deg); }
+.tcard .more { margin: 8px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 13.5px; color: var(--muted); }
+.tcard .more li { padding-left: 14px; position: relative; overflow-wrap: anywhere; }
+.tcard .more li::before { content: ""; position: absolute; left: 0; top: .6em; width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
+.tcard .more li.task::before { border-radius: 2px; background: none; border: 1.5px solid var(--accent); }
+.tcard .more li.task.done { text-decoration: line-through; opacity: .6; }
+.tcard .more li.task.done::before { background: var(--accent); }
+.tcard .err { margin-top: 6px; font-size: 12.5px; color: var(--bad); }
+.g-overdue { --g: var(--bad); } .g-today { --g: var(--warn); } .g-week { --g: var(--accent); }
+.g-later { --g: var(--muted); } .g-undated { --g: var(--accent-2); }
+
 /* side */
 .side { padding: 18px; display: flex; flex-direction: column; gap: 16px; animation: rise .5s .1s cubic-bezier(.2, .7, .2, 1) both; }
 .models { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; position: relative; }
@@ -208,7 +253,7 @@ form.input button { border: 0; border-radius: 13px; background: var(--grad); col
 @keyframes sheen { to { transform: translateX(100%); } }
 @keyframes blink { 0%, 80%, 100% { opacity: .3; transform: none; } 40% { opacity: 1; transform: translateY(-3px); } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
-@media (max-width: 980px) { .layout { grid-template-columns: 1fr; } .hero { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 980px) { .layout { grid-template-columns: 1fr; } .hero, .todo-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 640px) {
   .bar { padding: 10px 16px; } .shield span, .widths { display: none; } main { padding: 20px 16px 100px; } h1 { font-size: 26px; }
   .fab { right: 16px; bottom: 16px; } .pop { right: 16px; bottom: 16px; height: calc(100vh - 32px); }
@@ -235,6 +280,11 @@ form.input button { border: 0; border-radius: 13px; background: var(--grad); col
     <p class="sub" id="where">Loading the workspace…</p>
   </div>
   <div class="hero" id="hero"></div>
+  <section class="todo" id="todo" aria-label="To do">
+    <h2>To do</h2>
+    <div class="hero todo-stats" id="todo-stats"></div>
+    <div id="todo-groups"></div>
+  </section>
   <div class="layout">
     <section>
       <h2>Documents by folder</h2>
@@ -357,6 +407,65 @@ async function load() {
   } catch (e) { $("where").textContent = `Couldn't load the workspace: ${e.message}`; }
 }
 
+// -- the to-do list: counts, then cards grouped by when they're due; a checkbox marks one done in todo.md
+const TODO_GROUPS = [["overdue", "Overdue"], ["today", "Today"], ["week", "This week"], ["later", "Later"], ["undated", "No date"]];
+const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+function inline(s) {  // **bold** and `code`, after escaping
+  const esc = s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return esc.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/`([^`]+)`/g, "<code>$1</code>");
+}
+function html(tag, attrs, markup) { const el = h(tag, attrs); el.innerHTML = markup; return el; }
+function dueLabel(t) {
+  if (t.due == null) return "";
+  const [y, m, d] = t.due.split("-").map(Number), day = new Date(y, m - 1, d);
+  const when = `${DAYS[day.getDay()]} ${m}/${d}${y === new Date().getFullYear() ? "" : "/" + y}`;
+  const label = t.group === "overdue" ? `${when} · ${-t.days}d overdue` : t.group === "today" ? "Today" : when;
+  return t.time ? `${label}, ${t.time}` : label;
+}
+function todoCard(t, i) {
+  const more = [...t.notes.map(n => html("li", {}, inline(n))),
+    ...t.subtasks.map(s => html("li", { class: "task" + (s.done ? " done" : "") }, inline(s.text)))];
+  const err = h("div", { class: "err", hidden: true });
+  const card = h("div", { class: `card tcard g-${t.group}`, style: `animation-delay:${Math.min(i * 40, 400)}ms` },
+    h("div", { class: "row" },
+      h("input", { class: "chk", type: "checkbox", "aria-label": "Mark done", title: "Mark done", onchange: async e => {
+        const box = e.currentTarget;
+        box.disabled = true;
+        try {
+          await api("/api/todo/done", { line: t.line, text: t.raw });
+          card.classList.add("gone");
+          setTimeout(loadTodo, 320);
+        } catch (x) { box.checked = false; box.disabled = false; err.textContent = x.message; err.hidden = false; setTimeout(loadTodo, 2500); }
+      } }),
+      h("div", { class: "body" },
+        h("div", { class: "tags" }, h("span", { class: "tag sec" }, t.section), t.due ? h("span", { class: "tag due" }, dueLabel(t)) : null),
+        html("div", { class: "title" }, inline(t.text)),
+        more.length ? h("details", {}, h("summary", {}, [t.notes.length ? `${t.notes.length} note${t.notes.length > 1 ? "s" : ""}` : "",
+          t.subtasks.length ? `${t.subtasks.length} sub-task${t.subtasks.length > 1 ? "s" : ""}` : ""].filter(Boolean).join(" · ")),
+          h("ul", { class: "more" }, more)) : null,
+        err)));
+  return card;
+}
+async function loadTodo() {
+  try {
+    const d = await api("/api/todo");
+    if (!d.exists || !d.items.length) {
+      $("todo-stats").replaceChildren();
+      $("todo-groups").replaceChildren(h("div", { class: "card empty" }, d.exists ? "Nothing open in " : "No to-do list yet. Create ",
+        h("code", {}, "todo.md"), d.exists ? "." : " in the workspace, with ", d.exists ? null : h("code", {}, "## Section"),
+        d.exists ? null : " headings and ", d.exists ? null : h("code", {}, "- [ ] text"), d.exists ? null : " items."));
+      return;
+    }
+    const by = Object.fromEntries(TODO_GROUPS.map(([k]) => [k, d.items.filter(t => t.group === k)]));
+    $("todo-stats").replaceChildren(...TODO_GROUPS.map(([k, label]) => {
+      const s = stat(by[k].length, label); s.classList.add("g-" + k); return s;
+    }));
+    $("todo-groups").replaceChildren(...TODO_GROUPS.filter(([k]) => by[k].length).map(([k, label]) =>
+      h("div", { class: `tgroup g-${k}` }, h("h3", {}, label, h("span", { class: "n" }, by[k].length)),
+        h("div", { class: "tcards" }, by[k].map(todoCard)))));
+  } catch (e) { $("todo-groups").replaceChildren(h("div", { class: "card empty" }, `Couldn't load the to-do list: ${e.message}`)); }
+}
+
 // -- the chat
 const history = [];  // [{role, content}], kept while the page is open
 let busy = null;
@@ -458,7 +567,7 @@ $("fab").addEventListener("click", () => { $("pop").hidden = false; $("fab").sty
 $("close").addEventListener("click", () => { $("pop").hidden = true; $("fab").style.visibility = ""; });
 $("clear").addEventListener("click", reset);
 document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("pop").hidden) $("close").click(); });
-reset(); load();
+reset(); load(); loadTodo();
 </script>
 </body>
 </html>
