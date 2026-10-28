@@ -150,6 +150,7 @@ def test_cli_doesnt_save_a_statement_whose_rows_didnt_read(tmp_path: Path, works
     out = printed(capsys)
     assert "0 rows" in out and "failed: transactions are read from the statement's table" in out
     assert "not saved: an account with nothing read would count as one with no interest" in out
+    assert out.rstrip().endswith("no statements of account saved")
     assert not (workspace_home / "forms").exists()
 
 

@@ -932,7 +932,7 @@ def cmd_bank(args: argparse.Namespace) -> int:
             (out / f"bank-{found.account or 'x'}-{start}.json").write_text(
                 json.dumps([found.to_json()], indent=2, default=str) + "\n")
             written += 1
-    print(f"wrote to {out}" if written else "no statements of account found")
+    print(f"wrote to {out}" if written else "no statements of account saved")
     return 1 if failed else 0
 
 
