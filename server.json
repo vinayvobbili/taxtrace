@@ -1,0 +1,45 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.vinayvobbili/taxtrace",
+  "title": "taxtrace",
+  "description": "Masked, read-only views of a local tax workspace: documents, form checks and to-dos. No amount, name or ID leaves your machine.",
+  "repository": {
+    "url": "https://github.com/vinayvobbili/taxtrace",
+    "source": "github"
+  },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "taxtrace",
+      "version": "0.1.0",
+      "runtimeHint": "uvx",
+      "runtimeArguments": [
+        {
+          "type": "named",
+          "name": "--with",
+          "value": "mcp>=2.2",
+          "description": "The MCP server's dependency (the taxtrace[mcp] extra)"
+        }
+      ],
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "mcp",
+          "description": "Run the MCP server"
+        }
+      ],
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "TAXTRACE_HOME",
+          "description": "Path to your tax workspace folder (documents by tax year, todo.md). Defaults to ~/TaxData. Outside any git repository.",
+          "format": "filepath"
+        }
+      ]
+    }
+  ]
+}
