@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "taxtrace"
-version = "0.0.1"
+version = "0.1.0"
 description = "Prepare a US federal and state return from your own documents on your own machine: every number traced to the page it came from, nothing guessed, and no document sent to a cloud model."
 readme = "README.md"
 license = "MIT"
@@ -29,11 +29,13 @@ Funding = "https://ko-fi.com/vinayvobbili"
 
 [project.optional-dependencies]
 chat = ["anthropic>=0.40"]
+mcp = ["mcp>=2.2"]
 local = ["mlx-lm>=0.28; sys_platform == 'darwin' and platform_machine == 'arm64'"]
 dev = ["pytest>=8", "ruff>=0.14", "reportlab>=4"]
 
 [project.scripts]
 taxtrace = "taxtrace.cli:main"
+taxtrace-mcp = "taxtrace.mcp_server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["taxtrace"]

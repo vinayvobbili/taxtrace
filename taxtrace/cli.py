@@ -1518,6 +1518,20 @@ def cmd_ui(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_mcp(args: argparse.Namespace) -> int:
+    """Run the MCP server (the same as `taxtrace-mcp`): the workspace, its documents and to-dos, masked, for Claude
+    or another assistant over stdio. Needs the mcp extra."""
+    try:
+        from . import mcp_server
+    except ImportError as err:
+        if err.name != "mcp" and not str(err.name).startswith("mcp."):
+            raise
+        print("taxtrace: the MCP server needs the mcp package: pip install 'taxtrace[mcp]'", file=sys.stderr)
+        return 1
+    mcp_server.main()
+    return 0
+
+
 def cmd_service(args: argparse.Namespace) -> int:
     """Keep `taxtrace ui` running: start it at login, restart it if it stops (macOS)."""
     from . import service
@@ -1836,6 +1850,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--keychain", default="anthropic",
                    help="Keychain item with the Anthropic API key, if ANTHROPIC_API_KEY isn't set (default: anthropic)")
     p.set_defaults(func=cmd_ui)
+    p = sub.add_parser("mcp", help="run the MCP server (the same as `taxtrace-mcp`): masked workspace views for "
+                                   "Claude or another assistant", description=cmd_mcp.__doc__)
+    p.set_defaults(func=cmd_mcp)
     p = sub.add_parser("service", help="keep `taxtrace ui` running: start it at login, restart it if it stops "
                                        "(macOS)", description=cmd_service.__doc__)
     p.add_argument("action", choices=["install", "uninstall", "status"])
