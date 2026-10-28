@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.vinayvobbili/taxtrace",
   "title": "taxtrace",
-  "description": "Masked, read-only views of a local tax workspace: documents, form checks and to-dos. No amount, name or ID leaves your machine.",
+  "description": "Masked, read-only views of a local tax workspace: documents, form checks and to-dos.",
   "repository": {
     "url": "https://github.com/vinayvobbili/taxtrace",
     "source": "github"

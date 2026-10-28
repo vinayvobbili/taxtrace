@@ -224,5 +224,6 @@ def test_registry_entry_matches_the_release():
     root = Path(__file__).parent.parent
     entry = json.loads((root / "server.json").read_text())
     assert entry["version"] == entry["packages"][0]["version"] == __version__
+    assert len(entry["description"]) <= 100  # the registry refuses a longer one (422)
     assert entry["packages"][0]["environmentVariables"][0]["name"] == "TAXTRACE_HOME"
     assert f"mcp-name: {entry['name']}" in (root / "README.md").read_text()
