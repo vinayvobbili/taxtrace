@@ -144,6 +144,46 @@ def test_cli_saves_the_statement_and_prints_it_masked(tmp_path: Path, workspace_
     assert "000123459876" not in json.dumps(saved) and "Account Holder" not in json.dumps(saved)
 
 
+TYPED = """account,000123459876
+currency,inr
+period,01-04-2026,27-10-2026
+opening,"1,02,410.00"
+date,withdrawal,deposit,balance,description
+05-05-2026,,25000.00,127410.00,Cash Deposit
+30-06-2026,,1234.56,128644.56,Int.Pd From:01-04-2026 to 30-06-2026
+30-06-2026,123.45,,128521.11,TDS on interest
+
+"""
+
+
+def test_a_statement_typed_from_a_picture_reads_like_a_printed_one():
+    found = statement.read_typed("typed.csv", TYPED)
+    assert (found.account, found.currency, found.start, found.end) == ("9876", "INR", "01-04-2026", "27-10-2026")
+    assert [(r.on, str(r.withdrawal), str(r.deposit), str(r.balance), r.kind) for r in found.rows] == [
+        ("05-05-2026", "0", "25000.00", "127410.00", ""),
+        ("30-06-2026", "0", "1234.56", "128644.56", "interest"),
+        ("30-06-2026", "123.45", "0", "128521.11", "tds")]
+    assert found.failed == [] and len(found.checks) == 3  # the opening balance, then each row from the one before
+
+
+def test_cli_saves_a_typed_statement_and_not_a_mistyped_one(tmp_path: Path, workspace_home: Path, capsys):
+    typed = tmp_path / "pnb-9876-typed.csv"
+    typed.write_text(TYPED.replace("128521.11", "128512.11").replace("30-06-2026,,1234", "3006-2026,,1234"))
+    assert cli.main(["bank", str(typed)]) == 1
+    out = printed(capsys)
+    assert "failed: line 7 has a dd-mm-yyyy date, numbers and a balance" in out
+    assert "failed: the balance on 30-06-2026 follows from the one before" in out
+    assert "not saved: fix the typed line the check names, then run this again" in out
+    assert "128512.11" not in out and not (workspace_home / "forms").exists()
+    typed.write_text(TYPED)
+    assert cli.main(["bank", str(typed)]) == 0
+    assert "2 rows" not in printed(capsys)
+    (saved,) = json.loads((workspace_home / "forms" / "bank-9876-20260401.json").read_text())
+    assert [r["kind"] for r in saved["rows"]] == ["", "interest", "tds"]
+    (tmp_path / "other.csv").write_text("a,b\n1,2\n")
+    assert cli.main(["bank", str(tmp_path / "other.csv")]) == 0  # not a typed statement: left alone
+
+
 def test_cli_doesnt_save_a_statement_whose_rows_didnt_read(tmp_path: Path, workspace_home: Path, capsys):
     path = draw(tmp_path / "statement.pdf", [HEAD])  # the header and its columns, no rows under them
     assert cli.main(["bank", str(path)]) == 1

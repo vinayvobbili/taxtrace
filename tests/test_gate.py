@@ -272,10 +272,12 @@ def test_release_changes_nothing_when_the_entry_cant_be_removed(fake_gate: Path,
 
 
 def test_release_leaves_document_passwords_and_refused_reads_alone(fake_gate: Path, monkeypatch, capsys):
+    real_release = gate.release
     monkeypatch.setattr(gate, "release", lambda *a: pytest.fail("a document password was released"))
     assert cli.main(["keychain", "release", "taxtrace"]) == 2
     assert cli.main(["keychain", "release"]) == 2
-    monkeypatch.undo()
+    # not monkeypatch.undo(): that would also undo the fake helper, and the real list would be read
+    monkeypatch.setattr(gate, "release", real_release)
     monkeypatch.setattr(gate, "read", lambda *a: None)  # the approval was declined
     assert cli.main(["keychain", "release", "anthropic"]) == 1
     assert "the read wasn't approved; nothing changed" in capsys.readouterr().out

@@ -520,6 +520,21 @@ A bank's monthly "Account Statement" is read too: a row number, dates as `05 Jan
 amounts, Indian commas (`1,23,456.78`), an Opening Balance row and an Account Summary. Its quarterly interest is
 credited net of TDS (`Int:1234.56 and TAX:123.45`), and is read as two rows, the interest and then the TDS withheld.
 
+When only a blurred picture of a statement has arrived (a chat app shrinks what it sends past what OCR reads), type
+it into a .csv next to it, each row as printed. Its balances are checked one by one like a printed statement's, and
+a mistyped one isn't saved:
+
+```text
+account,000123459876
+currency,INR
+period,01-04-2026,27-10-2026
+opening,"1,02,410.00"
+date,withdrawal,deposit,balance,description
+05-05-2026,,25000.00,127410.00,Cash Deposit
+30-06-2026,,1234.56,128644.56,Int.Pd From:01-04-2026 to 30-06-2026
+30-06-2026,123.45,,128521.11,TDS on interest
+```
+
 So is a bank's monthly e-statement of every account the customer holds there ("As on 31-01-26"): a balance summary,
 the term deposits, and a page per savings account with the month's transactions (dates as `31-01-26`, amounts
 right-aligned under Credit, Debit and Balance) between its opening and closing balance lines. Each account is saved as

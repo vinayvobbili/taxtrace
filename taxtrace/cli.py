@@ -838,6 +838,10 @@ def cmd_bank(args: argparse.Namespace) -> int:
     The values go only to that folder, as bank-<last four digits>-<period start>.json. What's printed is masked: the
     period, how many rows of each kind, the checks that failed and the questions.
 
+    A statement only a blurred picture of has arrived can be typed into a .csv (`account,`, `currency,` and
+    `period,` lines, then `date,withdrawal,deposit,balance,description` and a row per transaction): its balances
+    are checked the same way, and a mistyped one isn't saved.
+
     A bank's interest certificate on its deposits goes there too, as certificate-<first account's last four
     digits>-<the financial year's end>.json: each account's interest and the tax kept on it, which a term deposit's
     statements don't show. So does India's quarterly TDS certificate (Form 16A, or 131 from April 2026), as
@@ -854,6 +858,13 @@ def cmd_bank(args: argparse.Namespace) -> int:
     out, written, failed = home / workspace.FORMS, 0, 0
     for doc in _documents(args):
         name = redact.redact(doc.name, terms, bare_years=True).text
+        if doc.suffix.lower() == ".csv":  # a statement typed from a picture of it
+            typed = doc.read_text(errors="replace")
+            if statement.is_typed(typed):
+                saved, wrong = _statements([statement.read_typed(doc.name, typed)], doc, name, out, masked,
+                                           args.rows, typed=True)
+                written, failed = written + saved, failed + wrong
+            continue
         if doc.suffix.lower() not in text.PDF_SUFFIXES | text.IMAGE_SUFFIXES:  # a statement's picture, too
             continue
         try:
@@ -906,34 +917,47 @@ def cmd_bank(args: argparse.Namespace) -> int:
             statements = [statement.read(doc.name, pages, {n: every[n] for n in tables})]
         else:
             continue
-        for found in statements:
-            failed += bool(found.failed)
-            kinds = {k: sum(r.kind == k for r in found.rows) for k in ("interest", "tax refund", "tds", "tds refund")}
-            held = f", {found.operation.lower()}" if found.operation else ""
-            term = f", opened {found.term['opened']}, matures {found.term['matures']}" if found.term else ""
-            label = {"savings": "savings account"}.get(found.kind, found.kind or "account")
-            print(f"{name}: {label} ending {masked(found.account) or '?'} in "
-                  f"{found.currency or '?'}{held}{term}, {found.start or '?'} to {found.end or '?'}; "
-                  f"{len(found.rows)} rows (" + ", ".join(f"{v} {k}" for k, v in kinds.items())
-                  + f"); {len(found.checks) - len(found.failed)} of {len(found.checks)} checks pass")
-            if args.rows:
-                for r in found.rows:
-                    print(f"  {r.on} {'deposit' if r.deposit else 'withdrawal'} {r.kind or '-'}: "
-                          f"{masked(r.description)}")
-            for c in found.failed:
-                print(f"  failed: {c.what}" + (f" ({masked(c.quote)})" if c.quote else ""))
-            for q in found.questions:
-                print(f"  question: {q.text}")
-            if not found.rows and found.failed:
-                print("  not saved: an account with nothing read would count as one with no interest")
-                continue
-            out.mkdir(parents=True, exist_ok=True)
-            start = "".join(reversed(found.start.split("-"))) if found.start else doc.stem
-            (out / f"bank-{found.account or 'x'}-{start}.json").write_text(
-                json.dumps([found.to_json()], indent=2, default=str) + "\n")
-            written += 1
+        saved, wrong = _statements(statements, doc, name, out, masked, args.rows)
+        written, failed = written + saved, failed + wrong
     print(f"wrote to {out}" if written else "no statements of account saved")
     return 1 if failed else 0
+
+
+def _statements(statements: list, doc: Path, name: str, out: Path, masked, rows: bool,
+                typed: bool = False) -> tuple[int, int]:
+    """Print each statement of account read from `doc`, masked, and save it to `out`: how many were saved, and how
+    many failed a check. A typed one that fails isn't saved: the mistyped line is fixed first."""
+    written = failed = 0
+    for found in statements:
+        failed += bool(found.failed)
+        kinds = {k: sum(r.kind == k for r in found.rows) for k in ("interest", "tax refund", "tds", "tds refund")}
+        held = f", {found.operation.lower()}" if found.operation else ""
+        term = f", opened {found.term['opened']}, matures {found.term['matures']}" if found.term else ""
+        label = {"savings": "savings account"}.get(found.kind, found.kind or "account")
+        print(f"{name}: {label} ending {masked(found.account) or '?'} in "
+              f"{found.currency or '?'}{held}{term}, {found.start or '?'} to {found.end or '?'}; "
+              f"{len(found.rows)} rows (" + ", ".join(f"{v} {k}" for k, v in kinds.items())
+              + f"); {len(found.checks) - len(found.failed)} of {len(found.checks)} checks pass")
+        if rows:
+            for r in found.rows:
+                print(f"  {r.on} {'deposit' if r.deposit else 'withdrawal'} {r.kind or '-'}: "
+                      f"{masked(r.description)}")
+        for c in found.failed:
+            print(f"  failed: {c.what}" + (f" ({masked(c.quote)})" if c.quote else ""))
+        for q in found.questions:
+            print(f"  question: {q.text}")
+        if not found.rows and found.failed:
+            print("  not saved: an account with nothing read would count as one with no interest")
+            continue
+        if typed and found.failed:
+            print("  not saved: fix the typed line the check names, then run this again")
+            continue
+        out.mkdir(parents=True, exist_ok=True)
+        start = "".join(reversed(found.start.split("-"))) if found.start else doc.stem
+        (out / f"bank-{found.account or 'x'}-{start}.json").write_text(
+            json.dumps([found.to_json()], indent=2, default=str) + "\n")
+        written += 1
+    return written, failed
 
 
 def cmd_rental(args: argparse.Namespace) -> int:

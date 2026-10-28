@@ -26,14 +26,19 @@ the interest accrued on it, as the statement's day.
 Checks: each balance is the one before plus the deposit or less the withdrawal, and the withdrawals and deposits add
 up to the statement's grand totals (or the balances match its account summary). Nothing that names the holders is
 kept, and of the account number only its last four digits.
+
+A statement only a picture of has reached (one a chat app shrank past what OCR reads) can be typed into a .csv,
+row by row as printed: the same checks catch a mistyped figure.
 """
 
 from __future__ import annotations
 
+import csv
+import io
 import re
 from dataclasses import asdict, dataclass, field, replace
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from .prior import Check, Question, _rows
 
@@ -154,6 +159,50 @@ def read(name: str, pages: list[str], words: dict[int, list[dict]]) -> Statement
     return found
 
 
+TYPED_HEADER = "date,withdrawal,deposit,balance,description"
+
+
+def is_typed(page: str) -> bool:
+    """A statement typed by hand from a picture of one (a .csv): its account, currency and period lines, then the
+    table under the header `date,withdrawal,deposit,balance,description`."""
+    return TYPED_HEADER in [ln.strip().lower() for ln in page.splitlines()]
+
+
+def read_typed(name: str, text: str) -> Statement:
+    """A typed statement: `account,<last four>`, `currency,INR`, `period,<dd-mm-yyyy>,<dd-mm-yyyy>`, an optional
+    `opening,<balance before the first row>`, then a row per transaction as printed (an empty amount left blank).
+    The balances are checked one by one like a printed statement's, so a mistyped figure fails a check."""
+    found = Statement(name)
+    rows = list(csv.reader(io.StringIO(text)))
+    table = next(i for i, r in enumerate(rows) if ",".join(c.strip().lower() for c in r) == TYPED_HEADER)
+    for key, *values in (r for r in rows[:table] if r):
+        key = key.strip().lower()
+        if key == "account" and values:
+            found.account = _last_four(values[0].strip())
+        elif key == "currency" and values:
+            found.currency = values[0].strip().upper()
+        elif key == "period" and len(values) >= 2:
+            found.start, found.end = values[0].strip(), values[1].strip()
+        elif key == "opening" and values:
+            found.opening = money(values[0].strip())
+    for line, cells in enumerate(rows[table + 1:], table + 2):
+        if not any(c.strip() for c in cells):
+            continue
+        on, out, dep, balance, *description = (c.strip() for c in cells + [""] * (5 - len(cells)))
+        try:
+            amounts = [money(a) if a else Decimal(0) for a in (out, dep, balance)]
+        except InvalidOperation:
+            amounts = []
+        if not (DAY.match(on) and amounts and balance):  # kept out: a later step would misread it
+            found.check(f"line {line} has a dd-mm-yyyy date, numbers and a balance", False, 1, f"line {line}")
+            continue
+        r = Row(on, *amounts, " ".join(description).strip(), "", 1, f"line {line}")
+        r.kind = _kind(r)
+        found.rows.append(r)
+    _checks(found)
+    return found
+
+
 def is_consolidated(page: str) -> bool:
     """A page of the monthly e-statement of all of a customer's accounts."""
     flat = " ".join(page.split())
@@ -241,10 +290,7 @@ def _transaction(row: list[dict], columns: dict[str, float], n: int, text: str) 
     words = [w["text"] for w in row[1:] if w["x0"] < cut and w["text"] != "-"]
     on = _long(row[0]["text"])
     found = Row(on, debit, credit, balance, " ".join(words), "", n, text)
-    found.kind = ("tds" if TDS.search(found.description) and debit else
-                  "tds refund" if TDS.search(found.description) and credit else
-                  "interest" if INTEREST.search(found.description) and credit else
-                  "tax refund" if REFUND.search(found.description) and credit else "")
+    found.kind = _kind(found)
     return found
 
 
@@ -404,10 +450,14 @@ def _page(found: Statement, n: int, words: list[dict]) -> None:
         r.description = " ".join(parts.get(i, []))
         found.rows.extend(_net_interest(found, r))
     for r in found.rows:
-        r.kind = r.kind or ("tds" if TDS.search(r.description) and r.withdrawal else
-                            "tds refund" if TDS.search(r.description) and r.deposit else
-                            "interest" if INTEREST.search(r.description) and r.deposit else
-                            "tax refund" if REFUND.search(r.description) and r.deposit else "")
+        r.kind = r.kind or _kind(r)
+
+
+def _kind(r: Row) -> str:
+    return ("tds" if TDS.search(r.description) and r.withdrawal else
+            "tds refund" if TDS.search(r.description) and r.deposit else
+            "interest" if INTEREST.search(r.description) and r.deposit else
+            "tax refund" if REFUND.search(r.description) and r.deposit else "")
 
 
 def _net_interest(found: Statement, r: Row) -> list[Row]:
