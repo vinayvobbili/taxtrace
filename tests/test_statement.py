@@ -166,8 +166,23 @@ def test_a_statement_typed_from_a_picture_reads_like_a_printed_one():
     assert found.failed == [] and len(found.checks) == 3  # the opening balance, then each row from the one before
 
 
+def test_a_statement_typed_with_spaces_reads_too():
+    typed = TYPED.split("date,")[0] + """date,withdrawal,deposit,balance,description
+05-05-2026 space 25000.00 127410.00cr cash deposit at Ramapuram
+20-05-2026 20    space 127390.00 Cr charges renewal fy 2026 - 2027
+30-06-2026 - 1234.56 128624.56 cr interest from: XXXX
+"""
+    found = statement.read_typed("typed.csv", typed)
+    assert [(str(r.withdrawal), str(r.deposit), str(r.balance), r.description, r.kind) for r in found.rows] == [
+        ("0", "25000.00", "127410.00", "cash deposit at Ramapuram", ""),
+        ("20", "0", "127390.00", "charges renewal fy 2026 - 2027", ""),
+        ("0", "1234.56", "128624.56", "interest from: XXXX", "interest")]
+    assert found.failed == []
+    assert statement._spaced("01-01-2026 space 5.00 100.00 dr x")[3] == "-100.00"  # overdrawn
+
+
 def test_cli_saves_a_typed_statement_and_not_a_mistyped_one(tmp_path: Path, workspace_home: Path, capsys):
-    typed = tmp_path / "pnb-9876-typed.csv"
+    typed = tmp_path / "kesavapuram-9876-typed.csv"
     typed.write_text(TYPED.replace("128521.11", "128512.11").replace("30-06-2026,,1234", "3006-2026,,1234"))
     assert cli.main(["bank", str(typed)]) == 1
     out = printed(capsys)

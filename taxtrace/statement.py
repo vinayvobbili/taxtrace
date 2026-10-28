@@ -188,6 +188,8 @@ def read_typed(name: str, text: str) -> Statement:
     for line, cells in enumerate(rows[table + 1:], table + 2):
         if not any(c.strip() for c in cells):
             continue
+        if len(cells) == 1:  # typed with spaces, the way the picture reads, not commas
+            cells = _spaced(cells[0])
         on, out, dep, balance, *description = (c.strip() for c in cells + [""] * (5 - len(cells)))
         try:
             amounts = [money(a) if a else Decimal(0) for a in (out, dep, balance)]
@@ -201,6 +203,29 @@ def read_typed(name: str, text: str) -> Statement:
         found.rows.append(r)
     _checks(found)
     return found
+
+
+BLANK_WORDS = {"space", "blank", "-", "nil"}  # what a person types for an empty column
+SIDE = re.compile(r"^([\d,]+(?:\.\d+)?)?(cr|dr)\.?$", re.IGNORECASE)
+
+
+def _spaced(line: str) -> list[str]:
+    """A row typed with spaces: the date, then the withdrawal, deposit and balance, each a number or a word for a
+    blank one ("space"), the balance's "Cr" or "Dr" after it or joined to it; the rest is the description."""
+    words = line.split()
+    if not words:
+        return []
+    cells, rest = [words[0]], words[1:]
+    while len(cells) < 4 and rest:
+        word = rest.pop(0)
+        cells.append("" if word.lower() in BLANK_WORDS else word)
+    side = SIDE.match(cells[-1]) if len(cells) == 4 else None
+    if side and side.group(1):  # "623458.18cr"
+        cells[-1] = ("-" if side.group(2).lower() == "dr" else "") + side.group(1)
+    elif rest and (side := SIDE.match(rest[0])) and not side.group(1):  # "623458.18 cr"
+        cells[-1] = ("-" if side.group(2).lower() == "dr" else "") + cells[-1]
+        rest.pop(0)
+    return [*cells, " ".join(rest)]
 
 
 def is_consolidated(page: str) -> bool:
