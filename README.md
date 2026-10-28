@@ -81,7 +81,10 @@ writing a reader of it. `--marks` adds the drawn shapes, so a checkbox ticked wi
 `taxtrace show 'prior-returns/2025*' --page 19` opens a document in Chrome at a page, for you to read yourself.
 A scanned PDF (pictures of pages, no text) is read through [ocrmypdf](https://ocrmypdf.readthedocs.io)
 on your machine (`brew install ocrmypdf`), once: the searchable copy is kept under the original's sha256
-in `<workspace>/ocr-cache`, so the text values are quoted from never shifts.
+in `<workspace>/ocr-cache`, so the text values are quoted from never shifts. A picture (.jpg, .png: a
+phone's photo or screenshot of a statement, as one arrives in a chat) goes the same way. A chat app shrinks
+what it sends, though, and a blurred table's rows may not read: `bank` then saves nothing for that account,
+and a PDF from the bank (or the picture sent as a document, uncompressed) is the better copy.
 
 `import` takes a folder or a zip, such as a tax preparer's portal export with one folder per year. It
 skips identity documents (driver's licenses, Social Security cards, passports) and anything already

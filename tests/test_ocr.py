@@ -75,6 +75,34 @@ def test_a_scan_is_read_through_ocr_once(tmp_path: Path):
     assert text.pages(scan, ocr_cache=cache) == first  # the same text every time after
 
 
+def test_a_picture_is_read_only_through_ocr(tmp_path: Path, monkeypatch):
+    from PIL import Image
+
+    picture = tmp_path / "statement.jpeg"
+    Image.new("RGB", (600, 800), "white").save(picture)
+    with pytest.raises(text.UnsupportedDocument, match="read only through OCR"):
+        text.pages(picture)  # no cache given
+    cache = tmp_path / "ocr-cache"
+    cache.mkdir()
+    make_pdf(cache / f"{hashlib.sha256(picture.read_bytes()).hexdigest()}.pdf", PRIOR_RETURN)
+    monkeypatch.setattr(shutil, "which", lambda name: pytest.fail("ocrmypdf ran despite the cache"))
+    assert "Form 4562" in text.pages(picture, ocr_cache=cache)[0]
+    assert text.layer(picture, cache).parent == cache and text.layer(cache / "x.pdf", None).name == "x.pdf"
+    assert picture in text.documents([tmp_path])
+
+
+@pytest.mark.skipif(shutil.which("ocrmypdf") is None, reason="ocrmypdf isn't installed")
+def test_a_photo_of_a_page_reads(tmp_path: Path):
+    from PIL import Image, ImageDraw, ImageFont
+
+    img = Image.new("RGB", (1200, 1600), "white")
+    ImageDraw.Draw(img).text((80, 120), "Statement for Period : 01-04-2026 to 30-09-2026", fill="black",
+                             font=ImageFont.load_default(size=40))
+    picture = tmp_path / "photo.jpeg"
+    img.save(picture)  # no resolution saved, as a phone's chat app sends it
+    assert "Statement for Period" in text.pages(picture, ocr_cache=tmp_path / "ocr-cache")[0]
+
+
 def test_outline_lists_masked_page_headings(prior_return: Path, capsys):
     assert cli.main(["outline", str(prior_return)]) == 0
     out = capsys.readouterr().out

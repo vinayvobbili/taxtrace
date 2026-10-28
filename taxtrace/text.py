@@ -6,6 +6,8 @@ quote is checked against exactly what this returns.
 A scanned PDF has pictures of pages and no text. Given an `ocr_cache` folder, such a file goes through
 ocrmypdf (Tesseract, on this machine) once, and the searchable copy is kept there under the original's
 sha256: OCR isn't byte-for-byte repeatable, and a quote must keep matching the text it was checked against.
+A picture (a phone's photo or screenshot of a statement, as one arrives in a chat) goes the same way, as a
+one-page PDF.
 """
 
 from __future__ import annotations
@@ -24,7 +26,10 @@ from xml.etree import ElementTree
 TEXT_SUFFIXES = {".txt", ".csv", ".tsv"}
 PDF_SUFFIXES = {".pdf"}
 OFFICE_SUFFIXES = {".docx", ".xlsx"}  # zip files of XML, read with the standard library
-SUPPORTED = TEXT_SUFFIXES | PDF_SUFFIXES | OFFICE_SUFFIXES
+IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png"}  # read through OCR only
+SUPPORTED = TEXT_SUFFIXES | PDF_SUFFIXES | OFFICE_SUFFIXES | IMAGE_SUFFIXES
+# A picture from a phone rarely says how big it prints; ocrmypdf needs a resolution to lay out its page.
+IMAGE_DPI = 150
 WORD = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 SHEET = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
 RELS = "{http://schemas.openxmlformats.org/package/2006/relationships}"
@@ -58,6 +63,8 @@ def pages(path: Path, password: str | None = None, ocr_cache: Path | None = None
                 if not has_text(found):
                     raise
         return found
+    if suffix in IMAGE_SUFFIXES:
+        return _pdf_pages(layer(path, ocr_cache), None)
     if suffix in TEXT_SUFFIXES:
         return [path.read_text(errors="replace")]
     if suffix in OFFICE_SUFFIXES:
@@ -211,8 +218,18 @@ def has_text(found: list[str]) -> bool:
     return any(len(page.strip()) >= OCR_MIN_CHARS for page in found)
 
 
+def layer(path: Path, ocr_cache: Path | None) -> Path:
+    """The PDF whose text layer stands for `path`: the file itself, or for a picture its OCR copy, which the words
+    of a form are placed by as well as its pages read."""
+    if path.suffix.lower() not in IMAGE_SUFFIXES:
+        return path
+    if ocr_cache is None:
+        raise UnsupportedDocument(f"{path.suffix}: a picture, read only through OCR")
+    return ocr(path, ocr_cache)
+
+
 def ocr(path: Path, cache: Path) -> Path:
-    """A searchable copy of a scanned PDF, made once and kept in `cache` under the original's sha256."""
+    """A searchable copy of a scanned PDF or a picture, made once and kept in `cache` under the original's sha256."""
     out = cache / f"{hashlib.sha256(path.read_bytes()).hexdigest()}.pdf"
     if out.exists():
         return out
@@ -222,7 +239,9 @@ def ocr(path: Path, cache: Path) -> Path:
     cache.mkdir(parents=True, exist_ok=True)
     part = out.with_suffix(".part")
     # --skip-text leaves pages that have text alone; --output-type pdf skips PDF/A, which needs Ghostscript.
-    run = subprocess.run([exe, "--skip-text", "--output-type", "pdf", "--optimize", "0", "--quiet",
+    # a phone's picture is small: drawn at 300 dpi for Tesseract (--rotate-pages turned a statement on its side)
+    picture = ["--image-dpi", str(IMAGE_DPI), "--oversample", "300"] if path.suffix.lower() in IMAGE_SUFFIXES else []
+    run = subprocess.run([exe, "--skip-text", "--output-type", "pdf", "--optimize", "0", "--quiet", *picture,
                           str(path), str(part)], capture_output=True)
     if run.returncode != 0:
         part.unlink(missing_ok=True)

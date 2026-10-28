@@ -854,15 +854,17 @@ def cmd_bank(args: argparse.Namespace) -> int:
     out, written, failed = home / workspace.FORMS, 0, 0
     for doc in _documents(args):
         name = redact.redact(doc.name, terms, bare_years=True).text
-        if doc.suffix.lower() not in text.PDF_SUFFIXES:
+        if doc.suffix.lower() not in text.PDF_SUFFIXES | text.IMAGE_SUFFIXES:  # a statement's picture, too
             continue
         try:
             pages, password = _unlocked(doc)
         except text.UnsupportedDocument as err:
             print(f"{name}: skipped, {err}")
             continue
+        src = text.layer(doc, workspace.ocr_cache())
+        every = {n: text.words(src, n, password) for n in range(1, len(pages) + 1)}
         if any(tds.is_certificate(page) for page in pages):  # India's quarterly TDS certificate
-            quarter = tds.read(doc.name, pages, {n: text.words(doc, n, password) for n in range(1, len(pages) + 1)})
+            quarter = tds.read(doc.name, pages, every)
             failed += bool(quarter.failed)
             print(f"{name}: TDS certificate (Form {quarter.number or '?'}), {quarter.quarter or '?'} of India's year, "
                   f"{quarter.start or '?'} to {quarter.end or '?'}; {len(quarter.payments)} payments, "
@@ -877,8 +879,7 @@ def cmd_bank(args: argparse.Namespace) -> int:
             written += 1
             continue
         if any(certificate.is_certificate(page) for page in pages):
-            found = certificate.read(doc.name, pages,
-                                     {n: text.words(doc, n, password) for n in range(1, len(pages) + 1)})
+            found = certificate.read(doc.name, pages, every)
             failed += bool(found.failed)
             print(f"{name}: interest certificate for the financial year ended {found.year_ended or '?'}; "
                   f"{len(found.deposits)} accounts; {len(found.checks) - len(found.failed)} of {len(found.checks)} "
@@ -900,10 +901,9 @@ def cmd_bank(args: argparse.Namespace) -> int:
             written += 1
             continue
         if any(statement.is_consolidated(page) for page in pages):  # every account the customer holds there
-            statements = statement.read_consolidated(
-                doc.name, pages, {n: text.words(doc, n, password) for n in range(1, len(pages) + 1)})
+            statements = statement.read_consolidated(doc.name, pages, every)
         elif tables := [n for n, page in enumerate(pages, 1) if statement.is_statement(page)]:
-            statements = [statement.read(doc.name, pages, {n: text.words(doc, n, password) for n in tables})]
+            statements = [statement.read(doc.name, pages, {n: every[n] for n in tables})]
         else:
             continue
         for found in statements:
@@ -924,6 +924,9 @@ def cmd_bank(args: argparse.Namespace) -> int:
                 print(f"  failed: {c.what}" + (f" ({masked(c.quote)})" if c.quote else ""))
             for q in found.questions:
                 print(f"  question: {q.text}")
+            if not found.rows and found.failed:
+                print("  not saved: an account with nothing read would count as one with no interest")
+                continue
             out.mkdir(parents=True, exist_ok=True)
             start = "".join(reversed(found.start.split("-"))) if found.start else doc.stem
             (out / f"bank-{found.account or 'x'}-{start}.json").write_text(

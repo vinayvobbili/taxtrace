@@ -144,6 +144,15 @@ def test_cli_saves_the_statement_and_prints_it_masked(tmp_path: Path, workspace_
     assert "000123459876" not in json.dumps(saved) and "Account Holder" not in json.dumps(saved)
 
 
+def test_cli_doesnt_save_a_statement_whose_rows_didnt_read(tmp_path: Path, workspace_home: Path, capsys):
+    path = draw(tmp_path / "statement.pdf", [HEAD])  # the header and its columns, no rows under them
+    assert cli.main(["bank", str(path)]) == 1
+    out = printed(capsys)
+    assert "0 rows" in out and "failed: transactions are read from the statement's table" in out
+    assert "not saved: an account with nothing read would count as one with no interest" in out
+    assert not (workspace_home / "forms").exists()
+
+
 # A monthly e-statement of every account a customer holds: a balance summary, the term deposits, and a page per savings
 # account, one with the month's transactions (the interest, then SMS charges and their GST) and one without.
 TOP = [(424, 5, "Welcome Ms. Lalitha Vemulapati"), (424, 22, "Customer CIF00004417"), (348, 34, "As on 31-03-26")]

@@ -424,6 +424,8 @@ def _net_interest(found: Statement, r: Row) -> list[Row]:
 
 def _checks(found: Statement) -> None:
     if not found.rows:
+        # a table whose rows didn't read (a blurred picture's) says nothing about the account's interest or balance
+        found.check("transactions are read from the statement's table", False, 1)
         found.questions.append(Question("no transactions were read: is this a statement of account?", 1, ""))
         return
     first = found.rows[0]
