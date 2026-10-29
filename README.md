@@ -3,6 +3,7 @@
 <!-- mcp-name: io.github.vinayvobbili/taxtrace -->
 
 [![vinayvobbili/taxtrace MCP server](https://glama.ai/mcp/servers/vinayvobbili/taxtrace/badges/score.svg)](https://glama.ai/mcp/servers/vinayvobbili/taxtrace)
+[![Indexed on TensorBlock MCP Index](https://mcp-index.tensorblock.co/v1/servers/github-vinayvobbili-taxtrace-4cc4bf8b/badge.svg)](https://tensorblock.co/mcp/servers/github-vinayvobbili-taxtrace-4cc4bf8b)
 
 **Prepare a US federal and state return from your own documents, on your own machine, with every
 number traced to the page it came from.**
