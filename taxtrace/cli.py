@@ -1342,7 +1342,9 @@ def cmd_ira(args: argparse.Namespace) -> int:
 def cmd_vul(args: argparse.Namespace) -> int:
     """What a variable universal life policy costs you, from its annual statement: the surrender charge as a share
     of the contract fund, the cash value against the payments made, the premium against the insurance amount, what
-    the no-lapse guarantees need, and the fund's return.
+    the no-lapse guarantees need, and the fund's return. From an in-force illustration: today's cash value against
+    the premiums paid, the surrender charge year by year, and under each illustrated return when the policy lapses,
+    how long the no-lapse guarantee holds and how fast the cash value grows.
 
     What's printed is shares and multiples of the statement's own figures, never the figures: the decision (keep it,
     pay only the minimum, exchange it, surrender it) turns on how they compare. Dates show as they are.
@@ -1354,17 +1356,21 @@ def cmd_vul(args: argparse.Namespace) -> int:
     for doc in map(Path, args.paths):
         name = redact.redact(doc.name, terms, bare_years=True).text
         try:
-            statement = vul.read(doc.name, _open(doc))
+            pages = _open(doc)
         except text.Locked as err:
             print(f"{name}: {err}", file=sys.stderr)
             status = 1
             continue
-        if statement is None:
-            print(f"{name}: no variable universal life statement found", file=sys.stderr)
+        if statement := vul.read(doc.name, pages):
+            lines = vul.shares(statement)
+        elif illustration := vul.read_illustration(doc.name, pages):
+            lines = vul.illustration_shares(illustration)
+        else:
+            print(f"{name}: no variable universal life statement or in-force illustration found", file=sys.stderr)
             status = 1
             continue
         print(f"{name}:")
-        for line in vul.shares(statement):
+        for line in lines:
             print(f"  {line}")
     return status
 
@@ -1830,7 +1836,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_ira)
     p = sub.add_parser("vul", help="what a variable universal life policy costs, as shares of its statement's figures",
                        description=cmd_vul.__doc__)
-    p.add_argument("paths", nargs="+", help="the policy's annual statements (PDFs)")
+    p.add_argument("paths", nargs="+", help="the policy's annual statements or in-force illustrations (PDFs)")
     p.set_defaults(func=cmd_vul)
     p = sub.add_parser("todo", help="the money and tax to-dos in todo.md, by due date", description=cmd_todo.__doc__)
     p.add_argument("--due", type=int, nargs="?", const=7, default=None, metavar="DAYS",
