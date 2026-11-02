@@ -43,8 +43,8 @@ Early. What works today:
 - `taxtrace passive`: each passive activity's year and the loss it carries in (see
   [Passive activities](#passive-activities)).
 - `taxtrace 1098`: reads each Form 1098 mortgage interest statement (see [Form 1098](#form-1098)).
-- `taxtrace 1099`: reads the 1099-DIVs and 1099-INTs on brokers' consolidated 1099 statements (see
-  [Forms 1099-DIV and 1099-INT](#forms-1099-div-and-1099-int)).
+- `taxtrace 1099`: reads the 1099-DIVs, 1099-INTs and 1099-Bs on brokers' consolidated 1099 statements (see
+  [Forms 1099-DIV and 1099-INT](#forms-1099-div-and-1099-int) and [Stock sales](#stock-sales)).
 - `taxtrace rental`: puts the rental's Schedule E together, line by line (see [Schedule E](#schedule-e)).
 - `taxtrace qbi`: Form 8995, the qualified business income deduction (see [Form 8995](#form-8995)).
 - `taxtrace paystub`: reads a pay stub's income tax withheld, and projects the year's (see
@@ -53,6 +53,12 @@ Early. What works today:
   (see [Estimated tax](#estimated-tax)).
 - `taxtrace ira`: each spouse's IRA deduction and the Roth IRA's limit at the year's projected income (see
   [IRAs](#iras)).
+- `taxtrace jobchange`: the year as the pay stub projects it, against leaving one job and starting another (see
+  [A change of job](#a-change-of-job)).
+- `taxtrace sales`: the year's stock sales for Schedule D, the wash-sale windows, and the room left for losses (see
+  [Stock sales](#stock-sales)).
+- `taxtrace moves`: the year's tax-saving moves, ranked by the dollars each saves, with deadlines (see
+  [The year's moves](#the-years-moves)).
 - `taxtrace itr`: reads India's income tax return (ITR-2): a property sale, the interest, the tax India kept (see
   [India's return](#indias-return)).
 - `taxtrace bank`: reads a foreign bank's statement of account: interest, a tax refund, balances (see
@@ -485,6 +491,61 @@ higher one for a spouse who isn't but is married to one who is. A Roth IRA has i
 year's income from the pay stub's federal taxable wages to December 31, as they are and with the 401(k)'s room
 filled (which lowers it), plus last year's interest, dividends and Schedule 1 income, and gives each spouse's
 deduction and the Roth IRA's limit in both cases. The income itself is masked.
+
+## A change of job
+
+```bash
+taxtrace jobchange --year 2026 --confirm leave=2026-12-11 --confirm start=2026-12-14 --confirm new_salary=196,000
+taxtrace jobchange --year 2026 --confirm loan=12,000 --confirm loan_repaid=no   # what's kept stays for the next run
+```
+
+Two employers in a year change four things, and neither payroll knows about the other. The 401(k)'s limit is one
+limit across both plans. Social Security stops at the wage base at each employer, so the new one withholds again, and
+what's past the base comes back as a credit on Schedule 3 line 11. A 401(k) loan comes due on leaving: what's unpaid
+is taxed, with 10% more under age 59½, unless it's repaid or the same amount is rolled over by October 15 of the next
+year. And a bonus, a sign-on or a paid-out vacation is withheld at a flat 22%, whatever your bracket.
+
+`jobchange` puts the year as it stands beside the year with the change, from the latest pay stub and last year's
+other income. The cases are rough on purpose, without capital gain rates or credits: they're for comparing, and the
+difference is what to read. Leaving after December 31 changes nothing on the year's return, and it says so. The
+terminal gets the paychecks left and what changes, with the amounts masked.
+
+## Stock sales
+
+```bash
+taxtrace 1099 2026                                   # reads the 1099-B on a consolidated statement too
+taxtrace sales --year 2026 trades.csv                # Schedule D's totals, and any purchases in the wash-sale windows
+taxtrace sales --year 2026 --confirm realized_short=-1,700   # before the 1099-B comes, from the broker's realized page
+taxtrace sales --year 2026 trades.csv --confirm loss_ACME_2026-10-20=yes   # a loss to watch the window of
+```
+
+The 1099-B's sales are read under their headings (short-term or long-term, the Form 8949 box) and columns. Each one's
+printed gain is checked against its proceeds and basis, and a wash sale's disallowed loss is added back. `sales` nets
+the two sides with the capital gain distributions and last year's carryovers, then applies the $3,000 limit against
+other income ($1,500 married filing separately): what's past it carries on, and what's under it is the room left for
+more losses.
+
+A sold loss comes undone if the same thing is bought within 30 days either side, in any account, a spouse's too. A
+dividend reinvested counts. A purchase in an IRA loses the loss for good, since nothing adds it to the IRA's basis.
+Give `sales` a broker's trade history (CSV) and it lists what falls inside each window, without printing symbols,
+amounts or accounts to the terminal.
+
+## The year's moves
+
+```bash
+taxtrace moves --year 2026 --confirm plan_cap=20 --confirm rental_tax=3,000 --confirm charity=500
+taxtrace moves --year 2026 --confirm done_401k=yes   # kept, and shown last
+```
+
+`moves` ranks what's still open by the dollars each takes off the year's tax at your own brackets, with its deadline:
+filling the 401(k) up to what the plan's percentage cap can reach in the paychecks left, stock losses up to the room
+`sales` found, the rental's property tax paid by December 31 when no escrow pays it, the IRAs `ira` finds deductible,
+and cash gifts to charity without itemizing (federal only, and only for giving you'd do anyway). Moves are stacked in
+a fixed order, each from the income the ones before it left, so two moves in one bracket aren't counted at a rate
+neither gets. `jobchange`'s findings join the list: Social Security coming back, and what an unpaid loan would cost.
+
+The terminal gets the ranking with the amounts masked. `taxtrace ui` shows the amounts, with the job change and stock
+sales beside them, in its Moves section.
 
 ## To do
 

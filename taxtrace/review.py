@@ -24,7 +24,8 @@ YEAR_FOLDER = re.compile(r"(?:19|20)\d\d")
 READ_IN = (workspace.FORMS, workspace.K1, workspace.CARRYFORWARDS)
 # every folder taxtrace saves readings and results in, counted by status
 SAVED = (workspace.FORMS, workspace.K1, workspace.CARRYFORWARDS, workspace.PASSIVE, workspace.SCHEDULE_E,
-         workspace.FOREIGN, workspace.QBI, workspace.ESTIMATES, workspace.IRA)
+         workspace.FOREIGN, workspace.QBI, workspace.ESTIMATES, workspace.IRA, workspace.JOBCHANGE, workspace.SALES,
+         workspace.MOVES)
 READ_PREFIXES = ("itr-", "bank-", "tds-")
 MAX_PAGES = 200
 

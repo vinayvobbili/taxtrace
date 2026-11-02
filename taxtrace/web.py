@@ -48,6 +48,17 @@ def overview() -> dict:
             "documents": sum(len(f["documents"]) for f in folders)}
 
 
+def plans() -> dict:
+    """The latest year's moves, with its job change and stock sales, as those commands last saved them."""
+    root = workspace.home()
+    saved = {folder: {p.stem: p for p in (root / folder).glob("*.json") if p.stem.isdigit()}
+             for folder in (workspace.MOVES, workspace.JOBCHANGE, workspace.SALES)}
+    year = max((y for paths in saved.values() for y in paths), default=None)
+    return {"year": int(year) if year else None,
+            **{folder: json.loads(paths[year].read_text()) if year in paths else None
+               for folder, paths in saved.items()}}
+
+
 def make_handler(settings: chat.Settings, token: str, port_ref: list[int]):
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, fmt, *args):  # quiet: the terminal shows only errors
@@ -131,6 +142,8 @@ def make_handler(settings: chat.Settings, token: str, port_ref: list[int]):
                     items = todo.load(on)
                     return self._json(HTTPStatus.OK, {"items": todo.to_json(items or [], on),
                                                       "path": str(todo.path()), "exists": items is not None})
+                if method == "GET" and url.path == "/api/moves":
+                    return self._json(HTTPStatus.OK, plans())
                 if method == "POST" and url.path == "/api/todo/done":
                     line, expect = int(body.get("line", 0)), str(body.get("text", ""))
                     try:

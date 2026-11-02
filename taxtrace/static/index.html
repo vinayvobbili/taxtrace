@@ -123,6 +123,19 @@ h2::before { content: ""; width: 14px; height: 3px; border-radius: 2px; backgrou
   background: color-mix(in srgb, var(--c) 14%, transparent); color: var(--c); }
 .empty { padding: 34px; text-align: center; color: var(--muted); }
 
+/* the year's moves */
+.plan { margin-bottom: 30px; --g: var(--accent); }
+.plan-stats { margin-bottom: 20px; }
+.plan .tcards + .tcards { margin-top: 12px; }
+.plan .rank { flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 13.5px; color: #fff; background: var(--grad); }
+.plan .did { opacity: .6; }
+.plan .did .rank { background: var(--chip); color: var(--chip-text); }
+.plan .action { margin-top: 3px; font-size: 13.5px; color: var(--muted); overflow-wrap: anywhere; }
+.tag.save { color: var(--good); background: color-mix(in srgb, var(--good) 15%, transparent); }
+.facts { display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; margin: 9px 0 0; font-size: 13.5px; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+
 /* to do */
 .todo { margin-bottom: 30px; }
 .todo-stats { grid-template-columns: repeat(5, minmax(0, 1fr)); margin-bottom: 20px; }
@@ -285,6 +298,12 @@ form.input button { border: 0; border-radius: 13px; background: var(--grad); col
     <div class="hero todo-stats" id="todo-stats"></div>
     <div id="todo-groups"></div>
   </section>
+  <section class="plan" id="plan" aria-label="The year's moves" hidden>
+    <h2 id="plan-title">Moves</h2>
+    <div class="hero plan-stats" id="plan-stats"></div>
+    <div class="tcards" id="plan-moves"></div>
+    <div class="tcards" id="plan-facts"></div>
+  </section>
   <div class="layout">
     <section>
       <h2>Documents by folder</h2>
@@ -415,10 +434,13 @@ function inline(s) {  // **bold** and `code`, after escaping
   return esc.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/`([^`]+)`/g, "<code>$1</code>");
 }
 function html(tag, attrs, markup) { const el = h(tag, attrs); el.innerHTML = markup; return el; }
+function shortDay(iso) {
+  const [y, m, d] = iso.split("-").map(Number), day = new Date(y, m - 1, d);
+  return `${DAYS[day.getDay()]} ${m}/${d}${y === new Date().getFullYear() ? "" : "/" + y}`;
+}
 function dueLabel(t) {
   if (t.due == null) return "";
-  const [y, m, d] = t.due.split("-").map(Number), day = new Date(y, m - 1, d);
-  const when = `${DAYS[day.getDay()]} ${m}/${d}${y === new Date().getFullYear() ? "" : "/" + y}`;
+  const when = shortDay(t.due);
   const label = t.group === "overdue" ? `${when} · ${-t.days}d overdue` : t.group === "today" ? "Today" : when;
   return t.time ? `${label}, ${t.time}` : label;
 }
@@ -464,6 +486,55 @@ async function loadTodo() {
       h("div", { class: `tgroup g-${k}` }, h("h3", {}, label, h("span", { class: "n" }, by[k].length)),
         h("div", { class: "tcards" }, by[k].map(todoCard)))));
   } catch (e) { $("todo-groups").replaceChildren(h("div", { class: "card empty" }, `Couldn't load the to-do list: ${e.message}`)); }
+}
+
+// -- the year's moves, ranked by what each saves, then the job change and stock sales, as those commands saved them
+const usd = v => `${Number(v) < 0 ? "−" : ""}$${Math.abs(Number(v)).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+function moveCard(m, i) {
+  return h("div", { class: "card tcard" + (m.done ? " did" : ""), style: `animation-delay:${Math.min(i * 40, 400)}ms` },
+    h("div", { class: "row" }, h("span", { class: "rank" }, i + 1),
+      h("div", { class: "body" },
+        h("div", { class: "tags" }, h("span", { class: "tag save" }, `saves ${usd(m.saving)}`),
+          h("span", { class: "tag due" }, `by ${shortDay(m.by)}`), m.done ? h("span", { class: "tag sec" }, "done") : null),
+        h("div", { class: "title" }, h("b", {}, m.name)),
+        h("div", { class: "action" }, `${m.action} (${usd(m.amount)})`))));
+}
+function factsCard(title, facts, notes = []) {
+  return h("div", { class: "card tcard" }, h("div", { class: "title" }, h("b", {}, title)),
+    h("dl", { class: "facts" }, facts.filter(Boolean).flatMap(([k, v]) => [h("dt", {}, k), h("dd", {}, v)])),
+    notes.length ? h("details", {}, h("summary", {}, `${notes.length} to check`),
+      h("ul", { class: "more" }, notes.map(n => html("li", {}, inline(n))))) : null);
+}
+function caseCard(c) {
+  return factsCard(c.name[0].toUpperCase() + c.name.slice(1), [["Paychecks left", c.paychecks], ["Wages", usd(c.wages)],
+    c.balance == null ? null : [Number(c.balance) < 0 ? "Refund" : "Owed with the return", usd(Math.abs(c.balance))],
+    c.room == null ? null : ["401(k) room left", usd(c.room)],
+    Number(c.social_security_back) ? ["Social Security back", usd(c.social_security_back)] : null,
+    Number(c.loan_cost) ? ["An unpaid loan costs", usd(c.loan_cost)] : null]);
+}
+function salesCard(s) {
+  const windows = s.windows.map(w => [`${w.symbol} sold ${shortDay(w.sold)}`, w.lost_for_good ? "loss gone: bought in a retirement account"
+    : w.bought.length ? "washed: bought back" : w.open ? `no buying to ${shortDay(w.until)}` : "clear"]);
+  return factsCard(`Stock sales${s.from_forms ? "" : " (not from a 1099-B yet)"}`, [["Short-term", usd(s.short)], ["Long-term", usd(s.long)],
+    ["Net", usd(s.net)], ["Against other income", usd(s.allowed)], Number(s.carries_on) ? ["Carries on", usd(s.carries_on)] : null,
+    ["Room for more losses", usd(s.room)], ...windows], s.questions);
+}
+async function loadPlan() {
+  try {
+    const d = await api("/api/moves");
+    $("plan").hidden = d.year == null;
+    if (d.year == null) return;
+    const open = d.moves ? d.moves.moves.filter(m => !m.done) : [], next = open.map(m => m.by).sort()[0];
+    $("plan-title").textContent = `Moves for ${d.year}`;
+    $("plan-stats").replaceChildren(stat(usd(d.moves ? d.moves.open_saving : 0), "could still come off the tax", "lead"),
+      stat(open.length, open.length === 1 ? "move still open" : "moves still open"),
+      stat(next ? shortDay(next) : "—", "the next deadline"),
+      stat(d.sales ? usd(d.sales.room) : "—", "room for stock losses"));
+    $("plan-moves").replaceChildren(...(d.moves ? d.moves.moves.map(moveCard) : []));
+    $("plan-facts").replaceChildren(
+      ...(d.moves && d.moves.questions.length ? [factsCard("What the moves still need", [], d.moves.questions)] : []),
+      ...(d.jobchange ? d.jobchange.cases.map(caseCard) : []), ...(d.sales ? [salesCard(d.sales)] : []));
+  } catch (e) { $("plan").hidden = false; $("plan-moves").replaceChildren(h("div", { class: "card empty" }, `Couldn't load the moves: ${e.message}`)); }
 }
 
 // -- the chat
@@ -567,7 +638,7 @@ $("fab").addEventListener("click", () => { $("pop").hidden = false; $("fab").sty
 $("close").addEventListener("click", () => { $("pop").hidden = true; $("fab").style.visibility = ""; });
 $("clear").addEventListener("click", reset);
 document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("pop").hidden) $("close").click(); });
-reset(); load(); loadTodo();
+reset(); load(); loadTodo(); loadPlan();
 </script>
 </body>
 </html>

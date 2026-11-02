@@ -79,6 +79,8 @@ class Paystub:
     salary: Taxed | None = None  # the earnings table's "Salary" row, what a deferral's percentage is of
     taxable_wages: Taxed | None = None  # the summary's federal taxable wages: what the W-2's box 1 adds up
     net: Taxed | None = None  # the summary's net pay
+    social_security: Taxed | None = None  # the employee's Social Security tax, which `jobchange` follows
+    loan: Taxed | None = None  # a 401(k) loan's repayment: not a deferral, but the loan comes due on leaving the job
     checks: list[Check] = field(default_factory=list)
     questions: list[Question] = field(default_factory=list)
 
@@ -191,7 +193,33 @@ class Paystub:
                     self.projected_wages(fill_401k=True))} if self.taxable_wages else None,
                 "deferral_room": str(r) if (r := self.deferral_room()) is not None else None,
                 "deferral_percent": {"now": str(rates[0]), "to_fill": str(rates[1])} if rates else None,
-                "net_pay": pair(self.net) if self.net else None, **({"at_rate": at_rate} if at_rate else {})}
+                "net_pay": pair(self.net) if self.net else None,
+                "social_security": pair(self.social_security) if self.social_security else None,
+                "loan_repayment": pair(self.loan) if self.loan else None,
+                **({"at_rate": at_rate} if at_rate else {})}
+
+
+def from_json(saved: dict) -> Paystub:
+    """A stub back from what `to_json` saved in forms/, for what's worked out from it later."""
+    def pair(key: str, where: dict | None = None) -> Taxed | None:
+        t = (saved if where is None else where).get(key)
+        return Taxed(Decimal(t["current"]), Decimal(t["year_to_date"]), t["label"]) if t else None
+
+    def day(key: str) -> date | None:
+        return date.fromisoformat(saved[key]) if saved.get(key) else None
+
+    stub = Paystub(saved.get("file", ""), day("period_start"), day("period_end"), day("paid"))
+    stub.withheld = {k: pair(k, saved["withheld"]) for k in saved.get("withheld", {})}
+    stub.deferred = {k: pair(k, saved["deferred"]) for k in saved.get("deferred", {})}
+    stub.salary, stub.taxable_wages = pair("salary"), pair("taxable_wages")
+    stub.net, stub.social_security, stub.loan = pair("net_pay"), pair("social_security"), pair("loan_repayment")
+    return stub
+
+
+def tax_on(wages: Decimal, year: int, filing: str = "joint") -> Decimal | None:
+    """The year's tax on a year's wages at its brackets past the standard deduction; None when they aren't known."""
+    brackets = BRACKETS.get((year, WITHHOLDS_AS.get(filing, filing)))
+    return None if brackets is None else _tax(wages, brackets)
 
 
 def _tax(wages: Decimal, brackets: tuple) -> Decimal:
@@ -252,8 +280,13 @@ def read(name: str, words: list[dict]) -> Paystub:
             if tax not in stub.withheld and at is not None and (taxed := _after(texts, at)):
                 stub.withheld[tax] = taxed
         for j, t in enumerate(texts):
-            if RETIREMENT.match(t) and (deferred := _after(texts, j)) and "loan" not in deferred.label.lower():
-                stub.deferred.setdefault("roth" if "roth" in deferred.label.lower() else "pretax", deferred)
+            if RETIREMENT.match(t) and (deferred := _after(texts, j)):
+                if "loan" in deferred.label.lower():
+                    stub.loan = stub.loan or deferred
+                else:
+                    stub.deferred.setdefault("roth" if "roth" in deferred.label.lower() else "pretax", deferred)
+            elif stub.social_security is None and (t == "OASDI" or texts[j:j + 2] == ["Social", "Security"]):
+                stub.social_security = _after(texts, j)
             elif t == "Salary" and stub.salary is None and j + 1 < len(texts) and MONEY.match(texts[j + 1]):
                 stub.salary = _after(texts, j)
     stub.taxable_wages = _column(rows, ("Federal", "Taxable", "Wages"))

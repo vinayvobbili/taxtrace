@@ -628,15 +628,15 @@ def cmd_1098(args: argparse.Namespace) -> int:
 
 
 def cmd_1099(args: argparse.Namespace) -> int:
-    """Read the 1099-DIVs and 1099-INTs on brokers' consolidated 1099 statements into <workspace>/forms: each box,
-    the payer and the year.
+    """Read the 1099-DIVs, 1099-INTs and 1099-Bs on brokers' consolidated 1099 statements into <workspace>/forms: each
+    box, each sale, the payer and the year.
 
-    The values go only to that folder. What's printed is masked: which boxes have amounts, the checks that failed
-    and the questions (foreign tax, return of capital, tax-exempt interest), and with --layout each value's text
-    and where it sits. Brokers' statements are seldom locked, so a locked document is skipped without asking the
-    Keychain unless --unlock is given: a folder's other locked files never prompt.
+    The values go only to that folder. What's printed is masked: which boxes have amounts, how many sales of which
+    kind, the checks that failed and the questions (foreign tax, return of capital, tax-exempt interest, wash sales),
+    and with --layout each value's text and where it sits. Brokers' statements are seldom locked, so a locked document
+    is skipped without asking the Keychain unless --unlock is given: a folder's other locked files never prompt.
     """
-    from . import f1099, k1
+    from . import f1099, f1099b, k1
 
     home = workspace.outside_git(workspace.home())
     terms = workspace.redact_terms()
@@ -657,10 +657,29 @@ def cmd_1099(args: argparse.Namespace) -> int:
             print(f"{name}: skipped, {err}")
             continue
         forms = [n for n, page in enumerate(pages, 1) if f1099.is_form(page)]
-        if not forms or doc.suffix.lower() not in text.PDF_SUFFIXES:
+        sold = [n for n, page in enumerate(pages, 1) if f1099b.is_form(page)]
+        if not (forms or sold) or doc.suffix.lower() not in text.PDF_SUFFIXES:
             continue
         words = {n: text.words(doc, n, password) for n in forms}
         found = f1099.read(doc.name, words)
+        sales_form = f1099b.read(doc.name, {n: text.words(doc, n, password) for n in sold})
+        if sales_form:
+            failed += bool(sales_form.failed)
+            short = sum(s.term == "short" for s in sales_form.sales)
+            boxes = ", ".join(sorted({s.box for s in sales_form.sales}))
+            print(f"{name}: {sales_form.year or '?'} Form 1099-B: {len(sales_form.sales)} sales, {short} short-term "
+                  f"and {len(sales_form.sales) - short} long-term; Boxes {boxes}; "
+                  f"{len(sales_form.checks) - len(sales_form.failed)} of {len(sales_form.checks)} checks pass, "
+                  f"{len(sales_form.questions)} questions")
+            for c in sales_form.failed:
+                print(f"  failed: {c.what}")
+            for q in sales_form.questions:  # counts and the rule's own words, never an amount read
+                print(f"  question: {q.text}")
+            if args.layout:
+                for s in sales_form.sales:
+                    print(f"  p{s.page} {s.term}, sold {s.sold}, acquired {s.acquired or 'not printed'}: proceeds "
+                          f"{masked(str(s.proceeds))}, basis {masked(str(s.basis))}, symbol "
+                          f"{'read' if s.symbol else 'not read'}")
         for f in found:
             problems = k1.verify(f, words[f.page])
             failed += bool(f.failed or problems)
@@ -681,11 +700,12 @@ def cmd_1099(args: argparse.Namespace) -> int:
                     v = f.amounts.get(box)
                     print(f"  box {box} {masked(label)}: " + (f"{masked(v.quote)} at {v.top}, {v.x0}" if v else
                                                               masked(f.words.get(box, "")) or "blank"))
-        if found:
+        if found or sales_form:
             out.mkdir(parents=True, exist_ok=True)
-            (out / f"{doc.stem}.json").write_text(json.dumps([f.to_json() for f in found], indent=2) + "\n")
+            saved = [f.to_json() for f in found] + ([sales_form.to_json()] if sales_form else [])
+            (out / f"{doc.stem}.json").write_text(json.dumps(saved, indent=2) + "\n")
             written += 1
-    print(f"wrote to {out}" if written else "no 1099-DIVs or 1099-INTs found")
+    print(f"wrote to {out}" if written else "no 1099-DIVs, 1099-INTs or 1099-Bs found")
     return 1 if failed else 0
 
 
@@ -1339,6 +1359,180 @@ def cmd_ira(args: argparse.Namespace) -> int:
     return 0
 
 
+def _returns(home: Path) -> list[dict]:
+    """The filed returns `prior` saved, its projections left out."""
+    folder = home / workspace.CARRYFORWARDS
+    return [json.loads(p.read_text()) for p in sorted(folder.glob("*.json"))
+            if not p.name.startswith("projected-")] if folder.exists() else []
+
+
+def _filing(home: Path, year: int) -> str:
+    """The filing status `foreign --confirm filing=` kept; "" when none was."""
+    kept = home / workspace.FOREIGN / f"{year}-confirmed.json"
+    return json.loads(kept.read_text()).get("filing", "") if kept.exists() else ""
+
+
+def cmd_jobchange(args: argparse.Namespace) -> int:
+    """What a change of job does to a year's return: the year as the latest pay stub projects it, against leaving on
+    one day and starting elsewhere on another. Written to <workspace>/jobchange/<year>.json.
+
+    It follows the 401(k)'s one limit across both plans, Social Security withheld twice and credited back, a 401(k)
+    loan coming due, and how the withholding stands against the tax and the safe harbor. Leaving after December 31
+    changes nothing this year, and it says so.
+
+    What's printed is masked, with which way each thing moves; --show prints the amounts, only to a terminal (your
+    own, not a session that reads the output), and the page shows them too.
+    """
+    from . import estimates, jobchange
+
+    if args.show and not sys.stdout.isatty():
+        print("--show prints the amounts only to a terminal: run it in your own")
+        return 2
+    home = workspace.outside_git(workspace.home())
+    terms = workspace.redact_terms()
+
+    def money(value: Decimal) -> str:
+        return f"{value:,.2f}" if args.show else redact.redact(f"{value:,.2f}", terms).text.strip()
+
+    year, out = args.year, home / workspace.JOBCHANGE
+    kept = out / f"{year}-confirmed.json"
+    confirmed = json.loads(kept.read_text()) if kept.exists() else {}
+    try:
+        confirmed |= dict(map(jobchange.confirmation, args.confirm))
+    except ValueError as err:
+        print(err, file=sys.stderr)
+        return 2
+    if args.confirm:
+        out.mkdir(parents=True, exist_ok=True)
+        kept.write_text(json.dumps(confirmed, indent=2) + "\n")
+    change = jobchange.build(year, stub=estimates.latest_stub(_forms(home), year), returns=_returns(home),
+                             confirmed=confirmed, filing=_filing(home, year))
+    print(f"{year} with a change of job:" if change.cases else f"{year} with a change of job: not worked out")
+    for c in change.cases:
+        print(f"  {c.name}: {c.paychecks} paychecks left at this job; wages {money(c.wages)}, withheld "
+              f"{money(c.withheld)}; 401(k) room left {money(c.room)}"
+              + (f"; Social Security back on the return {money(c.social_security_back)}" if c.social_security_back
+                 else "")
+              + (f"; a loan coming due costs {money(c.loan_cost)}" if c.loan_cost else ""))
+        if c.balance is not None:
+            print(f"    roughly {'owed with the return' if c.balance > 0 else 'refunded'}: {money(abs(c.balance))}; "
+                  + (f"quarters short of the safe harbor: {', '.join(map(str, c.quarters_short))}"
+                     if c.quarters_short else "no quarter is short of the safe harbor"))
+        if c.over_limit:
+            print("    the old plan's deferrals already fill the year's limit: stop the new plan's until January")
+    if len(change.cases) == 2 and None not in (change.cases[0].balance, change.cases[1].balance):
+        more = change.cases[1].balance - change.cases[0].balance
+        print(f"  the change {'adds' if more > 0 else 'takes'} {money(abs(more))} "
+              f"{'to' if more > 0 else 'from'} what's owed with the return")
+    for q in change.questions:  # built from the year and the rule's own figures, never an amount read
+        print(f"  question: {q.text}")
+    out.mkdir(parents=True, exist_ok=True)
+    (out / f"{year}.json").write_text(json.dumps(jobchange.to_json(change), indent=2) + "\n")
+    print(f"wrote to {out / f'{year}.json'}")
+    return 0
+
+
+def cmd_moves(args: argparse.Namespace) -> int:
+    """A year's tax-saving moves, ranked by the dollars each saves, with its deadline, into
+    <workspace>/moves/<year>.json: the 401(k)'s room, stock losses (`sales`), the IRAs (`ira`), the rental's property
+    tax, cash gifts, and what `jobchange` found.
+
+    What's printed is the order and the deadlines, the amounts masked; --show prints the amounts, only to a terminal
+    (your own, not a session that reads the output), and the page shows them too.
+    """
+    from . import estimates, moves
+
+    if args.show and not sys.stdout.isatty():
+        print("--show prints the amounts only to a terminal: run it in your own")
+        return 2
+    home = workspace.outside_git(workspace.home())
+    terms = workspace.redact_terms()
+
+    def money(value: Decimal) -> str:
+        return f"{value:,.2f}" if args.show else redact.redact(f"{value:,.2f}", terms).text.strip()
+
+    def saved(folder: str) -> dict | None:
+        path = home / folder / f"{args.year}.json"
+        return json.loads(path.read_text()) if path.exists() else None
+
+    year, out = args.year, home / workspace.MOVES
+    kept = out / f"{year}-confirmed.json"
+    confirmed = json.loads(kept.read_text()) if kept.exists() else {}
+    try:
+        confirmed |= dict(map(moves.confirmation, args.confirm))
+    except ValueError as err:
+        print(err, file=sys.stderr)
+        return 2
+    if args.confirm:
+        out.mkdir(parents=True, exist_ok=True)
+        kept.write_text(json.dumps(confirmed, indent=2) + "\n")
+    plan = moves.build(year, stub=estimates.latest_stub(_forms(home), year), returns=_returns(home),
+                       confirmed=confirmed, filing=_filing(home, year), sales=saved(workspace.SALES),
+                       jobchange=saved(workspace.JOBCHANGE))
+    print(f"{year} tax-saving moves, {money(plan.open_saving)} still open:")
+    for n, m in enumerate(plan.moves, 1):
+        print(f"  {n}. {m.name}{' (done)' if m.done else ''}: saves {money(m.saving)}, by {m.by:%b} {m.by.day}, "
+              f"{m.by.year}: {m.action}")
+    for item in plan.at_the_return:
+        print(f"  at the return: {item}")
+    for q in plan.questions:  # the rule's own words, never an amount read
+        print(f"  question: {q.text}")
+    out.mkdir(parents=True, exist_ok=True)
+    (out / f"{year}.json").write_text(json.dumps(moves.to_json(plan), indent=2) + "\n")
+    print(f"wrote to {out / f'{year}.json'}")
+    return 0
+
+
+def cmd_sales(args: argparse.Namespace) -> int:
+    """A year's stock sales: Schedule D's totals from the 1099-Bs (`1099`) or what's confirmed until they come, each
+    sale at a loss's wash sale window against the trade histories given, and how much more loss the year can use.
+    Written to <workspace>/sales/<year>.json.
+
+    Give each account's exported trade history (a CSV), IRAs and your spouse's too: a purchase in any of them can undo
+    a loss. What's printed is masked: symbols and amounts are in the file. Dates and whether a window is running show.
+    """
+    from . import sales
+
+    home = workspace.outside_git(workspace.home())
+    terms = workspace.redact_terms()
+
+    def money(value: Decimal) -> str:
+        return redact.redact(f"{value:,.2f}", terms).text.strip()
+
+    year, out = args.year, home / workspace.SALES
+    kept = out / f"{year}-confirmed.json"
+    confirmed = json.loads(kept.read_text()) if kept.exists() else {}
+    try:
+        confirmed |= dict(map(sales.confirmation, args.confirm))
+    except ValueError as err:
+        print(err, file=sys.stderr)
+        return 2
+    if args.confirm:
+        out.mkdir(parents=True, exist_ok=True)
+        kept.write_text(json.dumps(confirmed, indent=2) + "\n")
+    trades = [t for path in map(Path, args.paths) for t in sales.read_trades(path.read_text(errors="replace"))]
+    totals = sales.build(year, forms=_forms(home), returns=_returns(home), trades=trades, confirmed=confirmed,
+                         filing=_filing(home, year))
+    print(f"{year} stock sales, from " + ("the 1099-Bs" if totals.from_forms else "what's confirmed")
+          + f": {'a net loss' if totals.net < 0 else 'a net gain'} of {money(abs(totals.net))}")
+    if totals.carries_on:
+        print(f"  past the year's limit: {money(totals.carries_on)} carries to {year + 1}")
+    print("  no more loss helps this year" if not totals.room else
+          f"  room for {money(totals.room)} more net loss this year, against other income")
+    for w in totals.windows:
+        state = "running" if w.open else "over"
+        print(f"  a sale at a loss on {w.sold:%b} {w.sold.day}: window runs to {w.until:%b} {w.until.day}, "
+              f"{w.until.year}, {state}"
+              + ("; bought inside it in a retirement account, so the loss is gone for good" if w.lost_for_good else
+                 "; bought inside it, so the loss moves to the new shares" if w.bought else ""))
+    for q in totals.questions:  # the rule's own words, never an amount read
+        print(f"  question: {q.text}")
+    out.mkdir(parents=True, exist_ok=True)
+    (out / f"{year}.json").write_text(json.dumps(sales.to_json(totals), indent=2) + "\n")
+    print(f"wrote to {out / f'{year}.json'}")
+    return 0
+
+
 def cmd_vul(args: argparse.Namespace) -> int:
     """What a variable universal life policy costs you, from its annual statement: the surrender charge as a share
     of the contract fund, the cash value against the payments made, the premium against the insurance amount, what
@@ -1777,8 +1971,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("paths", nargs="*", help=PATHS_HELP)
     p.add_argument("--layout", action="store_true", help="also print each value's text and place, masked")
     p.set_defaults(func=cmd_1098)
-    p = sub.add_parser("1099", help="read the 1099-DIVs and 1099-INTs on brokers' consolidated 1099 statements",
-                       description=cmd_1099.__doc__)
+    p = sub.add_parser("1099", description=cmd_1099.__doc__,
+                       help="read the 1099-DIVs, 1099-INTs and 1099-Bs on brokers' consolidated 1099 statements")
     p.add_argument("paths", nargs="*", help=PATHS_HELP)
     p.add_argument("--layout", action="store_true", help="also print each value's text and place, masked")
     p.add_argument("--unlock", action="store_true",
@@ -1834,6 +2028,30 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--confirm", action="append", default=[], metavar="KEY=VALUE",
                    help="kept for later runs: other=AMOUNT (the year's income besides the wages)")
     p.set_defaults(func=cmd_ira)
+    p = sub.add_parser("moves", help="a year's tax-saving moves, ranked by dollars and deadline",
+                       description=cmd_moves.__doc__)
+    p.add_argument("--year", type=int, required=True, help="the tax year")
+    p.add_argument("--confirm", action="append", default=[], metavar="KEY=VALUE",
+                   help="kept for later runs: plan_cap=N, rental_tax=AMOUNT, charity=AMOUNT, other=AMOUNT, "
+                        "done_MOVE=yes (401k, losses, rental_tax, spouse_ira, own_ira, charity)")
+    p.add_argument("--show", action="store_true", help="print the amounts, only to a terminal")
+    p.set_defaults(func=cmd_moves)
+    p = sub.add_parser("sales", help="a year's stock sales: Schedule D, wash sale windows, the room left for losses",
+                       description=cmd_sales.__doc__)
+    p.add_argument("paths", nargs="*", help="each account's exported trade history (a CSV)")
+    p.add_argument("--year", type=int, required=True, help="the tax year")
+    p.add_argument("--confirm", action="append", default=[], metavar="KEY=VALUE",
+                   help="kept for later runs: realized_short=AMOUNT, realized_long=AMOUNT, distributions=AMOUNT, "
+                        "carry_short=AMOUNT, carry_long=AMOUNT, loss_SYMBOL_YYYY-MM-DD=yes")
+    p.set_defaults(func=cmd_sales)
+    p = sub.add_parser("jobchange", help="a year's return with a change of job against the year without one",
+                       description=cmd_jobchange.__doc__)
+    p.add_argument("--year", type=int, required=True, help="the tax year")
+    p.add_argument("--confirm", action="append", default=[], metavar="KEY=VALUE",
+                   help="kept for later runs: leave=YYYY-MM-DD, start=YYYY-MM-DD, new_salary=AMOUNT, sign_on=AMOUNT, "
+                        "payout=AMOUNT, percent=N, new_percent=N, loan=AMOUNT, loan_repaid=yes|no, other=AMOUNT")
+    p.add_argument("--show", action="store_true", help="print the amounts, only to a terminal")
+    p.set_defaults(func=cmd_jobchange)
     p = sub.add_parser("vul", help="what a variable universal life policy costs, as shares of its statement's figures",
                        description=cmd_vul.__doc__)
     p.add_argument("paths", nargs="+", help="the policy's annual statements or in-force illustrations (PDFs)")

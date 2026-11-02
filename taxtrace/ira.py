@@ -75,6 +75,16 @@ def confirmation(spec: str) -> tuple[str, str]:
     return key, str(number)
 
 
+def last_other(year: int, returns: list[dict]) -> Decimal | None:
+    """The year's income besides the wages, taken from last year's return: its interest, dividends and Schedule 1
+    income less its adjustments. None when that Form 1040 or those lines aren't read."""
+    lines = next(((r.get("f1040") or {}).get("lines", {}) for r in returns
+                  if r.get("year") == year - 1 and r.get("f1040")), {})
+    if not any(n in lines for n in OTHER_LINES):
+        return None
+    return sum((Decimal(lines.get(n, 0)) for n in OTHER_LINES), Decimal(0)) - Decimal(lines.get("10", 0))
+
+
 def build(year: int, *, stub: dict | None, returns: list[dict], confirmed: dict | None = None) -> Outlook:
     confirmed = confirmed or {}
     out = Outlook(year, LIMIT.get(year))
