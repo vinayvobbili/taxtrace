@@ -77,6 +77,36 @@ def test_a_statement_without_sales_has_no_form(tmp_path: Path):
     assert read(draw(tmp_path / "1099.pdf", [NOT_THE_FORM])) is None
 
 
+# the dates printed a little above their row's amounts, too far for the row to hold them together
+SPLIT = [(x, top - 6 if "/" in t and top == 332.0 else top, t) for x, top, t in PAGE if top <= 335.0]
+
+
+def test_a_1099b_with_no_sale_read_says_so_with_its_shape_and_no_values(tmp_path: Path, workspace_home: Path, capsys):
+    path = draw(tmp_path / "1099 Marlowe.pdf", [SPLIT])
+    assert read(path) is None
+    assert cli.main(["1099", str(path)]) == 0
+    out = printed(capsys)
+    assert "a Form 1099-B is printed here, but no sale was read from it" in out
+    assert "page 1: 1 headings, 1 table headers" in out and "1 with 2 dates and 0 amounts" in out
+    assert "1 with 0 dates and 7 amounts" in out
+    for secret in ("1,300", "900.00", "GBX", "10/20/2026"):
+        assert secret not in out
+
+
+def test_a_year_printed_a_little_off_the_titles_line_is_still_its_year(tmp_path: Path):
+    off = [PAGE[0], (40, 228.2, "1099-B Proceeds From Broker and Barter Exchange Transactions -"),
+           (358, 231.0, "2026"), (382, 228.2, "- Statement for Recipient (OMB NO. 1545-0715)"), *PAGE[2:]]
+    form = read(draw(tmp_path / "1099.pdf", [off]))
+    assert form.year == 2026 and form.failed == []
+
+
+def test_a_short_right_aligned_amount_stays_under_its_own_column(tmp_path: Path):
+    # 900.00 pushed right, nearer the Cost header than the Proceeds one, with no amount printed for market discount
+    moved = [(375 if t == "900.00" else x, top, t) for x, top, t in PAGE if not (top == 332.0 and x == 565)]
+    short = read(draw(tmp_path / "1099.pdf", [moved])).sales[0]
+    assert (short.proceeds, short.basis, short.gain_printed, short.wash) == (900, 1300, -400, 0)
+
+
 HISTORY = """Brokerage
 
 Run Date,Account,Action,Symbol,Description,Quantity,Amount ($)

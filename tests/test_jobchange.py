@@ -88,6 +88,14 @@ def test_a_new_percentage_moves_the_wages_and_the_withholding(stub: dict):
     assert raised.withheld < stands.withheld and raised.deferred == 13500 + 4 * 1500
 
 
+def test_a_pdf_with_no_pages_is_passed_over(tmp_path: Path, workspace_home: Path, capsys):
+    empty = tmp_path / "empty.pdf"
+    empty.write_bytes(b"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+                      b"2 0 obj<</Type/Pages/Kids[]/Count 0>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n")
+    assert cli.main(["paystub", str(empty)]) == 0
+    assert "empty.pdf" not in printed(capsys)
+
+
 def test_no_stub_asks_for_one():
     change = jobchange.build(2026, stub=None, returns=[])
     assert not change.cases and "pay stub" in change.questions[0].text

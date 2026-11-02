@@ -100,6 +100,30 @@ def test_a_web_page_saved_as_pdf_is_skipped_not_a_crash(tmp_path: Path, capsys):
     assert "not a readable PDF" in capsys.readouterr().out
 
 
+def test_a_pdf_that_opens_and_fails_on_its_pages_is_skipped_not_a_crash(tmp_path: Path, monkeypatch, capsys):
+    from pdfplumber.utils.exceptions import PdfminerException
+
+    class Undecryptable:  # opens with no password; each page, and closing it (which reads them), raises
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            raise PdfminerException(ValueError("Invalid IV size (1) for CBC."))
+
+        @property
+        def pages(self):
+            raise PdfminerException(ValueError("Invalid IV size (1) for CBC."))
+
+    monkeypatch.setattr("pdfplumber.open", lambda *a, **k: Undecryptable())
+    doc = tmp_path / "statement.pdf"
+    doc.write_bytes(b"%PDF-1.7\n")
+    with pytest.raises(text.UnsupportedDocument, match="can't be decrypted") as err:
+        text.pages(doc)
+    assert not isinstance(err.value, text.Locked)
+    assert cli.main(["paystub", str(doc)]) == 0
+    assert "can't be decrypted" in capsys.readouterr().out
+
+
 def test_words_on_a_locked_file_says_so_without_a_traceback(locked: Path, monkeypatch, capsys):
     monkeypatch.setattr(workspace, "pdf_passwords", lambda path: ["stale"])
     assert cli.main(["words", str(locked)]) == 1

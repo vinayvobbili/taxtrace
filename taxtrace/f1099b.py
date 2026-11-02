@@ -19,9 +19,11 @@ bought back, and Form 8949 marks the sale with code W.
 from __future__ import annotations
 
 import re
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal
+from itertools import combinations
 
 from .k1 import EIN
 from .prior import YEAR, Check, Question, _rows, amount
@@ -33,6 +35,7 @@ MONEY = re.compile(r"^\(?-?\$?(?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2}\)?-?$")
 DAY = re.compile(r"^\d{1,2}/\d{1,2}/\d{2,4}$")
 SYMBOL = re.compile(r"(?:Symbol:?\s+([A-Z][A-Z.]{0,5})\b|\(([A-Z][A-Z.]{0,5})\))")
 SLACK = 1.5
+TITLE_SLACK = 4.0
 # a column's word in the header, and what it's kept as; the first of a column's words found is its place
 COLUMNS = (("Proceeds", "proceeds"), ("Cost", "basis"), ("Basis", "basis"), ("Unadjusted", "gain"),
            ("Gain/Loss", "gain"), ("Accrued", "discount"), ("Wash", "wash"), ("Federal", "withheld"),
@@ -108,8 +111,6 @@ def read(name: str, pages: dict[int, list[dict]]) -> F1099B | None:
         label = ""
         for i, row in enumerate(rows):
             line = " ".join(w["text"] for w in row)
-            if TITLE.search(line) and form.year is None and (m := YEAR.search(line.split("-", 2)[-1])):
-                form.year = int(m.group(1))
             if m := HEADING.search(line):
                 term, covered = m.group(1).lower(), not m.group(2)
                 box = (b.group(1).upper() if (b := BOX_CHECKED.search(line)) else BOXES[term, covered])
@@ -131,6 +132,22 @@ def read(name: str, pages: dict[int, list[dict]]) -> F1099B | None:
     return form
 
 
+def survey(pages: dict[int, list[dict]]) -> list[str]:
+    """Each page's shape in counts, with no values, for when no sales were read: its headings and table headers, and
+    how many rows hold how many dates and amounts. A sale needs a date and two amounts on one row."""
+    found = []
+    for n, words in sorted(pages.items()):
+        rows = _rows(words, SLACK)
+        headings = sum(bool(HEADING.search(" ".join(w["text"] for w in row))) for row in rows)
+        headers = sum(bool(_header(row, rows[i + 1] if i + 1 < len(rows) else [])) for i, row in enumerate(rows))
+        shapes = Counter((sum(bool(DAY.match(w["text"])) for w in row), sum(bool(MONEY.match(w["text"])) for w in row))
+                         for row in rows)
+        held = ", ".join(f"{count} with {days} dates and {money} amounts"
+                         for (days, money), count in sorted(shapes.items()) if days or money)
+        found.append(f"page {n}: {headings} headings, {headers} table headers, rows: {held or 'no dates or amounts'}")
+    return found
+
+
 def _header(row: list[dict], below: list[dict]) -> dict[str, float]:
     """A table's columns, each kept's middle, when this row and the next are a header; {} otherwise."""
     texts = {w["text"] for w in row}
@@ -148,11 +165,8 @@ def _sale(row: list[dict], columns: dict[str, float], term: str, box: str, label
     money = [w for w in row if MONEY.match(w["text"])]
     if not days or len(money) < 2:
         return None
-    held: dict[str, Decimal] = {}
-    for w in money:
-        middle = (w["x0"] + w["x1"]) / 2
-        kept = min(columns, key=lambda k: abs(columns[k] - middle))
-        held[kept] = amount(w["text"].rstrip("-")) * (-1 if w["text"].endswith("-") else 1)
+    held = {kept: amount(w["text"].rstrip("-")) * (-1 if w["text"].endswith("-") else 1)
+            for kept, w in _under_columns(money, columns)}
     if "proceeds" not in held:
         return None
     sold = _day(days[-1]["text"])
@@ -165,12 +179,36 @@ def _sale(row: list[dict], columns: dict[str, float], term: str, box: str, label
                 held.get("wash", Decimal(0)), held.get("withheld", Decimal(0)), page)
 
 
+def _under_columns(money: list[dict], columns: dict[str, float]) -> list[tuple[str, dict]]:
+    """Each amount with its column: in order, one to a column, closest overall. Amounts print right-aligned, so a short
+    one can sit nearer the next column's header than its own."""
+    money = sorted(money, key=lambda w: w["x0"])
+    names = sorted(columns, key=lambda k: columns[k])
+    if len(money) > len(names):
+        return []
+    best = min(combinations(names, len(money)),
+               key=lambda chosen: sum(abs(columns[k] - (w["x0"] + w["x1"]) / 2)
+                                      for k, w in zip(chosen, money, strict=True)))
+    return list(zip(best, money, strict=True))
+
+
 def _day(token: str) -> date:
     return datetime.strptime(token, "%m/%d/%Y" if len(token.rsplit("/", 1)[1]) == 4 else "%m/%d/%y").date()
 
 
+def _year(words: list[dict]) -> int | None:
+    """The year on the title's line, which can print in another font, a little off the line of the words around it."""
+    for title in (w for w in words if w["text"] == "1099-B"):
+        line = sorted((w for w in words if abs(w["top"] - title["top"]) <= TITLE_SLACK and w["x0"] > title["x0"]),
+                      key=lambda w: w["x0"])
+        if m := YEAR.search(" ".join(w["text"] for w in line)):
+            return int(m.group(1))
+    return None
+
+
 def _fields(form: F1099B, pages: dict[int, list[dict]]) -> None:
     for words in pages.values():
+        form.year = form.year or _year(words)
         form.payer_tin = form.payer_tin or next((w["text"] for w in words if EIN.match(w["text"])), "")
         form.corrected = form.corrected or any(w["text"] == "CORRECTED" for w in words)
 

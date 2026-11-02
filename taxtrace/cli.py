@@ -662,7 +662,12 @@ def cmd_1099(args: argparse.Namespace) -> int:
             continue
         words = {n: text.words(doc, n, password) for n in forms}
         found = f1099.read(doc.name, words)
-        sales_form = f1099b.read(doc.name, {n: text.words(doc, n, password) for n in sold})
+        sold_words = {n: text.words(doc, n, password) for n in sold}
+        sales_form = f1099b.read(doc.name, sold_words)
+        if sold and not sales_form:
+            print(f"{name}: a Form 1099-B is printed here, but no sale was read from it")
+            for line in f1099b.survey(sold_words):
+                print(f"  {line}")
         if sales_form:
             failed += bool(sales_form.failed)
             short = sum(s.term == "short" for s in sales_form.sales)
@@ -746,7 +751,7 @@ def cmd_paystub(args: argparse.Namespace) -> int:
         if doc.suffix.lower() not in text.PDF_SUFFIXES:
             continue
         try:
-            _, password = _unlocked(doc, keychain=args.unlock)
+            pages, password = _unlocked(doc, keychain=args.unlock)
         except text.Locked as err:
             print(f"{name}: skipped, {err}" if args.unlock else
                   f"{name}: locked, skipped without asking the Keychain (--unlock to ask)")
@@ -754,7 +759,7 @@ def cmd_paystub(args: argparse.Namespace) -> int:
         except text.UnsupportedDocument as err:
             print(f"{name}: skipped, {err}")
             continue
-        words = text.words(doc, 1, password)
+        words = text.words(doc, 1, password) if pages else []
         if not paystub.is_form(words):
             continue
         stub = paystub.read(doc.name, words)

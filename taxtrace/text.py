@@ -155,8 +155,11 @@ def _opened(path: Path, password: str | None):
         if not (err.args and isinstance(err.args[0], PDFPasswordIncorrect)):
             raise UnsupportedDocument("not a readable PDF (a web page saved as .pdf, or a damaged file)") from None
     else:
-        with doc:
-            yield doc
+        try:
+            with doc:
+                yield doc
+        except PdfminerException:  # some generators' encryption opens, and fails only when a page is read
+            raise UnsupportedDocument("not a readable PDF (its pages can't be decrypted)") from None
         return
     if password is None:
         raise Locked("password-protected")
