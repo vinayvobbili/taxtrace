@@ -620,6 +620,11 @@ resident, following the state's D-400 and D-401 instructions:
   together (`--confirm property_tax= charity= medical=`). It says when Schedule A could still win.
 - The tax at the year's flat rate, the tax withheld, and estimated payments (`--confirm estimated=`).
 
+`taxtrace prior` also reads a filed return's Schedules 1, D and E, Form 4797 and D-400, checking each form's arithmetic
+and each against the others. `agi` then compares line 7 and line 8 part by part (the sales, the distributions, a sale on
+Form 4797, the rental, the K-1s), and `d400` compares line by line and tests its rate from the filed taxable income. All
+of it says which way and roughly how far, never an amount. Lines that can't test anything are listed apart, not counted.
+
 North Carolina has no credit for tax paid to another country, so nothing from Form 1116 comes here. The state starts from
 an older federal law, so the additions it asks for can differ from what you'd expect: check its instructions for the year.
 Schedule PN (nonresidents and part-year residents) isn't covered. The 2026 standard deduction and child table are

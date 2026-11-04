@@ -53,6 +53,7 @@ class Agi:
     checks: list[Check] = field(default_factory=list)
     explained: list[str] = field(default_factory=list)  # which pieces' absence would make a differing line match
     untested: list[str] = field(default_factory=list)  # lines of a filed return that nothing here could test
+    details: list[str] = field(default_factory=list)  # the filed Schedules D and 1, part by part, in words
     questions: list[str] = field(default_factory=list)
 
     def line(self, line: str) -> Part:
@@ -182,20 +183,99 @@ def build(year: int, *, forms: list[dict], k1s: list[dict], returns: list[dict],
                           ["`taxtrace moves`"] if done else []))
     if filed:
         _rehearse(agi, filed)
+        _schedule_d_details(agi, filed_lines(returns, year, "schedule_d"), sales, faces, found)
+        _sale_abroad_details(agi, filed_lines(returns, year, "form_4797"), found)
+        _schedule_1_details(agi, filed_lines(returns, year, "schedule_1"))
+        _schedule_e_details(agi, filed_lines(returns, year, "schedule_e"), faces)
     return agi
 
 
-def _compare(agi: Agi, what: str, mine: Decimal | None, theirs: Decimal) -> None:
+def filed_lines(returns: list[dict], year: int, form: str) -> dict[str, Decimal]:
+    """A filed form's lines for the year, from whichever of the year's returns holds it; a signing packet may not."""
+    lines = next(((r.get(form) or {}).get("lines", {}) for r in returns if r.get("year") == year and r.get(form)), {})
+    return {k: Decimal(v) for k, v in lines.items()}
+
+
+def difference(what: str, mine: Decimal | None, theirs: Decimal) -> Check:
+    """How a built amount compares with a filed one: which way and roughly how far, never an amount."""
     if mine is None:
-        agi.checks.append(Check(f"{what}: not built yet", False, 0))
-        return
+        return Check(f"{what}: not built yet", False, 0)
     gap = abs(mine - theirs)
     if gap <= TOLERANCE:
-        agi.checks.append(Check(f"{what} is the filed return's", True, 0))
-        return
+        return Check(f"{what} is the filed return's", True, 0)
     size = "by under $100" if gap < 100 else "by under $1,000" if gap < 1000 else "by $1,000 or more"
-    agi.checks.append(Check(f"{what} is {'higher' if mine > theirs else 'lower'} than the filed return's, {size}",
-                            False, 0))
+    return Check(f"{what} is {'higher' if mine > theirs else 'lower'} than the filed return's, {size}", False, 0)
+
+
+def _compare(agi: Agi, what: str, mine: Decimal | None, theirs: Decimal) -> None:
+    agi.checks.append(difference(what, mine, theirs))
+
+
+def _detail(agi: Agi, what: str, mine: Decimal, theirs: Decimal) -> None:
+    """One part of a line against the filed schedule's. Nothing on either side says nothing."""
+    if mine or theirs:
+        agi.details.append(difference(what, mine, theirs).what)
+
+
+def _schedule_d_details(agi: Agi, d: dict[str, Decimal], sales: dict | None, faces: list[dict],
+                        found: dict | None) -> None:
+    """Line 7's parts against Schedule D's, to show which part a difference comes from."""
+    if not d:
+        return
+
+    def filed(*lines: str) -> Decimal:
+        return sum((d.get(n, ZERO) for n in lines), ZERO)
+
+    sold = sales or {}
+    _detail(agi, "Schedule D, short-term sales (lines 1a to 3)", _dollars(sold.get("short")),
+            filed("1a", "1b", "2", "3"))
+    _detail(agi, "Schedule D, long-term sales (lines 8a to 10)", _dollars(sold.get("long")),
+            filed("8a", "8b", "9", "10"))
+    _detail(agi, "Schedule D, the K-1s' gains (lines 5 and 12)",
+            sum((_k1_box(f, "8") + _k1_box(f, "9a") for f in faces), ZERO), filed("5", "12"))
+    _detail(agi, "Schedule D, capital gain distributions (line 13)", _dollars(sold.get("distributions")), filed("13"))
+    _detail(agi, "Schedule D, loss carryovers (lines 6 and 14)",
+            -_dollars(sold.get("carry_short")) - _dollars(sold.get("carry_long")), filed("6", "14"))
+    abroad = sum((_dollars(s.get("gain")) for s in (found or {}).get("sales", [])), ZERO)
+    _detail(agi, "Schedule D, the sale abroad against Form 4797's gains (lines 4 and 11)", abroad, filed("4", "11"))
+
+
+def _sale_abroad_details(agi: Agi, form: dict[str, Decimal], found: dict | None) -> None:
+    """The sale abroad against Form 4797's Part III, where a depreciable property's sale is reported."""
+    sales = (found or {}).get("sales", [])
+    if not form or not sales:
+        return
+    price = sum((_dollars((s.get("proceeds") or {}).get("dollars")) for s in sales), ZERO)
+    _detail(agi, "Form 4797, the sale abroad's price (line 20)", price, form.get("20", ZERO))
+    _detail(agi, "Form 4797, the sale abroad's cost and selling expenses (line 21)",
+            sum((_dollars(s.get("basis")) for s in sales), ZERO), form.get("21", ZERO))
+    _detail(agi, "Form 4797, depreciation (line 22)", ZERO, form.get("22", ZERO))
+    _detail(agi, "Form 4797, the sale abroad's gain (line 24)", sum((_dollars(s.get("gain")) for s in sales), ZERO),
+            form.get("24", ZERO))
+
+
+def _schedule_e_details(agi: Agi, form: dict[str, Decimal], faces: list[dict]) -> None:
+    """Line 8's own parts against Schedule E's: the rental (line 26) and the K-1s (line 32). An activity on Form 8582
+    counts as a K-1's when its first word is a K-1 partnership's: everything else there is the rental."""
+    if not form:
+        return
+    first = {_k1_name(f).split()[0].casefold() for f in faces if _k1_name(f).split()}
+    pieces = agi.line("8").pieces
+    theirs = sum((v for k, v in pieces.items() if k == "the K-1s' royalties"
+                  or (k.split() and k.split()[0].casefold() in first)), ZERO)
+    _detail(agi, "Schedule E, the K-1s (line 32)", theirs, form.get("32", ZERO))
+    _detail(agi, "Schedule E, the rental (line 26)", (agi.line("8").amount or ZERO) - theirs, form.get("26", ZERO))
+    _explain(agi, "Schedule E line 32", {k: v for k, v in pieces.items() if k == "the K-1s' royalties"
+                                         or (k.split() and k.split()[0].casefold() in first)}, form.get("32", ZERO))
+
+
+def _schedule_1_details(agi: Agi, one: dict[str, Decimal]) -> None:
+    """Line 8's parts against Schedule 1's."""
+    if not one:
+        return
+    _detail(agi, "Schedule 1, the rental and the K-1s (line 5)", agi.line("8").amount or ZERO, one.get("5", ZERO))
+    for line, what in (("1", "state refunds"), ("4", "Form 4797's other gains"), ("9", "other income")):
+        _detail(agi, f"Schedule 1, {what} (line {line})", ZERO, one.get(line, ZERO))
 
 
 def _explain(agi: Agi, what: str, pieces: dict[str, Decimal], theirs: Decimal) -> None:

@@ -24,7 +24,8 @@ from dataclasses import asdict, dataclass, field
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 from . import estimates, paystub, schedule_e
-from .agi import ESTIMATE, MISSING, READY, Agi
+from .agi import ESTIMATE, MISSING, READY, Agi, difference
+from .prior import Check
 
 ZERO = Decimal(0)
 RATE = {2025: Decimal("0.0425"), 2026: Decimal("0.0399")}
@@ -39,6 +40,8 @@ CHILD_STEPS = {"joint": (40000, 60000, 80000, 100000, 120000, 140000),
 AMOUNTS = ("additions", "deductions", "us_interest", "property_tax", "charity", "medical", "credits", "use_tax",
            "estimated", "extension")
 TOLERANCE = Decimal(1)
+INPUTS = {"16": "credits", "18": "use_tax", "21a": "estimated", "21b": "extension"}  # lines only `--confirm` fills
+PAID = ("20", "23", "26a", "28")  # what the tax withheld decides
 
 
 @dataclass
@@ -261,6 +264,29 @@ def _deduction(form: Form, year: int, forms: list[dict], rental: dict | None, fe
         form.questions.append("line 11: the standard deduction is used, because the home's mortgage interest or "
                               "property tax isn't in yet: Schedule A may come out larger once they are")
     return standard, "standard"
+
+
+def compare(form: Form, filed: dict[str, Decimal], *, confirmed: dict | None = None,
+            has_w2: bool = True) -> tuple[list[Check], list[str]]:
+    """Each built line against the year's filed D-400: which way and roughly how far, never an amount. A line that
+    can't test anything is listed apart and not counted either way: nothing on either side, an amount only you can
+    confirm that wasn't given for this year, or the payments while no W-2 has been read."""
+    confirmed = confirmed or {}
+    checks, untested = [], []
+    for line in form.lines:
+        theirs = filed.get("20a", ZERO) + filed.get("20b", ZERO) if line.line == "20" else filed.get(line.line, ZERO)
+        if line.amount is not None and not line.amount and not theirs:
+            untested.append(f"line {line.line}: nothing on either side")
+        elif line.line in INPUTS and INPUTS[line.line] not in confirmed:
+            untested.append(f"line {line.line}: an amount you confirm, not given for {form.year}")
+        elif line.line in PAID and not has_w2:
+            untested.append(f"line {line.line}: no W-2 has been read")
+        else:
+            checks.append(difference(f"line {line.line}", line.amount, theirs))
+    if "14" in filed and "15" in filed and form.year in RATE:  # the rule alone, whatever the income above it
+        checks.append(difference("line 15 worked from the filed line 14", whole(filed["14"] * RATE[form.year]),
+                                 filed["15"]))
+    return checks, untested
 
 
 def to_text(form: Form) -> str:

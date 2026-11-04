@@ -1739,8 +1739,10 @@ def cmd_agi(args: argparse.Namespace) -> int:
         print(f"  not tested: {line}")
     for line in found.explained:  # names of parts, masked
         print(f"  {redact.redact(line, terms).text.strip()}")
+    for line in found.details:  # line numbers and a size's words, never an amount
+        print(f"  {line}")
     if found.checks:
-        print("  this stops at adjusted gross income: total tax, the foreign tax credit and the D-400 aren't compared")
+        print("  this stops at adjusted gross income: total tax and the foreign tax credit aren't compared")
     for q in found.questions:
         print(f"  question: {redact.redact(q, terms).text.strip()}")
     out = home / workspace.AGI
@@ -1754,9 +1756,11 @@ def cmd_d400(args: argparse.Namespace) -> int:
     """North Carolina's Form D-400 for a year, with Schedules S and A, into <workspace>/d400/<year>.txt, for a
     full-year resident: from federal adjusted gross income (`agi`), the NC K-1s, the home's 1098, and what's confirmed.
 
-    What's printed is masked: each line's status and which deduction line 11 uses, and what's still to settle.
+    What's printed is masked: each line's status and which deduction line 11 uses, and what's still to settle. A year
+    whose D-400 was filed and read is compared with it line by line, which way and roughly how far, and exits 1 when a
+    line differs.
     """
-    from . import d400
+    from . import agi, d400
 
     home = workspace.outside_git(workspace.home())
     terms = workspace.redact_terms()
@@ -1772,7 +1776,8 @@ def cmd_d400(args: argparse.Namespace) -> int:
     if args.confirm:
         kept.write_text(json.dumps(confirmed, indent=2) + "\n")
     rental_path = home / workspace.SCHEDULE_E / f"{args.year}.json"
-    form = d400.build(args.year, agi=_federal_agi(home, args.year), forms=_forms(home), k1s=_k1s(home),
+    federal = _federal_agi(home, args.year)
+    form = d400.build(args.year, agi=federal, forms=_forms(home), k1s=_k1s(home),
                       filing=_filing(home, args.year), confirmed=confirmed,
                       rental=json.loads(rental_path.read_text()) if rental_path.exists() else None)
     print(f"{args.year} Form D-400: {sum(n.amount is not None for n in form.lines)} lines"
@@ -1780,12 +1785,24 @@ def cmd_d400(args: argparse.Namespace) -> int:
     for line in form.lines:
         if line.status != d400.READY:
             print(f"  line {line.line}: {line.status}")
+    filed = agi.filed_lines(_returns(home), args.year, "d400")
+    stands_in = any(agi.FILED_STANDS_IN in p.sources for p in federal.parts)
+    checks, untested = d400.compare(form, filed, confirmed=confirmed, has_w2=not stands_in) if filed else ([], [])
+    bad = [c for c in checks if not c.ok]
+    if filed:
+        print(f"  against the filed {args.year} Form D-400: {len(checks) - len(bad)} of {len(checks)} match")
+    for c in bad:  # built from line numbers and a size's words, never an amount
+        print(f"  differs: {c.what}")
+    for line in untested:
+        print(f"  not tested: {line}")
+    if filed and stands_in:
+        print("  line 6 uses the filed return's wages, since no W-2 has been read, so it isn't a full test")
     for q in form.questions:
         print(f"  question: {redact.redact(q, terms).text.strip()}")
     (out / f"{args.year}.json").write_text(json.dumps(form.to_json(), indent=2, default=str) + "\n")
     (out / f"{args.year}.txt").write_text(d400.to_text(form))
     print(f"wrote to {out / f'{args.year}.txt'}")
-    return 0
+    return 1 if bad else 0
 
 
 def cmd_entry(args: argparse.Namespace) -> int:
