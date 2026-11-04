@@ -172,6 +172,7 @@ class Carryforwards:
     schedule_d: object | None = None  # the filed Schedule D's lines (`filed.Schedule`)
     schedule_e: object | None = None  # the filed Schedule E's totals (`filed.Schedule`)
     form_4797: object | None = None  # the filed Form 4797's lines (`filed.Schedule`)
+    form_1116: object | None = None  # the filed Form 1116's lines (`filed.Schedule`)
     d400: object | None = None  # the filed North Carolina D-400's lines (`filed.Schedule`)
 
     def check(self, what: str, ok: bool, page: int) -> None:
@@ -277,7 +278,7 @@ def read(name: str, pages: list[str], words: dict[int, list[dict]] | None = None
 
     forms = filed.read(pages, found.f1040)
     found.schedule_1, found.schedule_d, found.schedule_e = forms.schedule_1, forms.schedule_d, forms.schedule_e
-    found.form_4797, found.d400 = forms.form_4797, forms.d400
+    found.form_4797, found.d400, found.form_1116 = forms.form_4797, forms.d400, forms.form_1116
     found.checks += forms.checks
     _carryovers(found, pages, words or {})
     if found.year is None and (found.assets or found.unallowed):

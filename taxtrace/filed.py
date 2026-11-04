@@ -27,6 +27,17 @@ TITLE_E = re.compile(r"^Supplemental Income and Loss|^Schedule\s+E\s+\(Form\s+10
 TITLE_4797 = re.compile(r"^4797\s+Sales of Business Property|^Form\s+4797\s+\(", re.I)
 E_LINES = ("23a", "23b", "23c", "23d", "23e", "24", "25", "26", "30", "31", "32", "37", "39", "40", "41")
 F4797_LINES = ("2", "6", "7", "20", "21", "22", "23", "24", "32")
+TITLE_1116 = re.compile(r"^Form\s+1116\s+\(.*Page\s*2", re.I)
+F1116_WORDS = ("foreign tax credit", "use a separate form 1116")
+AMT_COPY = "min tax purposes only"  # the preparer's alternative minimum tax copy of the form, which isn't filed
+# by page, since page 1's Part II has rows of dates that end like a line number and an amount
+F1116_PAGE_1 = ("1a", "7")
+F1116_PAGE_2 = ("9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "20", "21", "23", "24", "32", "33", "34",
+                "35")
+LINE_1116 = re.compile(rf"(?<![\d,.])(?P<no>\d{{1,2}}[a-z]?)\s+(?P<amount>{AMOUNT})\s*$")  # also "y15 18,000"
+# by their words, since a print can garble these numbers and line 3e has an amount in each column
+F1116_LABELS = {no: re.compile(rf"{words}.*?(?P<amount>{AMOUNT})\s*$", re.I) for no, words in (
+    ("3d", "gross foreign source income"), ("3e", "gross income from all sources"), ("3g", "multiply line 3c by"))}
 D400_WORDS = ("federal adjusted gross income", "n.c. taxable income", "n.c. income tax")
 SALES_ROWS = {  # Schedule D's rows with columns of amounts: words on the row, and the line's number
     "go to line 1b": "1a", "box a or box g": "1b", "box b or box h": "2", "box c or box i": "3",
@@ -84,6 +95,24 @@ def _numbered(pages: list[str], title: re.Pattern, lines: tuple[str, ...]) -> Sc
             for row in page.splitlines():
                 if (m := LINE.search(row)) and m.group("no") in lines:
                     found.lines.setdefault(m.group("no"), _amount(m.group("amount")))
+    return found if found.pages else None
+
+
+def _form_1116(pages: list[str]) -> Schedule | None:
+    """The first Form 1116 filed: its AMT copy isn't, and a second category's would need its own reading."""
+    found = Schedule()
+    for n, page in enumerate(pages, 1):
+        flat = " ".join(page.lower().split())
+        if AMT_COPY in flat or not (_titled(page, TITLE_1116) or all(w in flat for w in F1116_WORDS)):
+            continue
+        found.pages.append(n)
+        wanted = F1116_PAGE_2 if _titled(page, TITLE_1116) else F1116_PAGE_1
+        for row in page.splitlines():
+            for no, label in F1116_LABELS.items():
+                if wanted is F1116_PAGE_1 and (m := label.search(row)):
+                    found.lines.setdefault(no, _amount(m.group("amount")))
+            if (m := LINE_1116.search(row)) and m.group("no") in wanted:
+                found.lines.setdefault(m.group("no"), _amount(m.group("amount")))
     return found if found.pages else None
 
 
@@ -176,6 +205,24 @@ def _checks_4797(s: Schedule, capital: Schedule | None) -> list[Check]:
     return checks
 
 
+def _checks_1116(s: Schedule, f1040) -> list[Check]:
+    page = s.pages[0]
+    credit = s.line("33") - s.line("34")
+    checks = [Check("Form 1116: line 14 adds up lines 11, 12 and 13",
+                    _near(s.total(("11", "12", "13")), s.line("14")), page),
+              Check("Form 1116: line 17 is lines 15 and 16", _near(s.line("15") + s.line("16"), s.line("17")), page),
+              Check("Form 1116: line 35 is line 33 less line 34", _near(credit, s.line("35")), page)]
+    if f1040 is not None:
+        checks.append(Check("Form 1116: line 20 is Form 1040's line 16", _near(s.line("20"), f1040.line("16")), page))
+        checks.append(Check("Form 1116: line 35 is within Form 1040's line 20",
+                            s.line("35") <= f1040.line("20") + SLACK, page))
+        if f1040.agi is not None and "14" in f1040.lines:
+            # lower when the worksheet for line 18 takes out the income taxed at lower rates
+            checks.append(Check("Form 1116: line 18 is at most Form 1040's income less line 14",
+                                s.line("18") <= f1040.agi - f1040.line("14") + SLACK, page))
+    return checks
+
+
 def _checks_d400(s: Schedule, f1040) -> list[Check]:
     page = s.pages[0]
     checks = [
@@ -200,13 +247,14 @@ class Forms:
     schedule_e: Schedule | None = None
     form_4797: Schedule | None = None
     d400: Schedule | None = None
+    form_1116: Schedule | None = None
     checks: list[Check] = field(default_factory=list)
 
 
 def read(pages: list[str], f1040=None) -> Forms:
     """A return's forms, each None when it has none, with the checks of their arithmetic."""
     f = Forms(_schedule_1(pages), _schedule_d(pages), _numbered(pages, TITLE_E, E_LINES),
-              _numbered(pages, TITLE_4797, F4797_LINES), _d400(pages))
+              _numbered(pages, TITLE_4797, F4797_LINES), _d400(pages), _form_1116(pages))
     if f.schedule_1:
         f.checks += _checks_1(f.schedule_1, f1040)
     if f.schedule_d:
@@ -217,4 +265,6 @@ def read(pages: list[str], f1040=None) -> Forms:
         f.checks += _checks_4797(f.form_4797, f.schedule_d)
     if f.d400:
         f.checks += _checks_d400(f.d400, f1040)
+    if f.form_1116:
+        f.checks += _checks_1116(f.form_1116, f1040)
     return f

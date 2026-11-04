@@ -26,13 +26,18 @@ from .prior import CENT, Check
 PAGE_1 = ("add lines 1a through 1h", "this is your total income")  # not NC's D-400, also an "Income Tax Return"
 PAGE_2 = re.compile(r"^Form\s+1040\s+\((?:19|20)\d\d\).*\bPage\s*2\b")  # "Form 1040 (2025) <names> Page 2"
 HEAD = 8  # lines: a preparer's page 1 can open with the SSN's box ahead of the form's title
-LINE = re.compile(rf"(?<!\S)(?P<no>\d{{1,2}}[a-dz]?)\s+(?P<amount>{AMOUNT})\s*$")
+LINE = re.compile(rf"(?<!\S)(?P<no>\d{{1,2}}[a-ez]?)\s+(?P<amount>{AMOUNT})\s*$")
+QUALIFIED = re.compile(rf"(?<!\S)3a\s+(?P<amount>{AMOUNT})\s+b\s+Ordinary", re.I)  # shares its row with line 3b
 # each line's number as printed, and words its label row holds
 LINES = {
     "1z": ("add lines 1a through 1h",), "2b": ("taxable interest",), "3b": ("ordinary dividends",),
     "7": ("capital gain",), "7a": ("capital gain",), "8": ("additional income",), "9": ("your total income",),
     "10": ("adjustments to income",),
     "11": ("adjusted gross income",), "11a": ("adjusted gross income",), "11b": ("adjusted gross income",),
+    "1a": ("form(s) w-2, box",), "1e": ("taxable dependent care",), "12e": ("standard deduction",),
+    "13a": ("qualified business income",), "14": ("add lines 12e",), "15": ("your taxable income",),
+    "16": ("tax (see instructions)",), "18": ("add lines 16",), "19": ("child tax credit",), "20": ("schedule 3",),
+    "22": ("subtract line 21",), "23": ("other taxes",),
     "24": ("this is your total tax",), "25d": ("add lines 25a",), "26": ("estimated tax payments",),
     "32": ("total other payments",), "33": ("total payments",), "34": ("amount you overpaid",),
     "36": ("applied to your",), "38": ("estimated tax penalty",),
@@ -68,6 +73,8 @@ def read(pages: list[str]) -> tuple[Filed | None, list[Check]]:
             continue
         filed.pages.append(n)
         for row in page.splitlines():
+            if m := QUALIFIED.search(row):
+                filed.lines.setdefault("3a", _amount(m.group("amount")))
             if (m := LINE.search(row)) and (words := LINES.get(m.group("no"))) and \
                     all(w in " ".join(row.lower().split()) for w in words):
                 filed.lines.setdefault(m.group("no"), _amount(m.group("amount")))

@@ -70,6 +70,7 @@ Early. What works today:
   [Adjusted gross income](#adjusted-gross-income)).
 - `taxtrace d400`: North Carolina's Form D-400 with Schedules S and A (see [Form D-400](#form-d-400)).
 - `taxtrace w2`: reads Form W-2s into the entry sheet, `agi` and `d400` (see [Form W-2](#form-w-2)).
+- `taxtrace tax`: Form 1040's lines 12e to 24 with Form 1116's credit (see [Total tax](#total-tax)).
 
 Planned: a year-over-year check.
 
@@ -609,7 +610,27 @@ K-1's section 1231 gain is on line 8 here where a preparer may use line 7, so "l
 ones that have to agree. When they don't, it says whether leaving out one or two parts (a K-1, the stock sales) would make
 them match, by name only. A line nothing could test isn't counted as a match: wages taken from the filed return because no
 W-2 was read, or a line with nothing on either side. The comparison stops at adjusted gross income, so a full match says
-nothing yet about total tax, the foreign tax credit or the state return.
+nothing about total tax, the foreign tax credit or the state return: see [Total tax](#total-tax) and
+[Form D-400](#form-d-400).
+
+## Total tax
+
+`taxtrace tax --year 2026` writes `tax/2026.txt`: Form 1040's lines 11 to 24 and Form 1116's passive category, for a joint
+or single return.
+
+- Line 12e is the larger of the standard deduction and Schedule A (the home's mortgage interest, state and local taxes up
+  to the year's cap, charity, and medical past 7.5%). It prints how far Schedule A is, in words.
+- Line 13a comes from `qbi`. Line 16 follows the Qualified Dividends and Capital Gain Tax Worksheet, with the Tax Table's
+  $50 bands under $100,000.
+- Line 19 is the child tax credit, using `d400 --confirm children=N`. Line 23 adds the additional Medicare tax and the net
+  investment income tax, as estimates until Forms 8959 and 8960 are compared.
+- Line 20 is Form 1116's credit. Lines 3d and 3e count gross income, so a rental's rents and not its profit. Income taxed
+  at lower rates comes out of line 18 through the Worksheet for Line 18, and a foreign gain is adjusted on line 1a. Below
+  the adjustment exception's limits that's an election, and the way with the larger limit is the one taken.
+
+The alternative minimum tax isn't worked out, and the output says so. For a filed year, `tax` compares each line and also
+works each rule from the filed form's own inputs (lines 15, 16, 19 and 23, and Form 1116's 1a, 3g, 18 and 21), so a wrong
+rule shows up apart from an income line that differs. Each comparison says which way and roughly how far, never an amount.
 
 ## Form D-400
 

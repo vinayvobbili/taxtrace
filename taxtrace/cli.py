@@ -1820,6 +1820,58 @@ def cmd_d400(args: argparse.Namespace) -> int:
     return 1 if bad else 0
 
 
+def cmd_tax(args: argparse.Namespace) -> int:
+    """Form 1040's lines 12e to 24 for a year, with Form 1116's credit, into <workspace>/tax/<year>.txt: from `agi`,
+    `qbi`, `foreign`, `sales`, and what `d400 --confirm` keeps (children, property tax, charity, medical).
+
+    What's printed is masked: each line's status, and how a filed year compares: which way and roughly how far, never
+    an amount. Exits 1 when a line differs from the filed return's.
+    """
+    from . import agi, tax
+
+    home = workspace.outside_git(workspace.home())
+    terms = workspace.redact_terms()
+
+    def saved(folder: str) -> dict | None:
+        path = home / folder / f"{args.year}.json"
+        return json.loads(path.read_text()) if path.exists() else None
+
+    kept = home / workspace.D400 / f"{args.year}-confirmed.json"
+    confirmed = json.loads(kept.read_text()) if kept.exists() else {}
+    filing = _filing(home, args.year)
+    form = tax.build(args.year, agi=_federal_agi(home, args.year), forms=_forms(home), k1s=_k1s(home), filing=filing,
+                     found=saved(workspace.FOREIGN), sales=saved(workspace.SALES), rental=saved(workspace.SCHEDULE_E),
+                     qbi=saved(workspace.QBI), confirmed=confirmed)
+    print(f"{args.year} Form 1040, lines 11 to 24: the {form.deduction or '?'} deduction on line 12e")
+    if form.deduction:
+        print(f"  {tax.schedule_a_words(form.room)}")
+    for line in form.lines:
+        if line.status != "ready":
+            print(f"  line {line.line}: {line.status}")
+    returns = _returns(home)
+    filed = agi.filed_lines(returns, args.year, "f1040")
+    bad: list = []
+    if filed:
+        children = int(confirmed["children"]) if "children" in confirmed else None
+        checks, untested = tax.compare(form, filed, agi.filed_lines(returns, args.year, "form_1116"),
+                                       agi.filed_lines(returns, args.year, "schedule_d"), filing, children,
+                                       _forms(home), agi.filed_lines(returns, args.year, "form_4797"))
+        bad = [c for c in checks if not c.ok]
+        print(f"  against the filed {args.year} return: {len(checks) - len(bad)} of {len(checks)} match")
+        for c in checks:  # built from line numbers and a size's words, never an amount
+            print(f"  {'matches' if c.ok else 'differs'}: {c.what}")
+        for line in untested:
+            print(f"  not tested: {line}")
+    for q in form.questions:
+        print(f"  question: {redact.redact(q, terms).text.strip()}")
+    out = home / workspace.TAX
+    out.mkdir(parents=True, exist_ok=True)
+    (out / f"{args.year}.json").write_text(json.dumps(form.to_json(), indent=2, default=str) + "\n")
+    (out / f"{args.year}.txt").write_text(tax.to_text(form))
+    print(f"wrote to {out / f'{args.year}.txt'}")
+    return 1 if bad else 0
+
+
 def cmd_entry(args: argparse.Namespace) -> int:
     """A year's entry sheet into <workspace>/entry/<year>.txt: everything the return asks for, section by section,
     each value with its source and whether it's ready, an estimate or missing, from what the other commands saved.
@@ -2326,6 +2378,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--confirm", action="append", default=[], metavar="KEY=AMOUNT",
                    help="for box 10's dependent care benefits: care_expenses=AMOUNT, spouse_earned=AMOUNT")
     p.set_defaults(func=cmd_agi)
+    p = sub.add_parser("tax", help="a year's Form 1040 lines 12e to 24 and Form 1116's credit, against a filed return",
+                       description=cmd_tax.__doc__)
+    p.add_argument("--year", type=int, required=True, help="the tax year")
+    p.set_defaults(func=cmd_tax)
     p = sub.add_parser("d400", help="North Carolina's Form D-400 for a year, with Schedules S and A",
                        description=cmd_d400.__doc__)
     p.add_argument("--year", type=int, required=True, help="the tax year")

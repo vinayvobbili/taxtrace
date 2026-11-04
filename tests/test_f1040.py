@@ -53,8 +53,8 @@ def test_each_line_is_read_by_its_number_and_label(tmp_path: Path):
     filed, checks = f1040.read(text.pages(path))
     assert filed.pages == [1, 2]  # a schedule's page 2, the preparer's worksheet and NC's return aren't the form
     assert filed.lines == {"1z": 204310, "2b": 41, "3b": 2486, "7a": 1317, "8": 3721, "9": 211875, "10": 0,
-                           "11a": 211875, "11b": 211875, "24": 31906, "25d": 33120, "32": 0, "33": 33120,
-                           "34": 1214, "36": 300}
+                           "11a": 211875, "11b": 211875, "1a": 204310, "3a": 1902, "24": 31906, "25d": 33120, "32": 0,
+                           "33": 33120, "34": 1214, "36": 300}
     assert filed.agi == Decimal(211875) and filed.line("26") == 0
     assert [c.what for c in checks if not c.ok] == [] and len(checks) == 6
 
