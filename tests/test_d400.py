@@ -106,6 +106,18 @@ def test_a_1231_gain_on_another_line_shows_in_the_two_lines_together():
     assert not checks["line 7 is lower than the filed return's, by under $1,000"]
 
 
+def test_a_difference_names_the_part_that_explains_it_without_amounts():
+    activities = [{"name": "Umbrella Lofts", "allowed": "300"}, {"name": "Hooli Towers", "allowed": "4400"}]
+    filed = {"1z": "150000", "2b": "240", "3b": "330", "7": "4060", "8": "340", "11": "155000"}
+    found = federal(moves=None, k1s=[FACE], passive={"form_8582": {"activities": activities}},
+                    returns=[{"year": 2026, "f1040": {"lines": filed}}])
+    assert found.explained == ["lines 7 and 8 together: leaving out Hooli Towers would match"]
+    filed = {**filed, "8": "1"}
+    found = federal(moves=None, k1s=[FACE], passive={"form_8582": {"activities": activities}},
+                    returns=[{"year": 2026, "f1040": {"lines": filed}}])
+    assert found.explained == ["lines 7 and 8 together: leaving out no one or two of its parts would match"]
+
+
 def form(**changes) -> d400.Form:
     made = {"agi": federal(), "forms": [W2, INT, DIV, HOME, RENTAL_LOAN], "k1s": [FACE, NC_K1], "filing": "joint",
             "rental": RENTAL, "confirmed": {"children": "2", "use_tax": "12"}}

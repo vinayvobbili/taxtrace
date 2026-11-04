@@ -584,7 +584,8 @@ or missing. It's what the state return starts from, and the sheet's check on wha
 For a year whose own return was filed and read with `prior`, each line is compared with it, which way and roughly how
 far ("line 7 is higher than the filed return's, by $1,000 or more"), never an amount. It exits 1 when a line differs. A
 K-1's section 1231 gain is on line 8 here where a preparer may use line 7, so "lines 7 and 8 together" and line 11 are the
-ones that have to agree.
+ones that have to agree. When they don't, it says whether leaving out one or two parts (a K-1, the stock sales) would make
+them match, by name only.
 
 ## Form D-400
 
