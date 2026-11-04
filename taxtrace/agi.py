@@ -34,6 +34,8 @@ SORT = {READY: 0, ESTIMATE: 1, MISSING: 2}
 TOLERANCE = Decimal(1)  # a dollar: a return's lines are rounded
 EXPLAINS = Decimal(5)  # a few rounded pieces can add up to a few dollars
 FILED_STANDS_IN = "the filed return: no W-2 has been read"
+CARE_LIMIT = {2025: Decimal(5000), 2026: Decimal(7500)}  # dependent care benefits a joint return can exclude
+CARE_KEYS = ("care_expenses", "spouse_earned")
 
 
 @dataclass
@@ -97,10 +99,46 @@ def _year_forms(forms: list[dict], year: int, kind: str) -> list[dict]:
     return [f for f in forms if f.get("form") == kind and f.get("year") == year and f.get("copy_of") is None]
 
 
-def _wages(year: int, forms: list[dict], filed: dict) -> Part:
+def _taxable_care(w2s: list[dict], filing: str, year: int, confirmed: dict, agi: Agi) -> tuple[Decimal, bool]:
+    """Form 2441's Part III: the dependent care benefits in box 10 that are taxed, line 1e, and whether that's certain.
+
+    What's excluded is the smallest of the benefits, the care expenses, each spouse's earned income and the year's
+    limit, so a joint return with no earned income on the spouse's side excludes nothing. A second employee's W-2 gives
+    the spouse's; otherwise `spouse_earned` does, for a job with no W-2 read yet.
+    """
+    benefits = sum((_box(f, "10") for f in w2s), ZERO)
+    if not benefits:
+        return ZERO, True
+    earned: dict[str, Decimal] = {}
+    for f in w2s:
+        earned[f.get("employee", "")] = earned.get(f.get("employee", ""), ZERO) + _box(f, "1")
+    amounts = sorted(earned.values(), reverse=True)
+    limit = CARE_LIMIT.get(year, max(CARE_LIMIT.values())) / (2 if filing == "separate" else 1)
+    caps = [benefits, amounts[0], limit]
+    if filing in ("joint", "separate"):
+        spouse = Decimal(confirmed["spouse_earned"]) if "spouse_earned" in confirmed else \
+            (amounts[1] if len(amounts) > 1 else ZERO)
+        caps.append(spouse)
+    if "care_expenses" in confirmed:
+        return benefits - min(*caps, Decimal(confirmed["care_expenses"])), True
+    if min(caps) == 0:  # no earned income on one side: nothing is excluded, whatever the expenses
+        if "spouse_earned" not in confirmed:
+            agi.questions.append("box 10: with no earned income shown for your spouse, all the dependent care benefits "
+                                 "are taxed; if your spouse worked, was a full-time student or disabled, "
+                                 "`--confirm spouse_earned=AMOUNT`")
+        return benefits, True
+    agi.questions.append("box 10: how much you paid for care this year decides how much of it is taxed "
+                         "(`--confirm care_expenses=AMOUNT`)")
+    return benefits - min(caps), False
+
+
+def _wages(year: int, forms: list[dict], filed: dict, filing: str, confirmed: dict, agi: Agi) -> Part:
     w2s = _year_forms(forms, year, "W-2")
     if w2s:
-        return Part("1z", "Wages", sum((_box(f, "1") for f in w2s), ZERO), READY, [f.get("file", "") for f in w2s])
+        wages = sum((_box(f, "1") for f in w2s), ZERO)
+        care, certain = _taxable_care(w2s, filing, year, confirmed, agi)
+        return Part("1z", "Wages", wages + care, READY if certain else ESTIMATE, [f.get("file", "") for f in w2s],
+                    {"box 1": wages, "taxable dependent care": care} if care else {})
     if stub := estimates.latest_stub(forms, year):
         wages = paystub.from_json(stub).projected_wages()
         if wages is not None:
@@ -164,14 +202,15 @@ def _schedule_1(rental: dict | None, passive: dict | None, faces: list[dict], ag
 
 def build(year: int, *, forms: list[dict], k1s: list[dict], returns: list[dict], filing: str = "",
           rental: dict | None = None, found: dict | None = None, sales: dict | None = None,
-          passive: dict | None = None, moves: dict | None = None, year_over: bool = False) -> Agi:
+          passive: dict | None = None, moves: dict | None = None, year_over: bool = False,
+          confirmed: dict | None = None) -> Agi:
     agi = Agi(year)
     filed = next(((r.get("f1040") or {}).get("lines", {}) for r in returns
                   if r.get("year") == year and r.get("f1040")), {})
     faces = qbi.faces(k1s, year)
     divs = _year_forms(forms, year, "1099-DIV")
     agi.parts = [
-        _wages(year, forms, filed),
+        _wages(year, forms, filed, filing, confirmed or {}, agi),
         _interest(year, forms, faces, found),
         Part("3b", "Ordinary dividends", sum((_box(f, "1a") for f in divs), ZERO)
              + sum((_k1_box(f, "6a") for f in faces), ZERO), READY, [f.get("file", "") for f in divs]),

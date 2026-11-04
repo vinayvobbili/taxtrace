@@ -356,7 +356,9 @@ It checks that box 4 is 6.2% of box 3 and box 6 at least 1.45% of box 5, and ask
 (allocated tips), box 10 (Form 2441), box 11, code W in box 12 (Form 8889), a second state's row, and a corrected W-2c.
 
 The entry sheet shows the W-2's boxes in place of the pay stub's estimate, `agi` uses box 1 for wages, and `d400` uses
-box 17 for the state tax withheld. The tests read the words of the IRS's own page with made-up values printed on it
+box 17 for the state tax withheld. Box 10's dependent care benefits follow Form 2441: what's excluded is the smallest of
+the benefits, the care expenses, each spouse's earned income and the year's limit, and the rest is wages on line 1e, so
+a joint return with no earned income for the spouse excludes nothing (`agi --confirm care_expenses= spouse_earned=`). The tests read the words of the IRS's own page with made-up values printed on it
 (`scripts/make-w2-fixture`).
 
 ## Form 1098

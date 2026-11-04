@@ -118,6 +118,20 @@ def test_a_payroll_companys_shorter_labels_and_values_beside_them(tmp_path: Path
     assert f.failed == []
 
 
+def test_a_ssn_beside_the_employers_name_and_an_ein_with_no_dash(tmp_path: Path):
+    copy = [
+        (14, 9, "Form W-2 Wage and Tax Statement 2026"),
+        (268, 18, "Employer identification number EIN"), (268, 26, "771234567"), (19, 26, "00000000042"),
+        (29, 36, "Employer's name, address and ZIP code"), (268, 36, "Employee's social security number"),
+        (383, 36, "1"), (392, 36, "Wages, tips, other compensation"),
+        (498, 36, "2"), (507, 36, "Federal income tax withheld"),
+        (29, 43, "Globex Staffing"), (268, 43, "123-45-9921"), (383, 43, "60000.00"), (498, 43, "5000.00"),
+    ]
+    f = read(draw(tmp_path / "w2.pdf", [copy]))[0]
+    assert (f.employer, f.ein, f.employee) == ("Globex Staffing", "77-1234567", "9921")
+    assert "123-45" not in json.dumps(f.to_json())
+
+
 def test_four_copies_on_a_page_are_one_form(tmp_path: Path):
     page = payroll_copy() + payroll_copy(x=300) + payroll_copy(top=380) + payroll_copy(x=300, top=380)
     found = read(draw(tmp_path / "w2.pdf", [page]))
@@ -193,6 +207,48 @@ def test_the_command_says_when_it_finds_none(workspace_home, tmp_path: Path, cap
     path = draw(tmp_path / "other.pdf", [[(40, 40, "Not a tax form")]])
     assert cli.main(["w2", str(path)]) == 0
     assert "no W-2s found" in printed(capsys)
+
+
+def care_w2(employee: str = "4410", wages: str = "100000", care: str = "5000") -> dict:
+    return {"form": "W-2", "file": f"{employee}.pdf", "year": 2026, "employee": employee,
+            "amounts": {"1": {"amount": wages}, **({"10": {"amount": care}} if care else {})}}
+
+
+def wages_line(*w2s: dict, filing: str = "joint", **confirmed: str) -> agi.Part:
+    return agi.build(2026, forms=list(w2s), k1s=[], returns=[], filing=filing, confirmed=confirmed).line("1z")
+
+
+def test_box_10_is_all_taxed_on_a_joint_return_with_no_earned_income_for_the_spouse():
+    part = wages_line(care_w2())
+    assert (part.amount, part.status) == (Decimal(105000), agi.READY)
+
+
+def test_box_10_is_excluded_up_to_the_spouses_earned_income_and_the_expenses():
+    both = (care_w2(), care_w2("9921", "30000", ""))
+    assert wages_line(*both, care_expenses="4000").amount == Decimal(131000)  # the expenses
+    assert wages_line(*both, care_expenses="9000").amount == Decimal(130000)  # all of it
+    assert wages_line(care_w2(), spouse_earned="1200", care_expenses="4000").amount == Decimal(103800)
+
+
+def test_box_10_without_the_expenses_is_an_estimate_that_asks():
+    built = agi.build(2026, forms=[care_w2(), care_w2("9921", "30000", "")], k1s=[], returns=[], filing="joint")
+    assert built.line("1z").status == agi.ESTIMATE
+    assert any("care_expenses" in q for q in built.questions)
+
+
+def test_box_10_for_a_single_filer_needs_no_spouses_income():
+    assert wages_line(care_w2(), filing="single", care_expenses="9000").amount == Decimal(100000)
+
+
+def test_the_limit_is_the_years():
+    both = (care_w2(care="9000"), care_w2("9921", "30000", ""))
+    assert wages_line(*both, care_expenses="9000").amount == Decimal(131500)  # 7,500 of it excluded in 2026
+
+
+def test_the_command_keeps_a_confirmed_amount(workspace_home, capsys):
+    assert cli.main(["agi", "--year", "2026", "--confirm", "care_expenses=4,000"]) in (0, 1)
+    assert json.loads((workspace_home / "agi" / "2026-confirmed.json").read_text()) == {"care_expenses": "4000"}
+    assert cli.main(["agi", "--year", "2026", "--confirm", "nonsense=1"]) == 2
 
 
 def saved_form(tmp_path: Path) -> dict:

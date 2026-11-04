@@ -36,6 +36,9 @@ BOX_12 = re.compile(r"^12[a-dA-D](?![a-z])")  # a tight form glues the number to
 NUMBER = re.compile(r"^\d{1,2}(?=[a-z])")  # the same glue, once squeezed: "10dependent"
 CODE = re.compile(r"^[A-HJ-NP-Z]{1,2}$")  # box 12's codes: letters, without I and O
 STATE = re.compile(r"^[A-Z]{2}$")
+PLAIN_EIN = re.compile(r"^\d{2}-?\d{7}$")
+NAME_GAP = 30.0  # points: words further apart than this aren't one name
+EIN_DOWN, EIN_LEFT, EIN_RIGHT = 20.0, 50.0, 70.0  # points: where an EIN sits around its label's "identification"
 ROW = 3.0  # points: labels this close in height are on one row
 NEAR_ROW = 14.0  # points: a label this close in height, to the right, still ends a box's column
 LEFT = 13.0  # points: a box's number, and an amount under it, can start this far left of its label's words
@@ -198,8 +201,30 @@ def form(name: str, page: int, words: list[dict]) -> W2 | None:
     return f
 
 
+def _name(row: list[dict]) -> str:
+    """The employer's name: a form can print the employee's Social Security number further along the same row."""
+    kept: list[dict] = []
+    for word in row:
+        if TIN.match(word["text"]) or (kept and word["x0"] - kept[-1]["x1"] > NAME_GAP):
+            break
+        kept.append(word)
+    return " ".join(w["text"] for w in kept)
+
+
+def _ein(words: list[dict]) -> str:
+    """The number under the "identification number" label, which a payroll company can print without its dash."""
+    label = next((w for w in words if w["text"].lower().startswith("identification")), None)
+    if label:
+        under = [w for w in words if label["top"] + ROW < w["top"] < label["top"] + EIN_DOWN
+                 and label["x0"] - EIN_LEFT <= w["x0"] < label["x0"] + EIN_RIGHT and PLAIN_EIN.match(w["text"])]
+        if under:
+            digits = under[0]["text"].replace("-", "")
+            return f"{digits[:2]}-{digits[2:]}"
+    return next((w["text"] for w in words if EIN.match(w["text"])), "")
+
+
 def _fields(f: W2, rows: list[list[dict]], words: list[dict], first: dict[str, Place]) -> None:
-    f.ein = next((w["text"] for w in words if EIN.match(w["text"])), "")
+    f.ein = _ein(words)
     f.employee = next((m.group(1) for w in words if (m := TIN.match(w["text"]))), "")
     for row in rows:  # the year sits on the form's title row, or just by it
         if "wage" in _squeezed(" ".join(w["text"] for w in row)) and "statement" in _squeezed(
@@ -215,7 +240,7 @@ def _fields(f: W2, rows: list[list[dict]], words: list[dict], first: dict[str, P
         boxes = min((p.x0 for p in first.values() if abs(p.top - heading[0]["top"]) <= ROW), default=612.0) - LEFT
         lines = _rows([w for w in words if heading[0]["top"] + ROW < w["top"] < heading[0]["top"] + 50
                        and left - LEFT <= w["x0"] < boxes], 1.5)
-        f.employer = " ".join(w["text"] for w in lines[0]) if lines else ""
+        f.employer = _name(lines[0]) if lines else ""
     if "16" in first:
         beside = [w for w in words if first["16"].top + ROW < w["top"] < first["16"].top + 40
                   and w["x0"] < first["16"].x0 and STATE.match(w["text"])]

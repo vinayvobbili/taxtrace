@@ -1710,7 +1710,9 @@ def _federal_agi(home: Path, year: int):
         path = home / folder / f"{year}.json"
         return json.loads(path.read_text()) if path.exists() else None
 
+    kept = home / workspace.AGI / f"{year}-confirmed.json"
     return agi.build(year, forms=_forms(home), k1s=_k1s(home), returns=_returns(home), filing=_filing(home, year),
+                     confirmed=json.loads(kept.read_text()) if kept.exists() else {},
                      rental=saved(workspace.SCHEDULE_E), found=saved(workspace.FOREIGN), sales=saved(workspace.SALES),
                      passive=saved(workspace.PASSIVE), moves=saved(workspace.MOVES),
                      year_over=date.today().year > year)
@@ -1723,8 +1725,21 @@ def cmd_agi(args: argparse.Namespace) -> int:
     What's printed is masked: each line's status, and how a filed year compares: which way and roughly how far, never
     an amount. Exits 1 when a line differs from the filed return's.
     """
+    from . import agi
+
     terms = workspace.redact_terms()
     home = workspace.outside_git(workspace.home())
+    if args.confirm:
+        kept = home / workspace.AGI / f"{args.year}-confirmed.json"
+        confirmed = json.loads(kept.read_text()) if kept.exists() else {}
+        for spec in args.confirm:
+            key, _, value = spec.partition("=")
+            if key not in agi.CARE_KEYS or not value:
+                print(f"--confirm takes {'=AMOUNT or '.join(agi.CARE_KEYS)}=AMOUNT", file=sys.stderr)
+                return 2
+            confirmed[key] = value.replace(",", "")
+        kept.parent.mkdir(parents=True, exist_ok=True)
+        kept.write_text(json.dumps(confirmed, indent=2) + "\n")
     found = _federal_agi(home, args.year)
     print(f"{args.year} federal adjusted gross income: "
           + (found.status if found.total is not None else "not complete yet"))
@@ -2308,6 +2323,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("agi", help="a year's federal adjusted gross income, against the filed return when there is one",
                        description=cmd_agi.__doc__)
     p.add_argument("--year", type=int, required=True, help="the tax year")
+    p.add_argument("--confirm", action="append", default=[], metavar="KEY=AMOUNT",
+                   help="for box 10's dependent care benefits: care_expenses=AMOUNT, spouse_earned=AMOUNT")
     p.set_defaults(func=cmd_agi)
     p = sub.add_parser("d400", help="North Carolina's Form D-400 for a year, with Schedules S and A",
                        description=cmd_d400.__doc__)

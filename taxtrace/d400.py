@@ -273,12 +273,15 @@ def compare(form: Form, filed: dict[str, Decimal], *, confirmed: dict | None = N
     confirm that wasn't given for this year, or the payments while no W-2 has been read."""
     confirmed = confirmed or {}
     checks, untested = [], []
+    unpaid = any(filed.get(n) and INPUTS[n] not in confirmed for n in ("21a", "21b"))  # payments the build wasn't given
     for line in form.lines:
         theirs = filed.get("20a", ZERO) + filed.get("20b", ZERO) if line.line == "20" else filed.get(line.line, ZERO)
         if line.amount is not None and not line.amount and not theirs:
             untested.append(f"line {line.line}: nothing on either side")
         elif line.line in INPUTS and INPUTS[line.line] not in confirmed:
             untested.append(f"line {line.line}: an amount you confirm, not given for {form.year}")
+        elif line.line in PAID and line.line != "20" and unpaid:
+            untested.append(f"line {line.line}: depends on a payment you confirm, not given for {form.year}")
         elif line.line in PAID and not has_w2:
             untested.append(f"line {line.line}: no W-2 has been read")
         else:
