@@ -105,6 +105,23 @@ def test_form_1116_carries_in_the_regular_carryover_and_not_the_amts():
     assert build(W2, DIV, found=found).form_1116["10"] == Decimal(300)
 
 
+def test_a_funds_foreign_tax_counts_on_form_1116_and_asks_for_its_income():
+    fund = {**DIV, "amounts": {**DIV["amounts"], "7": {"amount": "40"}}}
+    found = {"sales": [], "interest": "10000", "carryovers": [], "taxes": []}
+    form = build(W2, fund, found=found)
+    assert form.form_1116["9"] == Decimal(40)
+    assert any("1099-DIV box 7" in q for q in form.questions)
+
+
+def test_a_filed_tax_abroad_shows_as_a_rate_and_never_an_amount():
+    found = {"taxes": [{"kept": {"amount": "434000", "rate": {"rate": "86.8000"}}}]}
+    note = tax.tax_abroad_note(found, {"dated_tax": Decimal(5000)})
+    assert note == ("Form 1116 Part II, the tax abroad: the filed amount works out to 86.80 to the dollar; "
+                    "taxtrace used 86.80")
+    assert tax.tax_abroad_note(found, {}) is None
+    assert tax.tax_abroad_note(None, {"dated_tax": Decimal(5000)}) is None
+
+
 def test_no_foreign_side_is_no_credit():
     assert build(W2, DIV).amount("20") == 0
 
@@ -268,6 +285,7 @@ F1116_P1 = ["Foreign Tax Credit",
             "e Gross income from all sources (see instructions) ... 250,000 250,000 250,000",
             "g Multiply line 3c by line 3f .............. 39 2,000",
             "A 12 14",
+            "B 03-15-2025    1,500    1,500",
             "7 Subtract line 6 from line 1a. Enter the result here and on line 15, page 2.............. 7 18,000",
             "8 Add lines A through C, column (u). Enter the total here and on line 9, page 2 ................ 8 1,500"]
 F1116_P2 = ["Form 1116 (2025)     Page2",
@@ -300,6 +318,7 @@ def test_a_date_row_on_page_1_isnt_a_line_and_a_stray_letter_doesnt_hide_one(tmp
     assert forms.form_1116.line("3e") == Decimal(250000)  # in each column
     assert forms.form_1116.line("3d") == Decimal(20000)  # its number garbled in the print, as line 3g's
     assert forms.form_1116.line("3g") == Decimal(2000)
+    assert forms.form_1116.line("dated_tax") == Decimal(1500)
 
 
 def test_the_command_compares_and_masks(workspace_home, capsys):

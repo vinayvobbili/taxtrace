@@ -64,8 +64,7 @@ Early. What works today:
 - `taxtrace d400`: North Carolina's Form D-400 with Schedules S and A (see [Form D-400](#form-d-400)).
 - `taxtrace w2`: reads Form W-2s into the entry sheet, `agi` and `d400` (see [Form W-2](#form-w-2)).
 - `taxtrace tax`: Form 1040's lines 12e to 24 with Form 1116's credit (see [Total tax](#total-tax)).
-
-Planned: a year-over-year check.
+- `taxtrace yoy`: a year against the one before (see [Year over year](#year-over-year)).
 
 ## Install
 
@@ -624,6 +623,17 @@ or single return.
 The alternative minimum tax isn't worked out, and the output says so. For a filed year, `tax` compares each line and also
 works each rule from the filed form's own inputs (lines 15, 16, 19 and 23, and Form 1116's 1a, 3g, 18 and 21), so a wrong
 rule shows up apart from an income line that differs. Each comparison says which way and roughly how far, never an amount.
+
+## Year over year
+
+`taxtrace yoy --year 2026` writes `yoy/2026.txt`, the look a preparer takes before signing:
+
+- Every W-2, 1098, 1099 and K-1 from last year that hasn't come this year, matched by tax ID so a payer's new name doesn't
+  count as missing. A K-1 marked final isn't expected again. Foreign accounts need their statements again too.
+- How far each Form 1040 line moved from last year's filed return, in words: about the same under 10%, up or down 10% to
+  50%, up or down more than 50%, new or gone.
+
+It exits 1 while a document is missing, and it prints no amounts; the sheet holds them.
 
 ## Form D-400
 

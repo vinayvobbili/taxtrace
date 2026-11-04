@@ -218,15 +218,36 @@ def gross_income(agi: Agi, rental: dict | None) -> Decimal:
     return others + rents + max(ZERO, schedule_1 - net_rent)
 
 
+def _fund_tax(forms: list[dict], year: int) -> Decimal:
+    """Foreign tax a fund paid: 1099-DIV's box 7."""
+    return sum((_dollars((f.get("amounts", {}).get("7") or {}).get("amount")) for f in forms
+                if f.get("form") == "1099-DIV" and f.get("year") == year and f.get("copy_of") is None), ZERO)
+
+
+def tax_abroad_note(found: dict | None, filed_1116: dict[str, Decimal]) -> str | None:
+    """What a filed tax abroad comes to as an exchange rate, beside the one taxtrace used: a rate, never an amount."""
+    taxes = [t["kept"] for t in (found or {}).get("taxes", []) if t.get("kept")]
+    filed = filed_1116.get("dated_tax")
+    if len(taxes) != 1 or not filed:
+        return None
+    worked = _dollars(taxes[0].get("amount")) / filed
+    return (f"Form 1116 Part II, the tax abroad: the filed amount works out to {worked:.2f} to the dollar; "
+            f"taxtrace used {_dollars((taxes[0].get('rate') or {}).get('rate')):.2f}")
+
+
 def _foreign(form: Form, found: dict | None, agi: Agi, deduction: Decimal, tax: Decimal, preferred: Decimal,
-             rental: dict | None = None) -> Decimal:
+             rental: dict | None = None, forms: list[dict] | None = None) -> Decimal:
     """Form 1116, passive category, as this return has it: its lines by number; the credit is line 35."""
-    if not found:
+    if found is None:
         return ZERO
     gain = sum((_dollars(s.get("gain")) for s in found.get("sales", [])), ZERO)
     gross = gain + _dollars(found.get("interest"))
-    taxes = sum((_dollars((t.get("kept") or {}).get("dollars")) for t in found.get("taxes", [])
-                 if t.get("category", "passive") == "passive"), ZERO)
+    fund_tax = _fund_tax(forms or [], form.year)
+    if fund_tax:
+        form.questions.append("Form 1116 line 1a: a fund paid foreign tax (1099-DIV box 7), and its foreign dividends "
+                              "come from the fund's year-end tax statement: they aren't counted yet")
+    taxes = fund_tax + sum((_dollars((t.get("kept") or {}).get("dollars")) for t in found.get("taxes", [])
+                            if t.get("category", "passive") == "passive"), ZERO)
     carried = sum((_dollars(v) for c in found.get("carryovers", []) if c.get("category") == "passive"
                    and not c.get("amt") for v in c.get("years", {}).values()), ZERO)
     if not gross and not taxes and not carried:
@@ -291,7 +312,7 @@ def build(year: int, *, agi: Agi, forms: list[dict], k1s: list[dict], filing: st
     if "children" not in confirmed:
         form.questions.append("line 19: how many children got the child tax credit (`d400 --confirm children=N`)")
     credit_children = min(tax, child_credit(children, federal, filing))
-    foreign_credit = _foreign(form, found, agi, deduction, tax, preferred, rental)
+    foreign_credit = _foreign(form, found, agi, deduction, tax, preferred, rental, forms)
     foreign_credit = min(foreign_credit, tax - credit_children)
     line_22 = tax - credit_children - foreign_credit
     other = other_taxes(_medicare_wages(forms, year), sum((p.amount or ZERO for p in agi.parts if p.line in INVESTMENT),

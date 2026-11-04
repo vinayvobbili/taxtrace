@@ -1820,6 +1820,58 @@ def cmd_d400(args: argparse.Namespace) -> int:
     return 1 if bad else 0
 
 
+def _year_file(home: Path, folder: str, year: int) -> dict | None:
+    path = home / folder / f"{year}.json"
+    return json.loads(path.read_text()) if path.exists() else None
+
+
+def _tax_form(home: Path, year: int):
+    """The year's Form 1040 lines 12e to 24, from what the other commands saved."""
+    from . import tax
+
+    kept = home / workspace.D400 / f"{year}-confirmed.json"
+    return tax.build(year, agi=_federal_agi(home, year), forms=_forms(home), k1s=_k1s(home), filing=_filing(home, year),
+                     found=_year_file(home,workspace.FOREIGN, year), sales=_year_file(home,workspace.SALES, year),
+                     rental=_year_file(home,workspace.SCHEDULE_E, year), qbi=_year_file(home,workspace.QBI, year),
+                     confirmed=json.loads(kept.read_text()) if kept.exists() else {})
+
+
+def cmd_yoy(args: argparse.Namespace) -> int:
+    """A year against the one before, into <workspace>/yoy/<year>.txt: last year's W-2s, 1098s, 1099s, K-1s and foreign
+    accounts that haven't come this year, and how far Form 1040's lines moved from last year's filed return.
+
+    What's printed is masked: each document's status, and each line's move in words, never an amount. Exits 1 while a
+    document is missing.
+    """
+    from . import agi, yoy
+
+    home = workspace.outside_git(workspace.home())
+    terms = workspace.redact_terms()
+    income, form = _federal_agi(home, args.year), _tax_form(home, args.year)
+    built = [(p.line, p.what, p.amount) for p in income.parts]
+    built += [(n.line, n.what, n.amount) for n in form.lines]
+    if not any(line == "11" for line, _, _ in built):
+        built.append(("11", "Adjusted gross income", income.total))
+    filed = agi.filed_lines(_returns(home), args.year - 1, "f1040")
+    check = yoy.build(args.year, forms=_forms(home), k1s=_k1s(home), built=built, filed=filed,
+                      found_now=_year_file(home,workspace.FOREIGN, args.year),
+                      found_then=_year_file(home,workspace.FOREIGN, args.year - 1))
+    print(f"{args.year} against {args.year - 1}")
+    for d in check.documents:
+        print(f"  {d.status}: {d.form}, {redact.redact(d.name, terms).text.strip()}")
+    if filed:
+        for m in check.lines:  # a line's number, its label and words, never an amount
+            print(f"  line {m.line}, {m.what}: {m.words}")
+    else:
+        print(f"  no filed {args.year - 1} return, so no lines to compare (`taxtrace prior`)")
+    out = home / workspace.YOY
+    out.mkdir(parents=True, exist_ok=True)
+    (out / f"{args.year}.json").write_text(json.dumps(check.to_json(), indent=2, default=str) + "\n")
+    (out / f"{args.year}.txt").write_text(yoy.to_text(check))
+    print(f"wrote to {out / f'{args.year}.txt'}")
+    return 1 if check.missing else 0
+
+
 def cmd_tax(args: argparse.Namespace) -> int:
     """Form 1040's lines 12e to 24 for a year, with Form 1116's credit, into <workspace>/tax/<year>.txt: from `agi`,
     `qbi`, `foreign`, `sales`, and what `d400 --confirm` keeps (children, property tax, charity, medical).
@@ -1831,17 +1883,14 @@ def cmd_tax(args: argparse.Namespace) -> int:
 
     home = workspace.outside_git(workspace.home())
     terms = workspace.redact_terms()
-
-    def saved(folder: str) -> dict | None:
-        path = home / folder / f"{args.year}.json"
-        return json.loads(path.read_text()) if path.exists() else None
-
     kept = home / workspace.D400 / f"{args.year}-confirmed.json"
     confirmed = json.loads(kept.read_text()) if kept.exists() else {}
     filing = _filing(home, args.year)
-    form = tax.build(args.year, agi=_federal_agi(home, args.year), forms=_forms(home), k1s=_k1s(home), filing=filing,
-                     found=saved(workspace.FOREIGN), sales=saved(workspace.SALES), rental=saved(workspace.SCHEDULE_E),
-                     qbi=saved(workspace.QBI), confirmed=confirmed)
+
+    def saved(folder: str) -> dict | None:
+        return _year_file(home,folder, args.year)
+
+    form = _tax_form(home, args.year)
     print(f"{args.year} Form 1040, lines 11 to 24: the {form.deduction or '?'} deduction on line 12e")
     if form.deduction:
         print(f"  {tax.schedule_a_words(form.room)}")
@@ -1862,6 +1911,8 @@ def cmd_tax(args: argparse.Namespace) -> int:
             print(f"  {'matches' if c.ok else 'differs'}: {c.what}")
         for line in untested:
             print(f"  not tested: {line}")
+        if note := tax.tax_abroad_note(saved(workspace.FOREIGN), agi.filed_lines(returns, args.year, "form_1116")):
+            print(f"  {note}")
     for q in form.questions:
         print(f"  question: {redact.redact(q, terms).text.strip()}")
     out = home / workspace.TAX
@@ -2378,6 +2429,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--confirm", action="append", default=[], metavar="KEY=AMOUNT",
                    help="for box 10's dependent care benefits: care_expenses=AMOUNT, spouse_earned=AMOUNT")
     p.set_defaults(func=cmd_agi)
+    p = sub.add_parser("yoy", help="a year against the one before: documents that haven't come, lines that moved",
+                       description=cmd_yoy.__doc__)
+    p.add_argument("--year", type=int, required=True, help="the tax year")
+    p.set_defaults(func=cmd_yoy)
     p = sub.add_parser("tax", help="a year's Form 1040 lines 12e to 24 and Form 1116's credit, against a filed return",
                        description=cmd_tax.__doc__)
     p.add_argument("--year", type=int, required=True, help="the tax year")

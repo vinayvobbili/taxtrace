@@ -35,6 +35,7 @@ F1116_PAGE_1 = ("1a", "7")
 F1116_PAGE_2 = ("9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "20", "21", "23", "24", "32", "33", "34",
                 "35")
 LINE_1116 = re.compile(rf"(?<![\d,.])(?P<no>\d{{1,2}}[a-z]?)\s+(?P<amount>{AMOUNT})\s*$")  # also "y15 18,000"
+DATED_TAX = re.compile(rf"^\s*[A-C]\s+\d\d?-\d\d?-\d{{4}}\b.*?(?P<amount>{AMOUNT})\s*$")  # Part II's row, column (u)
 # by their words, since a print can garble these numbers and line 3e has an amount in each column
 F1116_LABELS = {no: re.compile(rf"{words}.*?(?P<amount>{AMOUNT})\s*$", re.I) for no, words in (
     ("3d", "gross foreign source income"), ("3e", "gross income from all sources"), ("3g", "multiply line 3c by"))}
@@ -111,6 +112,8 @@ def _form_1116(pages: list[str]) -> Schedule | None:
             for no, label in F1116_LABELS.items():
                 if wanted is F1116_PAGE_1 and (m := label.search(row)):
                     found.lines.setdefault(no, _amount(m.group("amount")))
+            if wanted is F1116_PAGE_1 and (m := DATED_TAX.search(row)):
+                found.lines.setdefault("dated_tax", _amount(m.group("amount")))
             if (m := LINE_1116.search(row)) and m.group("no") in wanted:
                 found.lines.setdefault(m.group("no"), _amount(m.group("amount")))
     return found if found.pages else None
