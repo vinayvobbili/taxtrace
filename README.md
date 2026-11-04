@@ -560,6 +560,11 @@ The sheet can be built at any time and only gets more complete, so run it again 
 that read them. It also lists what's still to come, by comparing the year's forms with last year's (a K-1 or 1099 that
 came last year and hasn't yet, unless that K-1 was marked final), and gathers every question the other commands left open.
 
+That comparison can't know about anything new this year, like a new brokerage account or partnership. Add those with
+`--expect 1099=5678` or `--expect "1098=Acme Mortgage"` (words of the form's payer, lender, partnership, account or file
+name; K-1 and W-2 work too), and each stays on the list until its form is read. Before filing, check your forms against
+every account and investment you held: an empty list doesn't mean you have everything.
+
 Names, Social Security numbers, birth dates, IP PINs and bank numbers never appear: you type those yourself. An IRA's K-1
 isn't entered, since its items stay in the account. If Form 1116 has a carryover, check that your filing site takes
 Schedule B (Form 1116) before relying on e-filing: not every one does.

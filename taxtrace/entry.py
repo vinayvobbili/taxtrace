@@ -27,6 +27,10 @@ YOURSELF = ("Type these yourself, they aren't on this sheet: names, Social Secur
             "IP PINs and your bank's numbers.")
 SCHEDULE_B_1116 = ("A carryover needs Schedule B (Form 1116): check that the filing site takes it before relying on "
                    "e-filing. If it can't, the return can still be mailed.")
+COMING_NOTE = ("This list holds only what came last year and what `--expect` added, so anything new this year isn't on "
+               "it unless you add it. Before filing, check your forms against every account and investment you held.")
+EXPECTS = {"1098": ("1098",), "1099": ("1099-INT", "1099-DIV", "1099-B"), "K-1": (), "W-2": ("W-2",)}
+IDENTIFIERS = ("lender", "lender_tin", "payer_tin", "account", "partnership", "ein", "file")
 
 
 @dataclass
@@ -64,6 +68,27 @@ class Sheet:
         return asdict(self)
 
 
+def expectation(spec: str) -> str:
+    """'1098=Acme Mortgage', '1099=5678', 'K-1=Umbrella': a form to wait for, by words of its payer, account or file."""
+    kind, sep, words = (s.strip() for s in spec.partition("="))
+    if not sep or not words or kind.upper() not in EXPECTS:
+        raise ValueError(f"--expect takes KIND=WORDS, with KIND one of {', '.join(EXPECTS)}: words of the form's "
+                         "payer, lender, partnership, account or file name")
+    return f"{kind.upper()}={words}"
+
+
+def _plain(text: str) -> str:
+    return text.lower().replace("-", "").replace(" ", "")
+
+
+def _arrived(spec: str, year: int, forms: list[dict], k1s: list[dict]) -> bool:
+    """Whether a form of the kind expected has been read for the year, with the words in one of its identifiers."""
+    kind, _, words = spec.partition("=")
+    rows = qbi.faces(k1s, year) if kind == "K-1" else [f for f in forms if f.get("form") in EXPECTS[kind]
+                                                       and f.get("year") == year]
+    return any(_plain(words) in _plain(str(f.get(key) or "")) for f in rows for key in IDENTIFIERS)
+
+
 def money(value: object) -> str:
     """A Decimal, or a string that is one, as "1,234.50"; anything else as it is."""
     if isinstance(value, Decimal):
@@ -83,9 +108,10 @@ def _where(saved: dict, page: object = None) -> str:
 def build(year: int, *, forms: list[dict], k1s: list[dict], returns: list[dict], filing: str = "",
           rental: dict | None = None, found: dict | None = None, sales: dict | None = None,
           passive: dict | None = None, form_8995: dict | None = None, plan: dict | None = None,
-          moves: dict | None = None, today: date | None = None) -> Sheet:
+          moves: dict | None = None, today: date | None = None, expected: list[str] | None = None) -> Sheet:
     """The year's sheet from what the other commands saved: `forms` and `k1s` hold every year's, the rest are the
-    year's own (`rental`, `foreign`, `sales`, `passive`, `qbi`, `estimates` and `moves`), None when not run yet."""
+    year's own (`rental`, `foreign`, `sales`, `passive`, `qbi`, `estimates` and `moves`), None when not run yet.
+    `expected` is the forms the person said to wait for (`expectation`), new this year or otherwise."""
     today = today or date.today()
     sheet = Sheet(year)
     done = today.year > year
@@ -104,6 +130,8 @@ def build(year: int, *, forms: list[dict], k1s: list[dict], returns: list[dict],
     sheet.sections.append(_payments(plan))
     sheet.sections.append(_north_carolina(k1s, year))
     sheet.coming = _coming(year, forms, k1s, found)
+    sheet.coming += [f"{spec.replace('=', ': ', 1)} (you said to expect it)" for spec in expected or []
+                     if not _arrived(spec, year, forms, k1s)]
     sheet.questions = _questions(rental=rental, foreign=found, sales=sales, passive=passive, qbi=form_8995)
     return sheet
 
@@ -428,8 +456,7 @@ def to_text(sheet: Sheet) -> str:
         if not section.rows:
             lines.append("  nothing for this year so far")
         lines.append("")
-    if sheet.coming:
-        lines += ["## Still to come", *(f"  {c}" for c in sheet.coming), ""]
+    lines += ["## Still to come", f"  ({COMING_NOTE})", *(f"  {c}" for c in sheet.coming), ""]
     if sheet.questions:
         lines += ["## Questions still open", *(f"  {q}" for q in sheet.questions), ""]
     return "\n".join(lines).rstrip() + "\n"

@@ -1661,10 +1661,21 @@ def cmd_entry(args: argparse.Namespace) -> int:
         path = home / folder / f"{args.year}.json"
         return json.loads(path.read_text()) if path.exists() else None
 
+    out = home / workspace.ENTRY
+    kept = out / f"{args.year}-expected.json"  # the forms said to wait for stay on the list until they're read
+    expected = json.loads(kept.read_text()) if kept.exists() else []
+    try:
+        expected += [e for e in map(entry.expectation, args.expect) if e not in expected]
+    except ValueError as err:
+        print(err, file=sys.stderr)
+        return 2
+    out.mkdir(parents=True, exist_ok=True)
+    if args.expect:
+        kept.write_text(json.dumps(expected, indent=2) + "\n")
     k1_folder = home / workspace.K1
     k1s = [row for p in sorted(k1_folder.glob("*.json")) for rows in [json.loads(p.read_text())]
            for row in (rows if isinstance(rows, list) else [rows])] if k1_folder.exists() else []
-    sheet = entry.build(args.year, forms=_forms(home), k1s=k1s, returns=_returns(home),
+    sheet = entry.build(args.year, forms=_forms(home), k1s=k1s, returns=_returns(home), expected=expected,
                         filing=_filing(home, args.year), rental=saved(workspace.SCHEDULE_E),
                         found=saved(workspace.FOREIGN), sales=saved(workspace.SALES),
                         passive=saved(workspace.PASSIVE), form_8995=saved(workspace.QBI),
@@ -1678,10 +1689,9 @@ def cmd_entry(args: argparse.Namespace) -> int:
         print(f"  {masked(section.title)}: {', '.join(counts) or 'nothing yet'}")
     for item in sheet.coming:
         print(f"  still to come: {masked(item)}")
+    print(f"  {entry.COMING_NOTE}")
     for question in sheet.questions:
         print(f"  question: {masked(question)}")
-    out = home / workspace.ENTRY
-    out.mkdir(parents=True, exist_ok=True)
     (out / f"{args.year}.json").write_text(json.dumps(sheet.to_json(), indent=2) + "\n")
     (out / f"{args.year}.txt").write_text(entry.to_text(sheet))
     print(f"wrote to {out / f'{args.year}.txt'}")
@@ -2131,6 +2141,9 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("entry", help="a year's entry sheet: what the return asks for, to type into a filing site",
                        description=cmd_entry.__doc__)
     p.add_argument("--year", type=int, required=True, help="the tax year")
+    p.add_argument("--expect", action="append", default=[], metavar="KIND=WORDS",
+                   help="a form to wait for that last year's forms don't show: 1098=Acme Mortgage, 1099=5678 (words of "
+                        "its payer, lender, partnership, account or file name; K-1 and W-2 too). Kept until it's read")
     p.set_defaults(func=cmd_entry)
     p = sub.add_parser("passive", help="each passive activity's year, from the saved returns and K-1s",
                        description=cmd_passive.__doc__)

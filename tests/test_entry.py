@@ -6,6 +6,7 @@ import json
 from datetime import date
 from pathlib import Path
 
+import pytest
 from conftest import printed
 
 from taxtrace import cli, entry
@@ -206,6 +207,34 @@ def test_whats_still_to_come_is_last_years_forms_not_yet_here():
     assert any("3301: 2026-10-01 to 2026-12-31" in c for c in coming)
 
 
+def test_a_form_new_this_year_is_on_the_list_only_when_expected_until_its_read():
+    expected = ["1098=Initrode Loans", "1099=9-9-9", "K-1=Dunder", "1099=A77"]
+    coming = full(expected=expected).coming
+    assert "1098: Initrode Loans (you said to expect it)" in coming
+    assert "1099: 9-9-9 (you said to expect it)" in coming
+    assert "K-1: Dunder (you said to expect it)" in coming
+    assert not any("A77 (you said" in c for c in coming)  # that account's 1099 has been read
+    read = {**INT, "account": "99-9", "payer_tin": "33-3333333"}
+    assert not any("9-9-9" in c for c in full(forms=[read], expected=["1099=999"]).coming)  # dashes don't matter
+
+
+def test_a_form_expected_of_another_kind_or_year_hasnt_arrived():
+    assert any("A77" in c for c in full(expected=["1098=A77"]).coming)  # the account's 1099s aren't a 1098
+    assert any("Z11" in c for c in full(forms=[LAST_DIV], expected=["1099=Z11"]).coming)  # last year's copy
+
+
+def test_expect_takes_a_known_kind_and_words():
+    assert entry.expectation("k-1 = Umbrella Lofts") == "K-1=Umbrella Lofts"
+    for bad in ("Umbrella", "1098=", "1040=Acme"):
+        with pytest.raises(ValueError):
+            entry.expectation(bad)
+
+
+def test_the_sheet_always_says_the_list_isnt_everything():
+    assert entry.COMING_NOTE in entry.to_text(entry.build(2026, forms=[{"form": "W-2", "year": 2026}], k1s=[],
+                                                          returns=[], today=date(2026, 11, 4))).replace("\n", " ")
+
+
 def test_a_w2_read_is_no_longer_coming():
     assert "Form W-2" not in full(forms=[{"form": "W-2", "year": 2026}]).coming
 
@@ -266,6 +295,17 @@ def test_an_accounts_last_digits_that_look_like_a_year_stay_masked(workspace_hom
     assert cli.main(["entry", "--year", "2026"]) == 0
     assert "1987" not in printed(capsys)
     assert "Statements, account 1987" in (workspace_home / "entry" / "2026.txt").read_text()
+
+
+def test_the_command_keeps_what_to_expect_and_prints_it_masked(workspace_home, capsys):
+    assert cli.main(["entry", "--year", "2026", "--expect", "1098=Initrode Loans", "--expect", "1099=5678"]) == 0
+    first = printed(capsys)
+    assert "Initrode" not in first
+    assert "5678" not in first
+    assert cli.main(["entry", "--year", "2026"]) == 0  # kept for the next run
+    printed(capsys)
+    assert "1098: Initrode Loans" in (workspace_home / "entry" / "2026.txt").read_text()
+    assert cli.main(["entry", "--year", "2026", "--expect", "nonsense"]) == 2
 
 
 def test_the_command_runs_on_an_empty_workspace(workspace_home, capsys):
