@@ -31,10 +31,12 @@ JOBCHANGE = "jobchange"  # the year with a change of job against the year withou
 SALES = "sales"  # the year's stock sales: Schedule D, wash sales, the room left for losses
 MOVES = "moves"  # the year's tax-saving moves, ranked by dollars and deadline
 ENTRY = "entry"  # the year's entry sheet, to type into a filing site
+AGI = "agi"  # the year's federal adjusted gross income, against the filed return when there is one
+D400 = "d400"  # North Carolina's Form D-400 for the year
 TODO = "todo.md"  # the money and tax to-do list, written by hand
 # taxtrace's own files and folders in the workspace, never read back as documents: its output and its settings
 DERIVED = {OCR_CACHE, REDACTED, MANIFEST, TERMS_FILE, CARRYFORWARDS, K1, PASSIVE, FORMS, SCHEDULE_E, FOREIGN, FX, QBI,
-           ESTIMATES, IRA, JOBCHANGE, SALES, MOVES, ENTRY, TODO}
+           ESTIMATES, IRA, JOBCHANGE, SALES, MOVES, ENTRY, AGI, D400, TODO}
 KEYCHAIN_SERVICE = "taxtrace"
 KEYCHAIN_DEFAULT = "default"  # tried after the file's own entry: one password for every return a preparer sends
 

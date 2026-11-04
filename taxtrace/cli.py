@@ -7,6 +7,7 @@ import json
 import re
 import subprocess
 import sys
+from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
@@ -1641,6 +1642,93 @@ def cmd_fbar(args: argparse.Namespace) -> int:
     return 0
 
 
+def _k1s(home: Path) -> list[dict]:
+    """Every K-1 `k1` saved, each year's, the state's and K-3s too."""
+    folder = home / workspace.K1
+    return [row for p in sorted(folder.glob("*.json")) for rows in [json.loads(p.read_text())]
+            for row in (rows if isinstance(rows, list) else [rows])] if folder.exists() else []
+
+
+def _federal_agi(home: Path, year: int):
+    """The year's federal adjusted gross income, from what the other commands saved."""
+    from . import agi
+
+    def saved(folder: str) -> dict | None:
+        path = home / folder / f"{year}.json"
+        return json.loads(path.read_text()) if path.exists() else None
+
+    return agi.build(year, forms=_forms(home), k1s=_k1s(home), returns=_returns(home), filing=_filing(home, year),
+                     rental=saved(workspace.SCHEDULE_E), found=saved(workspace.FOREIGN), sales=saved(workspace.SALES),
+                     passive=saved(workspace.PASSIVE), moves=saved(workspace.MOVES),
+                     year_over=date.today().year > year)
+
+
+def cmd_agi(args: argparse.Namespace) -> int:
+    """A year's federal adjusted gross income, Form 1040's income lines, into <workspace>/agi/<year>.json, from what
+    the other commands saved. A year whose own return was filed and read is compared with it line by line.
+
+    What's printed is masked: each line's status, and how a filed year compares: which way and roughly how far, never
+    an amount. Exits 1 when a line differs from the filed return's.
+    """
+    terms = workspace.redact_terms()
+    home = workspace.outside_git(workspace.home())
+    found = _federal_agi(home, args.year)
+    print(f"{args.year} federal adjusted gross income: "
+          + (found.status if found.total is not None else "not complete yet"))
+    for part in found.parts:
+        print(f"  line {part.line}, {part.what.lower()}: {part.status}")
+    bad = [c for c in found.checks if not c.ok]
+    if found.checks:
+        print(f"  against the filed {args.year} Form 1040: {len(found.checks) - len(bad)} of {len(found.checks)} match")
+    for c in bad:  # built from line numbers and a size's words, never an amount
+        print(f"  differs: {c.what}")
+    for q in found.questions:
+        print(f"  question: {redact.redact(q, terms).text.strip()}")
+    out = home / workspace.AGI
+    out.mkdir(parents=True, exist_ok=True)
+    (out / f"{args.year}.json").write_text(json.dumps(found.to_json(), indent=2, default=str) + "\n")
+    print(f"wrote to {out / f'{args.year}.json'}")
+    return 1 if bad else 0
+
+
+def cmd_d400(args: argparse.Namespace) -> int:
+    """North Carolina's Form D-400 for a year, with Schedules S and A, into <workspace>/d400/<year>.txt, for a
+    full-year resident: from federal adjusted gross income (`agi`), the NC K-1s, the home's 1098, and what's confirmed.
+
+    What's printed is masked: each line's status and which deduction line 11 uses, and what's still to settle.
+    """
+    from . import d400
+
+    home = workspace.outside_git(workspace.home())
+    terms = workspace.redact_terms()
+    out = home / workspace.D400
+    kept = out / f"{args.year}-confirmed.json"
+    confirmed = json.loads(kept.read_text()) if kept.exists() else {}
+    try:
+        confirmed |= dict(map(d400.confirmation, args.confirm))
+    except ValueError as err:
+        print(err, file=sys.stderr)
+        return 2
+    out.mkdir(parents=True, exist_ok=True)
+    if args.confirm:
+        kept.write_text(json.dumps(confirmed, indent=2) + "\n")
+    rental_path = home / workspace.SCHEDULE_E / f"{args.year}.json"
+    form = d400.build(args.year, agi=_federal_agi(home, args.year), forms=_forms(home), k1s=_k1s(home),
+                      filing=_filing(home, args.year), confirmed=confirmed,
+                      rental=json.loads(rental_path.read_text()) if rental_path.exists() else None)
+    print(f"{args.year} Form D-400: {sum(n.amount is not None for n in form.lines)} lines"
+          + (f", the {form.deduction} deduction on line 11" if form.deduction else ""))
+    for line in form.lines:
+        if line.status != d400.READY:
+            print(f"  line {line.line}: {line.status}")
+    for q in form.questions:
+        print(f"  question: {redact.redact(q, terms).text.strip()}")
+    (out / f"{args.year}.json").write_text(json.dumps(form.to_json(), indent=2, default=str) + "\n")
+    (out / f"{args.year}.txt").write_text(d400.to_text(form))
+    print(f"wrote to {out / f'{args.year}.txt'}")
+    return 0
+
+
 def cmd_entry(args: argparse.Namespace) -> int:
     """A year's entry sheet into <workspace>/entry/<year>.txt: everything the return asks for, section by section,
     each value with its source and whether it's ready, an estimate or missing, from what the other commands saved.
@@ -1672,10 +1760,8 @@ def cmd_entry(args: argparse.Namespace) -> int:
     out.mkdir(parents=True, exist_ok=True)
     if args.expect:
         kept.write_text(json.dumps(expected, indent=2) + "\n")
-    k1_folder = home / workspace.K1
-    k1s = [row for p in sorted(k1_folder.glob("*.json")) for rows in [json.loads(p.read_text())]
-           for row in (rows if isinstance(rows, list) else [rows])] if k1_folder.exists() else []
-    sheet = entry.build(args.year, forms=_forms(home), k1s=k1s, returns=_returns(home), expected=expected,
+    sheet = entry.build(args.year, forms=_forms(home), k1s=_k1s(home), returns=_returns(home), expected=expected,
+                        nc=saved(workspace.D400), federal=saved(workspace.AGI),
                         filing=_filing(home, args.year), rental=saved(workspace.SCHEDULE_E),
                         found=saved(workspace.FOREIGN), sales=saved(workspace.SALES),
                         passive=saved(workspace.PASSIVE), form_8995=saved(workspace.QBI),
@@ -2138,6 +2224,17 @@ def build_parser() -> argparse.ArgumentParser:
                        description=cmd_fbar.__doc__)
     p.add_argument("--year", type=int, required=True, help="the tax year")
     p.set_defaults(func=cmd_fbar)
+    p = sub.add_parser("agi", help="a year's federal adjusted gross income, against the filed return when there is one",
+                       description=cmd_agi.__doc__)
+    p.add_argument("--year", type=int, required=True, help="the tax year")
+    p.set_defaults(func=cmd_agi)
+    p = sub.add_parser("d400", help="North Carolina's Form D-400 for a year, with Schedules S and A",
+                       description=cmd_d400.__doc__)
+    p.add_argument("--year", type=int, required=True, help="the tax year")
+    p.add_argument("--confirm", action="append", default=[], metavar="KEY=VALUE",
+                   help="children=N, or an amount: additions, deductions, us_interest, property_tax, charity, medical, "
+                        "credits, use_tax, estimated, extension. Kept for later runs")
+    p.set_defaults(func=cmd_d400)
     p = sub.add_parser("entry", help="a year's entry sheet: what the return asks for, to type into a filing site",
                        description=cmd_entry.__doc__)
     p.add_argument("--year", type=int, required=True, help="the tax year")

@@ -108,10 +108,11 @@ def _where(saved: dict, page: object = None) -> str:
 def build(year: int, *, forms: list[dict], k1s: list[dict], returns: list[dict], filing: str = "",
           rental: dict | None = None, found: dict | None = None, sales: dict | None = None,
           passive: dict | None = None, form_8995: dict | None = None, plan: dict | None = None,
-          moves: dict | None = None, today: date | None = None, expected: list[str] | None = None) -> Sheet:
+          moves: dict | None = None, today: date | None = None, expected: list[str] | None = None,
+          nc: dict | None = None, federal: dict | None = None) -> Sheet:
     """The year's sheet from what the other commands saved: `forms` and `k1s` hold every year's, the rest are the
-    year's own (`rental`, `foreign`, `sales`, `passive`, `qbi`, `estimates` and `moves`), None when not run yet.
-    `expected` is the forms the person said to wait for (`expectation`), new this year or otherwise."""
+    year's own (`rental`, `foreign`, `sales`, `passive`, `qbi`, `estimates`, `moves`, `d400` and `agi`), None when not
+    run yet. `expected` is the forms the person said to wait for (`expectation`), new this year or otherwise."""
     today = today or date.today()
     sheet = Sheet(year)
     done = today.year > year
@@ -128,7 +129,8 @@ def build(year: int, *, forms: list[dict], k1s: list[dict], returns: list[dict],
     sheet.sections.append(_qbi(form_8995))
     sheet.sections.append(_deductions(forms, year, rental, moves))
     sheet.sections.append(_payments(plan))
-    sheet.sections.append(_north_carolina(k1s, year))
+    sheet.sections.append(_north_carolina(k1s, year, nc))
+    sheet.sections.append(_checks(federal, nc))
     sheet.coming = _coming(year, forms, k1s, found)
     sheet.coming += [f"{spec.replace('=', ': ', 1)} (you said to expect it)" for spec in expected or []
                      if not _arrived(spec, year, forms, k1s)]
@@ -395,9 +397,32 @@ def _payments(plan: dict | None) -> Section:
     return s
 
 
-def _north_carolina(k1s: list[dict], year: int) -> Section:
+def _checks(federal: dict | None, nc: dict | None) -> Section:
+    """What the site's own forms should come to: a wrong entry shows here, before anything is filed."""
+    s = Section("Checks: what the site should come to")
+    if federal is None or federal.get("total") is None:
+        s.add("Federal adjusted gross income", "", MISSING, "`taxtrace agi`")
+    else:
+        s.add("Federal adjusted gross income", _dollars(federal["total"]), federal.get("status", ESTIMATE),
+              "`taxtrace agi`")
+    for line in (nc or {}).get("lines", []):
+        if line.get("line") in ("14", "15", "26a", "28") and line.get("amount") is not None:
+            s.add(f"D-400 line {line['line']}, {line.get('what', '')}", _dollars(line["amount"]),
+                  line.get("status", ESTIMATE), "`taxtrace d400`")
+    return s
+
+
+def _north_carolina(k1s: list[dict], year: int, nc: dict | None = None) -> Section:
     s = Section("North Carolina (D-400)")
     s.notes.append("Most of the state return follows the federal one; these are what it takes besides.")
+    wanted = {"10a": "D-400 line 10a, qualifying children", "16": "D-400 line 16, tax credits",
+              "18": "D-400 line 18, consumer use tax", "21a": "D-400 line 21a, estimated tax paid"}
+    for line in (nc or {}).get("lines", []):
+        if line.get("line") in wanted:
+            s.add(wanted[line["line"]], _dollars(line.get("amount")), line.get("status", READY), line.get("source", ""))
+    for line in (nc or {}).get("schedule_a", []):
+        if line.get("status") == MISSING:
+            s.add(f"Schedule A line {line.get('line')}, {line.get('what', '')}", "", MISSING, line.get("source", ""))
     for f in k1s:
         if f.get("form") != "D-403" or f.get("year") != year or f.get("copy_of") is not None:
             continue

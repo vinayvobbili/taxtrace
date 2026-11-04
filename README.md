@@ -66,7 +66,11 @@ Early. What works today:
 - `taxtrace entry`: the year's entry sheet, to type into a filing site (see [Entry sheet](#entry-sheet)).
 - `taxtrace ui`: the workspace in the browser, with a chat (see [Chat](#chat)).
 
-Planned, in order: a W-2 reader, the state return's own lines, and a year-over-year check.
+- `taxtrace agi`: the year's federal adjusted gross income, against the filed return when there is one (see
+  [Adjusted gross income](#adjusted-gross-income)).
+- `taxtrace d400`: North Carolina's Form D-400 with Schedules S and A (see [Form D-400](#form-d-400)).
+
+Planned, in order: a W-2 reader and a year-over-year check.
 
 ## Install
 
@@ -570,6 +574,33 @@ isn't entered, since its items stay in the account. If Form 1116 has a carryover
 Schedule B (Form 1116) before relying on e-filing: not every one does.
 
 The terminal gets each section's counts, masked. The amounts are only in the file.
+
+## Adjusted gross income
+
+`taxtrace agi --year 2026` adds up Form 1040's income lines from what the other commands saved: wages (1z), taxable
+interest (2b), dividends (3b), capital gain (7), Schedule 1 income (8) and adjustments (10), each marked ready, estimate
+or missing. It's what the state return starts from, and the sheet's check on what your filing site should come to.
+
+For a year whose own return was filed and read with `prior`, each line is compared with it, which way and roughly how
+far ("line 7 is higher than the filed return's, by $1,000 or more"), never an amount. It exits 1 when a line differs. A
+K-1's section 1231 gain is on line 8 here where a preparer may use line 7, so "lines 7 and 8 together" and line 11 are the
+ones that have to agree.
+
+## Form D-400
+
+`taxtrace d400 --year 2026` writes `d400/2026.txt`: North Carolina's Form D-400 with Schedules S and A, for a full-year
+resident, following the state's D-400 and D-401 instructions:
+
+- Additions and deductions from the NC K-1s, and interest on US obligations (a fund's share with `--confirm us_interest=`).
+- The child deduction from the state's table (`--confirm children=N`).
+- The larger of the standard deduction and Schedule A, whose home mortgage interest and property tax stop at $20,000
+  together (`--confirm property_tax= charity= medical=`). It says when Schedule A could still win.
+- The tax at the year's flat rate, the tax withheld, and estimated payments (`--confirm estimated=`).
+
+North Carolina has no credit for tax paid to another country, so nothing from Form 1116 comes here. The state starts from
+an older federal law, so the additions it asks for can differ from what you'd expect: check its instructions for the year.
+Schedule PN (nonresidents and part-year residents) isn't covered. The 2026 standard deduction and child table are
+2025's until the state's 2026 instructions come out.
 
 ## To do
 
