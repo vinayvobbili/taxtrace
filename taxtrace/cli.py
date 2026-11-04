@@ -1641,6 +1641,53 @@ def cmd_fbar(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_entry(args: argparse.Namespace) -> int:
+    """A year's entry sheet into <workspace>/entry/<year>.txt: everything the return asks for, section by section,
+    each value with its source and whether it's ready, an estimate or missing, from what the other commands saved.
+    Run it again as documents come in, after the commands that read them.
+
+    What's printed is masked: each section's counts, what's still to come and the questions still open. The amounts
+    are in the file, for you to read beside the filing site.
+    """
+    from . import entry
+
+    home = workspace.outside_git(workspace.home())
+    terms = workspace.redact_terms()
+
+    def masked(line: str) -> str:
+        return redact.redact(line, terms).text.strip()
+
+    def saved(folder: str) -> dict | None:
+        path = home / folder / f"{args.year}.json"
+        return json.loads(path.read_text()) if path.exists() else None
+
+    k1_folder = home / workspace.K1
+    k1s = [row for p in sorted(k1_folder.glob("*.json")) for rows in [json.loads(p.read_text())]
+           for row in (rows if isinstance(rows, list) else [rows])] if k1_folder.exists() else []
+    sheet = entry.build(args.year, forms=_forms(home), k1s=k1s, returns=_returns(home),
+                        filing=_filing(home, args.year), rental=saved(workspace.SCHEDULE_E),
+                        found=saved(workspace.FOREIGN), sales=saved(workspace.SALES),
+                        passive=saved(workspace.PASSIVE), form_8995=saved(workspace.QBI),
+                        plan=saved(workspace.ESTIMATES), moves=saved(workspace.MOVES))
+    print(f"{args.year} entry sheet: {sheet.count(entry.READY)} ready, {sheet.count(entry.ESTIMATE)} estimates, "
+          f"{sheet.count(entry.MISSING)} missing")
+    for section in sheet.sections:
+        counts = [f"{n} {label}" for n, label in ((section.count(entry.READY), "ready"),
+                                                  (section.count(entry.ESTIMATE), "estimates"),
+                                                  (section.count(entry.MISSING), "missing")) if n]
+        print(f"  {masked(section.title)}: {', '.join(counts) or 'nothing yet'}")
+    for item in sheet.coming:
+        print(f"  still to come: {masked(item)}")
+    for question in sheet.questions:
+        print(f"  question: {masked(question)}")
+    out = home / workspace.ENTRY
+    out.mkdir(parents=True, exist_ok=True)
+    (out / f"{args.year}.json").write_text(json.dumps(sheet.to_json(), indent=2) + "\n")
+    (out / f"{args.year}.txt").write_text(entry.to_text(sheet))
+    print(f"wrote to {out / f'{args.year}.txt'}")
+    return 0
+
+
 def cmd_passive(args: argparse.Namespace) -> int:
     """Each passive activity's year into <workspace>/passive/<year>.json, from what `prior` and `k1` saved.
 
@@ -2081,6 +2128,10 @@ def build_parser() -> argparse.ArgumentParser:
                        description=cmd_fbar.__doc__)
     p.add_argument("--year", type=int, required=True, help="the tax year")
     p.set_defaults(func=cmd_fbar)
+    p = sub.add_parser("entry", help="a year's entry sheet: what the return asks for, to type into a filing site",
+                       description=cmd_entry.__doc__)
+    p.add_argument("--year", type=int, required=True, help="the tax year")
+    p.set_defaults(func=cmd_entry)
     p = sub.add_parser("passive", help="each passive activity's year, from the saved returns and K-1s",
                        description=cmd_passive.__doc__)
     p.add_argument("--year", type=int, help="the tax year (default: the latest year of the K-1s read)")

@@ -30,10 +30,11 @@ IRA = "ira"  # the year's IRA deductions and Roth IRA limit at its projected inc
 JOBCHANGE = "jobchange"  # the year with a change of job against the year without one
 SALES = "sales"  # the year's stock sales: Schedule D, wash sales, the room left for losses
 MOVES = "moves"  # the year's tax-saving moves, ranked by dollars and deadline
+ENTRY = "entry"  # the year's entry sheet, to type into a filing site
 TODO = "todo.md"  # the money and tax to-do list, written by hand
 # taxtrace's own files and folders in the workspace, never read back as documents: its output and its settings
 DERIVED = {OCR_CACHE, REDACTED, MANIFEST, TERMS_FILE, CARRYFORWARDS, K1, PASSIVE, FORMS, SCHEDULE_E, FOREIGN, FX, QBI,
-           ESTIMATES, IRA, JOBCHANGE, SALES, MOVES, TODO}
+           ESTIMATES, IRA, JOBCHANGE, SALES, MOVES, ENTRY, TODO}
 KEYCHAIN_SERVICE = "taxtrace"
 KEYCHAIN_DEFAULT = "default"  # tried after the file's own entry: one password for every return a preparer sends
 

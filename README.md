@@ -63,10 +63,10 @@ Early. What works today:
   [India's return](#indias-return)).
 - `taxtrace bank`: reads a foreign bank's statement of account: interest, a tax refund, balances (see
   [Bank statements](#bank-statements)).
+- `taxtrace entry`: the year's entry sheet, to type into a filing site (see [Entry sheet](#entry-sheet)).
 - `taxtrace ui`: the workspace in the browser, with a chat (see [Chat](#chat)).
 
-Planned, in order: the foreign side (interest at Treasury rates, foreign tax
-credit, FBAR, Form 8938 check), the entry sheet, and a year-over-year check.
+Planned, in order: a W-2 reader, the state return's own lines, and a year-over-year check.
 
 ## Install
 
@@ -546,6 +546,25 @@ neither gets. `jobchange`'s findings join the list: Social Security coming back,
 
 The terminal gets the ranking with the amounts masked. `taxtrace ui` shows the amounts, with the job change and stock
 sales beside them, in its Moves section.
+
+## Entry sheet
+
+`taxtrace entry --year 2026` writes `entry/2026.txt`: everything the return asks for, in the order a return's interview
+asks it, from what the other commands saved. Each value shows the document it came from and how far to trust it:
+
+- **ready**: read off a final form, or worked out from them.
+- **estimate**: it can still change. The year isn't over, a statement is missing, or a pay stub stands in for the W-2.
+- **missing**: nothing has been read for it yet; the row names the command that fills it.
+
+The sheet can be built at any time and only gets more complete, so run it again as documents come in, after the commands
+that read them. It also lists what's still to come, by comparing the year's forms with last year's (a K-1 or 1099 that
+came last year and hasn't yet, unless that K-1 was marked final), and gathers every question the other commands left open.
+
+Names, Social Security numbers, birth dates, IP PINs and bank numbers never appear: you type those yourself. An IRA's K-1
+isn't entered, since its items stay in the account. If Form 1116 has a carryover, check that your filing site takes
+Schedule B (Form 1116) before relying on e-filing: not every one does.
+
+The terminal gets each section's counts, masked. The amounts are only in the file.
 
 ## To do
 
