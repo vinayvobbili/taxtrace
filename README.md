@@ -2,9 +2,6 @@
 
 <!-- mcp-name: io.github.vinayvobbili/taxtrace -->
 
-[![vinayvobbili/taxtrace MCP server](https://glama.ai/mcp/servers/vinayvobbili/taxtrace/badges/score.svg)](https://glama.ai/mcp/servers/vinayvobbili/taxtrace)
-[![Indexed on TensorBlock MCP Index](https://mcp-index.tensorblock.co/v1/servers/github-vinayvobbili-taxtrace-4cc4bf8b/badge.svg)](https://tensorblock.co/mcp/servers/github-vinayvobbili-taxtrace-4cc4bf8b)
-
 **Prepare a US federal and state return from your own documents, on your own machine, with every
 number traced to the page it came from.**
 
@@ -12,10 +9,6 @@ taxtrace does not file anything. It reads a folder of your documents (W-2s, 1099
 manager statements, receipts, foreign bank statements, last year's return) and produces an entry sheet
 you type into consumer tax software, an FBAR account list, and a list of questions for you: anything
 it couldn't settle from the documents alone.
-
-If taxtrace helps with your return, a ⭐ on GitHub is how I know: taxtrace sends nothing home, so stars are the
-only count of who uses it. If it saved you a preparer's fee, a [$1 coffee](https://ko-fi.com/vinayvobbili) says so
-too.
 
 Three rules hold everywhere:
 
@@ -940,3 +933,12 @@ Set `PRE_PUSH_AUDIT` to a command that scans a repository for personal data and 
 finding, and `scripts/check` runs it too, with the repository's path appended.
 
 Every fixture is invented: no real person, place or amount appears in this repository.
+
+## Support and listings
+
+If taxtrace helps with your return, a ⭐ on GitHub is how I know: taxtrace sends nothing home, so stars are the
+only count of who uses it. If it saved you a preparer's fee, a [$1 coffee](https://ko-fi.com/vinayvobbili) says so
+too.
+
+[![vinayvobbili/taxtrace MCP server](https://glama.ai/mcp/servers/vinayvobbili/taxtrace/badges/score.svg)](https://glama.ai/mcp/servers/vinayvobbili/taxtrace)
+[![Indexed on TensorBlock MCP Index](https://mcp-index.tensorblock.co/v1/servers/github-vinayvobbili-taxtrace-4cc4bf8b/badge.svg)](https://tensorblock.co/mcp/servers/github-vinayvobbili-taxtrace-4cc4bf8b)
