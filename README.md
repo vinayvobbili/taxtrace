@@ -585,7 +585,9 @@ For a year whose own return was filed and read with `prior`, each line is compar
 far ("line 7 is higher than the filed return's, by $1,000 or more"), never an amount. It exits 1 when a line differs. A
 K-1's section 1231 gain is on line 8 here where a preparer may use line 7, so "lines 7 and 8 together" and line 11 are the
 ones that have to agree. When they don't, it says whether leaving out one or two parts (a K-1, the stock sales) would make
-them match, by name only.
+them match, by name only. A line nothing could test isn't counted as a match: wages taken from the filed return because no
+W-2 was read, or a line with nothing on either side. The comparison stops at adjusted gross income, so a full match says
+nothing yet about total tax, the foreign tax credit or the state return.
 
 ## Form D-400
 

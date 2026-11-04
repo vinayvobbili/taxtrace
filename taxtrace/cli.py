@@ -1682,8 +1682,12 @@ def cmd_agi(args: argparse.Namespace) -> int:
         print(f"  against the filed {args.year} Form 1040: {len(found.checks) - len(bad)} of {len(found.checks)} match")
     for c in bad:  # built from line numbers and a size's words, never an amount
         print(f"  differs: {c.what}")
+    for line in found.untested:  # line numbers and the rule's own words
+        print(f"  not tested: {line}")
     for line in found.explained:  # names of parts, masked
         print(f"  {redact.redact(line, terms).text.strip()}")
+    if found.checks:
+        print("  this stops at adjusted gross income: total tax, the foreign tax credit and the D-400 aren't compared")
     for q in found.questions:
         print(f"  question: {redact.redact(q, terms).text.strip()}")
     out = home / workspace.AGI

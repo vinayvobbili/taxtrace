@@ -33,6 +33,7 @@ ZERO = Decimal(0)
 SORT = {READY: 0, ESTIMATE: 1, MISSING: 2}
 TOLERANCE = Decimal(1)  # a dollar: a return's lines are rounded
 EXPLAINS = Decimal(5)  # a few rounded pieces can add up to a few dollars
+FILED_STANDS_IN = "the filed return: no W-2 has been read"
 
 
 @dataclass
@@ -51,6 +52,7 @@ class Agi:
     parts: list[Part] = field(default_factory=list)
     checks: list[Check] = field(default_factory=list)
     explained: list[str] = field(default_factory=list)  # which pieces' absence would make a differing line match
+    untested: list[str] = field(default_factory=list)  # lines of a filed return that nothing here could test
     questions: list[str] = field(default_factory=list)
 
     def line(self, line: str) -> Part:
@@ -103,7 +105,7 @@ def _wages(year: int, forms: list[dict], filed: dict) -> Part:
         if wages is not None:
             return Part("1z", "Wages", wages, ESTIMATE, [stub.get("file", "")])
     if "1z" in filed:
-        return Part("1z", "Wages", Decimal(filed["1z"]), READY, ["the filed return: no W-2 has been read"])
+        return Part("1z", "Wages", Decimal(filed["1z"]), READY, [FILED_STANDS_IN])
     return Part("1z", "Wages", None, MISSING, ["`taxtrace paystub`, until the W-2 comes"])
 
 
@@ -223,7 +225,13 @@ def _rehearse(agi: Agi, filed: dict) -> None:
     for line, theirs in (("1z", amount.get("1z", ZERO)), ("2b", amount.get("2b", ZERO)),
                          ("3b", amount.get("3b", ZERO)), ("7", seven), ("8", amount.get("8", ZERO)),
                          ("10", amount.get("10", ZERO))):
-        _compare(agi, f"line {line}", agi.line(line).amount, theirs)
+        part = agi.line(line)
+        if FILED_STANDS_IN in part.sources:  # the filed line itself: a match would prove nothing
+            agi.untested.append(f"line {line}: no W-2 has been read, so the filed line stands in")
+        elif part.amount == 0 and theirs == 0:  # nothing on either side
+            agi.untested.append(f"line {line}: nothing on either side")
+        else:
+            _compare(agi, f"line {line}", part.amount, theirs)
     seven_mine, eight_mine = agi.line("7").amount, agi.line("8").amount
     both = None if seven_mine is None or eight_mine is None else seven_mine + eight_mine
     _compare(agi, "lines 7 and 8 together", both, seven + amount.get("8", ZERO))

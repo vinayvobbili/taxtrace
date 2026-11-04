@@ -89,12 +89,31 @@ def test_a_filed_year_is_compared_line_by_line_without_amounts():
     found = federal(forms=[INT, DIV], moves=None, returns=[{"year": 2026, "f1040": {"lines": filed}}])
     assert built.line("1z").amount is None
     checks = {c.what: c.ok for c in found.checks}
-    assert checks["line 1z is the filed return's"]
+    assert not any(what.startswith("line 1z") for what in checks)  # the filed line can't test itself
+    assert found.untested == ["line 1z: no W-2 has been read, so the filed line stands in",
+                              "line 10: nothing on either side"]
     assert checks["line 2b is the filed return's"]
     assert checks["line 3b is lower than the filed return's, by under $100"] is False
     assert checks["line 8 is lower than the filed return's, by $1,000 or more"] is False
     assert not checks["line 11 is lower than the filed return's, by $1,000 or more"]
     assert all(not any(a in c.what for a in ("150000", "2000", "4060")) for c in found.checks)
+
+
+def test_a_real_w2_and_real_adjustments_are_tested():
+    filed = {"1z": "149000", "2b": "240", "3b": "330", "7": "4060", "8": "840", "10": "7000", "11": "148000"}
+    found = federal(returns=[{"year": 2026, "f1040": {"lines": filed}}])
+    checks = {c.what: c.ok for c in found.checks}
+    assert checks["line 1z is higher than the filed return's, by $1,000 or more"] is False
+    assert checks["line 10 is the filed return's"]
+    assert found.untested == []
+
+
+def test_the_command_says_what_it_didnt_test_and_where_it_stops(workspace_home, capsys):
+    save(workspace_home, "carryforwards", "2026.json", {"year": 2026, "f1040": {"lines": {"1z": "1", "11": "1"}}})
+    cli.main(["agi", "--year", "2026"])
+    out = printed(capsys)
+    assert "not tested: line 1z" in out
+    assert "this stops at adjusted gross income" in out
 
 
 def test_a_1231_gain_on_another_line_shows_in_the_two_lines_together():
