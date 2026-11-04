@@ -114,7 +114,7 @@ def _sum_lines(rows: list[dict], *numbers: str) -> Decimal:
 
 def _withheld(year: int, forms: list[dict], rows: list[dict]) -> tuple[Decimal | None, str, str]:
     from_k1s = _sum_lines(rows, "5")
-    w2s = [f for f in forms if f.get("form") == "W-2" and f.get("year") == year]
+    w2s = [f for f in forms if f.get("form") == "W-2" and f.get("year") == year and f.get("copy_of") is None]
     if w2s:
         total = sum((_dollars((f.get("amounts", {}).get("17") or {}).get("amount")) for f in w2s), ZERO)
         return total + from_k1s, READY, "the W-2s"

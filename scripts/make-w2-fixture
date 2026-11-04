@@ -1,0 +1,58 @@
+#!/usr/bin/env python3
+"""Rebuild tests/data/w2-irs-words.json: the words of the IRS's own Copy B page with made-up values printed on it.
+
+Words, not the PDF: this repo keeps no PDFs (.gitignore), so one can't slip in by accident. The IRS's forms are public;
+download fw2.pdf from irs.gov/pub/irs-pdf/fw2.pdf. Needs reportlab (a dev dependency) and qpdf on the PATH.
+
+    uv run --with reportlab python scripts/make-w2-fixture ~/Downloads/fw2.pdf
+"""
+
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+
+from taxtrace import text
+
+COPY_B = "4"
+SECOND_COPY = 396.0
+KEEP = ("text", "x0", "x1", "top")
+VALUES = [
+    (170, 49, "XXX-XX-4410"), (50, 74, "88-7654321"), (50, 98, "Initech Payroll Services"), (50, 108, "44 Birch Road"),
+    (345, 74, "152,400.17"), (470, 74, "22,310.44"), (345, 98, "171,000.00"), (470, 98, "10,602.00"),
+    (345, 122, "178,000.00"), (470, 122, "2,581.00"), (475, 194, "D"), (510, 194, "24,500.00"),
+    (475, 218, "DD"), (510, 218, "19,250.10"), (345, 228, "NQ"), (375, 228, "1,200.00"),
+    (40, 303, "CO"), (70, 303, "12-3456"), (205, 303, "152,400.17"), (295, 303, "6,081.00"),
+]
+
+
+def main(blank: str) -> None:
+    out = Path(__file__).parent.parent / "tests" / "data" / "w2-irs-words.json"
+    out.parent.mkdir(exist_ok=True)
+    with tempfile.TemporaryDirectory() as folder:
+        values = Path(folder) / "values.pdf"
+        c = canvas.Canvas(str(values), pagesize=letter)
+        c.setFont("Helvetica", 8)
+        for offset in (0.0, SECOND_COPY):
+            for x, top, phrase in VALUES:
+                c.drawString(x, letter[1] - top - offset - 8, phrase)
+        c.save()
+        page = Path(folder) / "page.pdf"
+        subprocess.run(["qpdf", blank, "--pages", ".", COPY_B, "--", "--remove-restrictions",
+                        "--flatten-annotations=all", str(page)], check=True)
+        filled = Path(folder) / "filled.pdf"
+        subprocess.run(["qpdf", str(page), "--overlay", str(values), "--", str(filled)], check=True)
+        words = [{k: w[k] for k in KEEP} for w in text.words(filled, 1)]
+    lines = ",\n".join(json.dumps(w, ensure_ascii=False) for w in words)
+    out.write_text(f"[\n{lines}\n]\n", encoding="utf-8")
+    print(f"wrote {out}: {len(words)} words")
+
+
+if __name__ == "__main__":
+    main(sys.argv[1])

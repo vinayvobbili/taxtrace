@@ -117,7 +117,7 @@ def build(year: int, *, forms: list[dict], k1s: list[dict], returns: list[dict],
     sheet = Sheet(year)
     done = today.year > year
     sheet.sections.append(_personal(year, filing, returns))
-    sheet.sections.append(_wages(year, forms))
+    sheet.sections += _w2s(forms, year) or [_wages(year, forms)]
     sheet.sections += _information(forms, year, "1099-INT", "Interest")
     sheet.sections += _information(forms, year, "1099-DIV", "Dividends")
     sheet.sections.append(_sales(sales, found))
@@ -151,6 +151,22 @@ def _personal(year: int, filing: str, returns: list[dict]) -> Section:
         s.add(f"{year - 1} adjusted gross income, to sign the e-file", _dollars(agi), READY,
               f"the filed {year - 1} Form 1040")
     return s
+
+
+def _w2s(forms: list[dict], year: int) -> list[Section]:
+    """One section per W-2, its boxes as printed."""
+    out = []
+    for f in _year_forms(forms, year, "W-2"):
+        s = Section(f"Wages (Form W-2), {f.get('employer') or '?'}, EIN {f.get('ein') or '?'}")
+        for box, value in f.get("amounts", {}).items():
+            state = f"{f.get('state')}, " if box in ("16", "17") and f.get("state") else ""
+            s.add(f"Box {box}, {state}{value.get('label', '')}", _dollars(value.get("amount")), READY,
+                  _where(f, value.get("page")))
+        for code, value in f.get("box_12", {}).items():
+            s.add(f"Box 12 code {code}", _dollars(value.get("amount")), READY, _where(f, value.get("page")))
+        s.notes.append("Box 13's checkboxes aren't read: type them from the form.")
+        out.append(s)
+    return out
 
 
 def _wages(year: int, forms: list[dict]) -> Section:

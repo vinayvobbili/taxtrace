@@ -570,6 +570,59 @@ def cmd_k1(args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+def cmd_w2(args: argparse.Namespace) -> int:
+    """Read every Form W-2 into <workspace>/forms: wages, the tax withheld, box 12's codes and the state's lines, found
+    by the words of each box's label, so a payroll company's own layout reads too.
+
+    The values go only to that folder. What's printed is masked: the year, which boxes have amounts, the checks that
+    failed and the questions, and with --layout each value's text and where it sits. Only the last four digits of the
+    employee's Social Security number are kept.
+    """
+    from . import k1, w2
+
+    home = workspace.outside_git(workspace.home())
+    terms = workspace.redact_terms()
+
+    def masked(line: str) -> str:
+        return redact.redact(line, terms).text.strip()
+
+    out, written, failed = home / workspace.FORMS, 0, 0
+    for doc in _documents(args):
+        name = redact.redact(doc.name, terms, bare_years=True).text
+        try:
+            pages, password = _unlocked(doc)
+        except text.UnsupportedDocument as err:
+            print(f"{name}: skipped, {err}")
+            continue
+        forms = [n for n, page in enumerate(pages, 1) if w2.is_form(page)]
+        if not forms or doc.suffix.lower() not in text.PDF_SUFFIXES:
+            continue
+        words = {n: text.words(doc, n, password) for n in forms}
+        found = w2.read(doc.name, words)
+        for f in found:
+            problems = k1.verify(f, words[f.page])
+            failed += bool(f.failed or problems)
+            print(f"{name} p{f.page}: {f.year or '?'} Form W-2, amounts in boxes {', '.join(f.amounts) or 'none'}; "
+                  f"box 12 codes {', '.join(f.box_12) or 'none'}; "
+                  f"{len(f.checks) - len(f.failed)} of {len(f.checks)} checks pass, {len(f.questions)} questions"
+                  + (f"; a second copy of p{f.copy_of}'s, counted once" if f.copy_of else ""))
+            for c in f.failed:
+                print(f"  failed: {c.what}" + (f" ({masked(c.quote)})" if c.quote else ""))
+            for p in problems:
+                print(f"  failed: {masked(p)}")
+            for q in f.questions:
+                print(f"  question: {q.text}" + (f" ({masked(q.quote)})" if q.quote else ""))
+            if args.layout:
+                for box, v in {**f.amounts, **f.box_12}.items():
+                    print(f"  box {box}: {masked(v.quote)} at {v.top}, {v.x0}")
+        if found:
+            out.mkdir(parents=True, exist_ok=True)
+            (out / f"{doc.stem}.json").write_text(json.dumps([f.to_json() for f in found], indent=2) + "\n")
+            written += 1
+    print(f"wrote to {out}" if written else "no W-2s found")
+    return 1 if failed else 0
+
+
 def cmd_1098(args: argparse.Namespace) -> int:
     """Read every Form 1098 (Mortgage Interest Statement) into <workspace>/forms: each box, the lender and the year.
 
@@ -2120,6 +2173,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("paths", nargs="*", help=PATHS_HELP)
     p.add_argument("--layout", action="store_true", help="also print each value's text and place, masked")
     p.set_defaults(func=cmd_k1)
+    p = sub.add_parser("w2", help="read Form W-2s: wages, the tax withheld, box 12's codes and the state's lines",
+                       description=cmd_w2.__doc__)
+    p.add_argument("paths", nargs="*", help=PATHS_HELP)
+    p.add_argument("--layout", action="store_true", help="also print each value's text and place, masked")
+    p.set_defaults(func=cmd_w2)
     p = sub.add_parser("1098", help="read Form 1098 mortgage interest statements: each box, the lender and the year",
                        description=cmd_1098.__doc__)
     p.add_argument("paths", nargs="*", help=PATHS_HELP)

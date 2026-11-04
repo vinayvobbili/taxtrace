@@ -69,8 +69,9 @@ Early. What works today:
 - `taxtrace agi`: the year's federal adjusted gross income, against the filed return when there is one (see
   [Adjusted gross income](#adjusted-gross-income)).
 - `taxtrace d400`: North Carolina's Form D-400 with Schedules S and A (see [Form D-400](#form-d-400)).
+- `taxtrace w2`: reads Form W-2s into the entry sheet, `agi` and `d400` (see [Form W-2](#form-w-2)).
 
-Planned, in order: a W-2 reader and a year-over-year check.
+Planned: a year-over-year check.
 
 ## Install
 
@@ -338,6 +339,25 @@ ledger:
   against its Worksheet 5: the same arithmetic, rehearsed on the preparer's numbers.
 
 The terminal says what each activity's loss does (allowed, part carried on, off the form), never how much.
+
+## Form W-2
+
+`taxtrace w2 "2026 W-2 Initech.pdf"` writes `forms/2026 W-2 Initech.json`: boxes 1 to 8, 10, 11, 12 (each code with its
+amount), 16 to 19, the state in box 15, the employer's name and EIN, and the year.
+
+The IRS's form and a payroll company's substitute hold the same boxes in different places, so each box is found by the
+words of its label, and its value under or beside that label. Two or four copies on a page, or the same form on another
+page, count once. If the copies show different wages, it asks, since that may be a second employer's.
+
+Only the last four digits of the employee's Social Security number are kept. Box 13's checkboxes and box 14 aren't read:
+the entry sheet says to type box 13 from the form.
+
+It checks that box 4 is 6.2% of box 3 and box 6 at least 1.45% of box 5, and asks about what needs another form: box 8
+(allocated tips), box 10 (Form 2441), box 11, code W in box 12 (Form 8889), a second state's row, and a corrected W-2c.
+
+The entry sheet shows the W-2's boxes in place of the pay stub's estimate, `agi` uses box 1 for wages, and `d400` uses
+box 17 for the state tax withheld. The tests read the words of the IRS's own page with made-up values printed on it
+(`scripts/make-w2-fixture`).
 
 ## Form 1098
 
