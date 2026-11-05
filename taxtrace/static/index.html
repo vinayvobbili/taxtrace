@@ -171,6 +171,8 @@ h2::before { content: ""; width: 14px; height: 3px; border-radius: 2px; backgrou
 .tcard summary::-webkit-details-marker { display: none; }
 .tcard summary::before { content: "\25B8"; display: inline-block; margin-right: 6px; transition: transform .15s; }
 .tcard details[open] summary::before { transform: rotate(90deg); }
+.tcard .detail { margin-top: 8px; display: grid; gap: 8px; font-size: 13.5px; color: var(--muted); overflow-wrap: anywhere; }
+.tcard .detail p { margin: 0; }
 .tcard .more { margin: 8px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 13.5px; color: var(--muted); }
 .tcard .more li { padding-left: 14px; position: relative; overflow-wrap: anywhere; }
 .tcard .more li::before { content: ""; position: absolute; left: 0; top: .6em; width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
@@ -461,10 +463,12 @@ function todoCard(t, i) {
       } }),
       h("div", { class: "body" },
         h("div", { class: "tags" }, h("span", { class: "tag sec" }, t.section), t.due ? h("span", { class: "tag due" }, dueLabel(t)) : null),
-        html("div", { class: "title" }, inline(t.text)),
-        more.length ? h("details", {}, h("summary", {}, [t.notes.length ? `${t.notes.length} note${t.notes.length > 1 ? "s" : ""}` : "",
+        html("div", { class: "title" }, inline(t.title)),
+        more.length || t.detail.length ? h("details", {}, h("summary", {}, [t.detail.length ? "Details" : "",
+          t.notes.length ? `${t.notes.length} note${t.notes.length > 1 ? "s" : ""}` : "",
           t.subtasks.length ? `${t.subtasks.length} sub-task${t.subtasks.length > 1 ? "s" : ""}` : ""].filter(Boolean).join(" · ")),
-          h("ul", { class: "more" }, more)) : null,
+          t.detail.length ? h("div", { class: "detail" }, t.detail.map(p => html("p", {}, inline(p)))) : null,
+          more.length ? h("ul", { class: "more" }, more) : null) : null,
         err)));
   return card;
 }

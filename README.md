@@ -667,7 +667,8 @@ taxtrace todo --due 14   # ... the next 14 days
 
 The list is `todo.md` at the root of the workspace, written by hand (taxtrace never reads it as a tax document).
 The page shows it above the documents, in groups (overdue, today, this week, later, no date), and a card's checkbox
-marks it done.
+marks it done. A long item shows as its first sentence, without asides in parentheses, and the whole text opens below
+it, so write the next step first.
 
 ```markdown
 ## Estimated tax

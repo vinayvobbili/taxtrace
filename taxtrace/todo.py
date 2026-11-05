@@ -6,6 +6,8 @@ notes and indented `  - [ ] text` lines its sub-tasks. Its due date is a leading
 mean the date within 2 months back to 10 months ahead of today, so a December list can say `**Fri 1/15**` and mean
 next January. Other lines (a one-line intro under a heading) are ignored.
 
+A long item shows as its first sentence, without asides in parentheses, and the whole text opens below it.
+
 Ticking an item changes that line's `[ ]` to `[x]` and nothing else, and refuses if the line isn't what the page
 showed any more.
 """
@@ -28,6 +30,10 @@ SUBTASK = re.compile(r"^\s+- \[([ xX])\] (.*)$")
 NOTE = re.compile(r"^\s+- (.*)$")
 OPEN = "- [ ] "
 GROUPS = ("overdue", "today", "week", "later", "undated")
+TITLE_MAX = 160  # characters a card's title can run to; a longer item opens from its title
+ABBREVIATIONS = ("Dr", "Mr", "Mrs", "Ms", "St", "vs", "No", "Inc", "e.g", "i.e")
+# a long item's paragraphs start at a dated update or its next step
+PARAGRAPH = re.compile(r"(?<=[.!?)]) (?=\d{1,2}/\d{1,2}\b|Next:)")
 
 
 @dataclass
@@ -142,11 +148,51 @@ def group(item: Item, on: date) -> str:
     return "week" if (item.due - on).days <= 7 else "later"
 
 
+def _first_sentence(text: str) -> str:
+    """The text up to its first sentence's end, leaving out whatever is in parentheses."""
+    kept: list[str] = []
+    depth = 0
+    for n, char in enumerate(text):
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth = max(depth - 1, 0)
+        elif depth == 0:
+            ends = char in ".!?" and text[n + 1:n + 2] in ("", " ")
+            if ends and not "".join(kept).endswith(ABBREVIATIONS):
+                break
+            kept.append(char)
+    return re.sub(r"\s+([,:;])", r"\1", re.sub(r"\s+", " ", "".join(kept))).strip()
+
+
+def _shortened(title: str) -> str:
+    """A title at most TITLE_MAX long, cut between words, with any bold mark it cut in half gone."""
+    if len(title) > TITLE_MAX:
+        title = title[:TITLE_MAX].rsplit(" ", 1)[0].rstrip(",;:") + "…"
+    return title if title.count("**") % 2 == 0 else title.replace("**", "")
+
+
+def headline(text: str) -> tuple[str, list[str]]:
+    """What a card shows of an item: (its title, the paragraphs that open below it, none for a short item). A long
+    item, or one that opens with an aside, keeps all its words in those paragraphs."""
+    if len(text) <= TITLE_MAX and not text.startswith("("):
+        return text, []
+    title = _shortened(_first_sentence(text) or text)
+    rest = text.removeprefix(title.rstrip("…")) if text.startswith(title.rstrip("…")) else text
+    rest = rest.lstrip(" .!?")
+    return title, PARAGRAPH.split(rest) if rest else []
+
+
 def to_json(items: list[Item], on: date) -> list[dict]:
     """The items for the page, soonest first."""
-    return [{"line": i.line, "raw": i.raw, "section": i.section, "text": i.text, "time": i.time, "notes": i.notes,
-             "subtasks": i.subtasks, "due": i.due.isoformat() if i.due else None,
-             "days": (i.due - on).days if i.due else None, "group": group(i, on)} for i in ordered(items)]
+    shown = []
+    for i in ordered(items):
+        title, detail = headline(i.text)
+        shown.append({"line": i.line, "raw": i.raw, "section": i.section, "text": i.text, "title": title,
+                      "detail": detail, "time": i.time, "notes": i.notes, "subtasks": i.subtasks,
+                      "due": i.due.isoformat() if i.due else None, "days": (i.due - on).days if i.due else None,
+                      "group": group(i, on)})
+    return shown
 
 
 def mark_done(file: Path, line: int, expect: str) -> None:
@@ -165,7 +211,7 @@ def mark_done(file: Path, line: int, expect: str) -> None:
 
 
 def row(item: Item) -> str:
-    """One line for the terminal: the due date, the section, the text."""
+    """One line for the terminal: the due date, the section, the title."""
     due = item.due
     when = "no date" if due is None else f"{due.strftime('%a')} {due.month}/{due.day}/{due.year}"
-    return f"{when:<18} [{item.section}] {item.text}"
+    return f"{when:<18} [{item.section}] {headline(item.text)[0]}"

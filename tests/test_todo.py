@@ -80,6 +80,55 @@ def test_a_january_item_in_a_december_list_is_next_year_and_later_not_overdue():
     assert todo.group(item, on) == "overdue"
 
 
+def test_a_short_item_is_its_own_title():
+    assert todo.headline("Call Marlowe Credit Union about the rollover") == (
+        "Call Marlowe Credit Union about the rollover", [])
+
+
+def test_a_long_item_shows_its_first_sentence_and_opens_the_rest():
+    text = ("Roof claim: Dr. Pell is the adjuster (Fernwick office, 2 Elm St. since May; ask for the file). "
+            "Photos went in. 3/4: Pell asked for the invoice, which is still with the roofer and will take some time "
+            "to come back from them. Next: send it. 3/9 reply came.")
+    title, detail = todo.headline(text)
+    assert title == "Roof claim: Dr. Pell is the adjuster"
+    assert detail == [
+        "(Fernwick office, 2 Elm St. since May; ask for the file). Photos went in.",
+        "3/4: Pell asked for the invoice, which is still with the roofer and will take some time to come back from "
+        "them.", "Next: send it.", "3/9 reply came."]
+
+
+def test_a_long_item_without_an_aside_opens_only_what_follows_its_title():
+    first = "Move the Larkspur savings to the brokerage"
+    later = "The Fernwick branch closes its counters on Fridays, so plan around that and leave extra time for the form."
+    title, detail = todo.headline(f"{first}. {later} 3/4: called them. Next: send it, and keep a copy for the file.")
+    assert title == first
+    assert detail == [later, "3/4: called them.", "Next: send it, and keep a copy for the file."]
+
+
+def test_an_item_opening_with_an_aside_is_titled_by_what_follows_and_keeps_the_aside():
+    text = "(moved up from May) Call Pemberton"
+    assert todo.headline(text) == ("Call Pemberton", [text])
+
+
+def test_a_title_with_no_sentence_end_is_cut_between_words_and_bold_stays_whole():
+    title, detail = todo.headline("Sort the **Pemberton receipts " + "and then the folder " * 20)
+    assert len(title) <= todo.TITLE_MAX + 1 and title.endswith("…") and "**" not in title
+    assert detail and "folder" in detail[0]
+
+
+def test_only_one_paren_left_open_does_not_lose_the_item():
+    title, detail = todo.headline("(never closed " + "and more words here " * 12)
+    assert title.startswith("(never closed") and title.endswith("…") and detail
+
+
+def test_the_page_and_terminal_get_the_title():
+    long = "Pay the Fernwick bill. " + "It came late and the amount changed twice this year. " * 4
+    (item,) = todo.parse(f"## A\n- [ ] {long}\n", TODAY)
+    (shown,) = todo.to_json([item], TODAY)
+    assert shown["title"] == "Pay the Fernwick bill" and shown["detail"] and shown["text"] == long
+    assert todo.row(item).endswith("[A] Pay the Fernwick bill")
+
+
 def test_groups_and_order():
     items = todo.parse(LIST, TODAY)
     assert [todo.group(i, TODAY) for i in items] == ["overdue", "today", "week", "later", "undated", "later"]
