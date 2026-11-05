@@ -629,7 +629,8 @@ rule shows up apart from an income line that differs. Each comparison says which
 `taxtrace yoy --year 2026` writes `yoy/2026.txt`, the look a preparer takes before signing:
 
 - Every W-2, 1098, 1099 and K-1 from last year that hasn't come this year, matched by tax ID so a payer's new name doesn't
-  count as missing. A K-1 marked final isn't expected again. Foreign accounts need their statements again too.
+  count as missing, and within a payer by account, employee or partner, so one account's form can't answer for another's.
+  A K-1 marked final isn't expected again. Foreign accounts need their statements again too.
 - How far each Form 1040 line moved from last year's filed return, in words: about the same under 10%, up or down 10% to
   50%, up or down more than 50%, new or gone.
 

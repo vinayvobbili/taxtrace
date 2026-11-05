@@ -16,8 +16,8 @@ def w2(year: int, ein: str = "12-3456789", employee: str = "4410", **kw) -> dict
             "amounts": {"1": {"amount": "150000"}}, **kw}
 
 
-def div(year: int, tin: str = "98-7654321") -> dict:
-    return {"form": "1099-DIV", "year": year, "payer_tin": tin, "file": "globex.pdf", "amounts": {}}
+def div(year: int, tin: str = "98-7654321", account: str = "") -> dict:
+    return {"form": "1099-DIV", "year": year, "payer_tin": tin, "file": "globex.pdf", "amounts": {}, "account": account}
 
 
 def statuses(found: list[yoy.Document]) -> dict[str, str]:
@@ -38,6 +38,41 @@ def test_a_payers_new_name_is_still_the_same_payer():
 def test_each_spouses_w2_counts_apart():
     found = yoy.documents([w2(2025), w2(2025, employee="7720"), w2(2026)], [], 2026)
     assert sorted(d.status for d in found) == [yoy.HERE, yoy.MISSING]
+
+
+def test_one_accounts_form_doesnt_answer_for_another_at_the_same_firm():
+    found = yoy.documents([div(2025, account="7788"), div(2025, account="5566"), div(2026, account="7788")], [], 2026)
+    assert statuses(found) == {"1099-DIV globex.pdf, account ending 5566": yoy.MISSING,
+                               "1099-DIV globex.pdf, account ending 7788": yoy.HERE}
+    assert found[0].status == yoy.MISSING
+
+
+def test_a_second_account_at_the_same_firm_is_new():
+    found = yoy.documents([div(2025, account="7788"), div(2026, account="7788"), div(2026, account="5566")], [], 2026)
+    assert statuses(found)["1099-DIV globex.pdf, account ending 5566"] == yoy.NEW
+
+
+def test_an_account_number_can_print_differently():
+    found = yoy.documents([div(2025, account="XXXX7788"), div(2026, account="12-34-7788")], [], 2026)
+    assert [d.status for d in found] == [yoy.HERE]
+
+
+@pytest.mark.parametrize(("then", "now", "expected"), [
+    (["7788"], [""], [yoy.HERE]),
+    ([""], ["7788"], [yoy.HERE]),
+    (["7788", "5566"], [""], [yoy.MISSING, yoy.HERE]),
+    (["7788"], ["5566"], [yoy.MISSING, yoy.NEW]),
+])
+def test_an_account_that_wasnt_read_pairs_once(then, now, expected):
+    forms = [div(2025, account=a) for a in then] + [div(2026, account=a) for a in now]
+    assert [d.status for d in yoy.documents(forms, [], 2026)] == expected
+
+
+def test_each_partners_k1_counts_apart():
+    k1s = [{"year": 2025, "ein": "11-1111111", "partnership": "Umbrella Fund", "partner": "4410"},
+           {"year": 2025, "ein": "11-1111111", "partnership": "Umbrella Fund", "partner": "7720"},
+           {"year": 2026, "ein": "11-1111111", "partnership": "Umbrella Fund", "partner": "4410"}]
+    assert sorted(d.status for d in yoy.documents([], k1s, 2026)) == [yoy.HERE, yoy.MISSING]
 
 
 def test_a_new_payer_is_listed():
@@ -81,7 +116,7 @@ def test_lines_find_the_number_a_line_had_and_skip_empty_ones():
 
 def test_the_command_lists_without_an_amount(workspace_home, capsys):
     for folder, name, data in (
-            ("forms", "w2.json", [w2(2025), w2(2026), div(2025)]),
+            ("forms", "w2.json", [w2(2025), w2(2026), div(2025, account="7788")]),
             ("carryforwards", "2025.json", {"year": 2025, "f1040": {"lines": {"11a": "160000", "24": "20000"}}}),
             ("foreign", "2026-confirmed.json", {"filing": "joint"})):
         (workspace_home / folder).mkdir(parents=True, exist_ok=True)
@@ -90,7 +125,7 @@ def test_the_command_lists_without_an_amount(workspace_home, capsys):
     out = printed(capsys)
     assert "not here yet: 1099-DIV" in out
     assert "2026 against 2025" in out
-    for secret in ("150000", "150,000", "160,000", "20,000"):
+    for secret in ("150000", "150,000", "160,000", "20,000", "7788"):
         assert secret not in out
     assert (workspace_home / "yoy" / "2026.txt").exists()
 
