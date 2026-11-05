@@ -8,6 +8,11 @@ amount, or words (box 8's country). A box id printed a little under its label's 
 capital gain") is on that row. The year is the title's; the payer's TIN and the account number are read by their
 labels, as the 1098's are (`f1098`).
 
+Some brokers print a summary page instead: "DIVIDENDS AND DISTRIBUTIONS 2025 1099-DIV*" and "INTEREST INCOME 2025
+1099-INT", the year before the form's name, each row "1a- Total ordinary dividends ... 123.45" with the amount at the
+row's end, and sometimes two boxes on one row ("8- Foreign country: See detail 7- Foreign tax paid: 1.23"). These
+print every form whether or not it applies, so one with nothing in it is none. The payer's TIN can be on another page.
+
 Where the boxes go: 1099-DIV box 1a and 1b to Schedule B and the qualified dividends worksheet, 2a to Schedule D,
 box 5 (section 199A dividends) to Form 8995 line 6 (`qbi`), box 7 (foreign tax paid) to Form 1116 or straight to
 Schedule 3; 1099-INT box 1 to Schedule B. The boxes that change where an amount goes are questions. The form's own
@@ -25,7 +30,11 @@ from .k1 import EIN, Value
 from .prior import YEAR, Check, Question, _rows, amount
 
 TITLES = {"1099-DIV": "Dividends", "1099-INT": "Interest"}  # a form's title, and the word that follows it
-TITLE = re.compile(r"1099-(?:DIV\s+Dividends|INT\s+Interest)")
+TITLE = re.compile(r"1099-(?:DIV\s+Dividends|INT\s+Interest)"
+                   r"|DISTRIBUTIONS\s+\d{4}\s+1099-DIV|INCOME\s+\d{4}\s+1099-INT")
+SUMMARY_TITLES = {"1099-DIV": ("DIVIDENDS", "DISTRIBUTIONS"), "1099-INT": ("INTEREST", "INCOME")}  # first, last word
+SUMMARY_BOX = re.compile(r"^(\d{1,2}[a-h]?)-$")
+ACCOUNT = re.compile(r"^(?=.*\d)[0-9A-Z]{6,}$")
 BOX = re.compile(r"^\d{1,2}[a-h]?$")
 MONEY = re.compile(r"^\(?-?\$?(?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2}\)?$")
 SLACK = 2.5  # points: a box id printed this far under its label's line is on that row
@@ -84,6 +93,9 @@ def read(name: str, pages: dict[int, list[dict]]) -> list[F1099]:
     """The 1099-DIVs and 1099-INTs among a document's pages, given each page's words by page number; a repeat
     counts once."""
     found = [f for n, words in sorted(pages.items()) for f in on_page(name, n, words)]
+    tin = next((f.payer_tin for f in found if f.payer_tin), "")
+    for f in found:
+        f.payer_tin = f.payer_tin or tin
     for n, later in enumerate(found):
         if first := next((f for f in found[:n] if f.copy_of is None and _same(f, later)), None):
             later.copy_of = first.page
@@ -115,7 +127,52 @@ def on_page(name: str, page: int, words: list[dict]) -> list[F1099]:
             _fields(f, words)
             _checks(f)
             found.append(f)
+    return found or _on_summary(name, page, words)
+
+
+def _on_summary(name: str, page: int, words: list[dict]) -> list[F1099]:
+    """The forms a summary page prints, each one with an amount in it."""
+    found = []
+    for row in _rows(words, 1.5):
+        for i, w in enumerate(row):
+            form = w["text"].rstrip("*")
+            first, last = SUMMARY_TITLES.get(form, ("", ""))
+            if not first or i < 2 or not YEAR.fullmatch(row[i - 1]["text"]) or row[i - 2]["text"] != last:
+                continue
+            left = next((x["x0"] for x in row[:i] if x["text"] == first), w["x0"]) - 4
+            right = next((x["x0"] - 4 for x in row[i + 1:] if x["text"].isupper() and len(x["text"]) > 3), 10_000.0)
+            f = F1099(form=form, file=name, page=page, year=int(row[i - 1]["text"]))
+            below = [x for x in words if left <= x["x0"] < right and x["top"] > w["top"] + SLACK]
+            for line in _rows(below, 1.5):
+                _summary_row(f, line, page)
+            if any(v.amount for v in f.amounts.values()):
+                _fields(f, words)
+                _checks(f)
+                found.append(f)
     return found
+
+
+def _summary_row(f: F1099, line: list[dict], page: int) -> None:
+    """One row of a summary page: each box on it runs to the next box's id, and its amount is the last there."""
+    starts = [i for i, w in enumerate(line) if SUMMARY_BOX.match(w["text"])]
+    for start, end in zip(starts, [*starts[1:], len(line)], strict=False):  # a row of notes has no box
+        box = SUMMARY_BOX.match(line[start]["text"]).group(1)
+        held = line[start + 1:end]
+        money = next((w for w in reversed(held) if MONEY.match(w["text"])), None)
+        if box in f.labels or not held:
+            continue
+        label = " ".join(w["text"] for w in held if money is None or w["x0"] < money["x0"])
+        f.labels[box] = label.split(":")[0]
+        if money:
+            f.amounts[box] = Value(amount(money["text"]), page, money["top"], money["x0"], money["text"])
+        elif words := label.partition(":")[2].strip():
+            f.words[box] = words
+
+
+def account_on(words: list[dict]) -> str:
+    """The account a page's header prints as "Account 1AB23456"; "" when it prints no such thing."""
+    return next((row[i + 1]["text"] for row in _rows(words, 1.5) for i, w in enumerate(row[:-1])
+                 if w["text"] == "Account" and ACCOUNT.match(row[i + 1]["text"])), "")
 
 
 def _box(f: F1099, line: list[dict], page: int) -> None:
@@ -146,6 +203,7 @@ def _fields(f: F1099, words: list[dict]) -> None:
         f.account = next((w["text"] for w in sorted(words, key=lambda w: w["top"])
                           if number["top"] + 4 < w["top"] < number["top"] + 16
                           and number["x0"] - 150 <= w["x0"] <= number["x1"] and re.search(r"\d", w["text"])), "")
+    f.account = f.account or account_on(words)
     f.corrected = any(w["text"] == "CORRECTED" for w in words)
 
 

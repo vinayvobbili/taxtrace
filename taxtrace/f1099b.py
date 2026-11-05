@@ -11,6 +11,11 @@ with the date sold and at least two amounts, and each amount belongs to the colu
 is the row above, or on the sale's own row left of its first date; a symbol prints as "Symbol: ACME" or "(ACME)".
 A table can run on to the next page, under the same heading.
 
+Some brokers print "Proceeds from Broker and Barter Exchange Transactions" over "2025 1099-B*", tables headed "SHORT
+TERM TRANSACTIONS FOR COVERED TAX LOTS" (covered: the basis was reported), and columns named by box ("1d-Proceeds&",
+"1e-Cost or", "1f-Accrued market discount(D)&" over "1g-Wash sale loss disallowed(W)", a shared column whose letter
+says which). The date sold comes first there, so a sale's dates are told apart by which is later.
+
 What a sale adds to Schedule D is its proceeds less its basis, plus any market discount and wash sale loss
 disallowed: "unadjusted" means before those two. A disallowed loss isn't gone, it moved to the basis of what was
 bought back, and Form 8949 marks the sale with code W.
@@ -25,11 +30,14 @@ from datetime import date, datetime
 from decimal import Decimal
 from itertools import combinations
 
+from .f1099 import account_on
 from .k1 import EIN
 from .prior import YEAR, Check, Question, _rows, amount
 
-TITLE = re.compile(r"1099-B\s+Proceeds\s+From\s+Broker", re.IGNORECASE)
+TITLE = re.compile(r"1099-B\s+Proceeds\s+From\s+Broker|Proceeds\s+From\s+Broker\s+and\s+Barter\s+Exchange",
+                   re.IGNORECASE)
 HEADING = re.compile(r"(Short|Long)-Term\s+Transactions.*?(Not\s+)?Reported", re.IGNORECASE)
+LOTS = re.compile(r"(SHORT|LONG)\s+TERM\s+TRANSACTIONS\s+FOR\s+(NON)?COVERED")
 BOX_CHECKED = re.compile(r"Box\s+([A-F])\s+checked", re.IGNORECASE)
 MONEY = re.compile(r"^\(?-?\$?(?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2}\)?-?$")
 DAY = re.compile(r"^\d{1,2}/\d{1,2}/\d{2,4}$")
@@ -102,8 +110,9 @@ def is_form(page_text: str) -> bool:
     return bool(TITLE.search(" ".join(page_text.split())))
 
 
-def read(name: str, pages: dict[int, list[dict]]) -> F1099B | None:
-    """The sales among a document's pages, given each page's words by page number; None when there are none."""
+def read(name: str, pages: dict[int, list[dict]], other: dict[int, list[dict]] | None = None) -> F1099B | None:
+    """The sales among a document's pages, given each page's words by page number; None when there are none. `other`
+    is the document's other form pages: the payer's TIN can be printed only there."""
     form = F1099B(file=name)
     term, covered, columns, box = "", True, {}, ""
     for n, words in sorted(pages.items()):
@@ -111,7 +120,7 @@ def read(name: str, pages: dict[int, list[dict]]) -> F1099B | None:
         label = ""
         for i, row in enumerate(rows):
             line = " ".join(w["text"] for w in row)
-            if m := HEADING.search(line):
+            if m := HEADING.search(line) or LOTS.search(line):
                 term, covered = m.group(1).lower(), not m.group(2)
                 box = (b.group(1).upper() if (b := BOX_CHECKED.search(line)) else BOXES[term, covered])
                 columns, label = {}, ""
@@ -127,7 +136,7 @@ def read(name: str, pages: dict[int, list[dict]]) -> F1099B | None:
                 label = line
     if not form.sales:
         return None
-    _fields(form, pages)
+    _fields(form, {**(other or {}), **pages})
     _checks(form)
     return form
 
@@ -151,6 +160,8 @@ def survey(pages: dict[int, list[dict]]) -> list[str]:
 def _header(row: list[dict], below: list[dict]) -> dict[str, float]:
     """A table's columns, each kept's middle, when this row and the next are a header; {} otherwise."""
     texts = {w["text"] for w in row}
+    if any(t.startswith("1d-") for t in texts):
+        return _box_header(row, below)
     if not ({"Proceeds", "Sold"} & texts and "Cost" in texts):
         return {}
     columns: dict[str, float] = {}
@@ -160,23 +171,39 @@ def _header(row: list[dict], below: list[dict]) -> dict[str, float]:
     return columns
 
 
+def _box_header(row: list[dict], below: list[dict]) -> dict[str, float]:
+    """A header whose columns are named by box. Amounts print flush with a column's right edge, so that's its place."""
+    words = (*row, *below)
+    columns = {kept: next((w["x1"] for w in words if w["text"].startswith(prefix)), None)
+               for kept, prefix in (("proceeds", "1d-"), ("basis", "1e-"), ("wash", "1f-"))}
+    columns["gain"] = next((w["x1"] for w in words if w["text"].endswith("(-)&")), None)
+    return {kept: place for kept, place in columns.items() if place is not None}
+
+
 def _sale(row: list[dict], columns: dict[str, float], term: str, box: str, label: str, page: int) -> Sale | None:
     days = [w for w in row if DAY.match(w["text"])]
     money = [w for w in row if MONEY.match(w["text"])]
     if not days or len(money) < 2:
         return None
-    held = {kept: amount(w["text"].rstrip("-")) * (-1 if w["text"].endswith("-") else 1)
-            for kept, w in _under_columns(money, columns)}
+    under = _under_columns(money, columns)
+    held = {kept: amount(w["text"].rstrip("-")) * (-1 if w["text"].endswith("-") else 1) for kept, w in under}
     if "proceeds" not in held:
         return None
-    sold = _day(days[-1]["text"])
-    acquired = _day(days[0]["text"]) if len(days) > 1 else None
+    if "discount" not in columns and any(kept == "wash" and _marked_discount(w, row) for kept, w in under):
+        held["discount"] = held.pop("wash")
+    dates = sorted(_day(w["text"]) for w in days)
+    sold, acquired = dates[-1], dates[0] if len(dates) > 1 else None
     left = " ".join(w["text"] for w in row if w["x1"] <= days[0]["x0"] and not re.fullmatch(r"[\d,.]+", w["text"]))
     description = " ".join(s for s in (label, left) if s and s.lower() not in ("sale", "sell", "redemption"))
     m = SYMBOL.search(description)
     return Sale(description, (m.group(1) or m.group(2)) if m else "", sold, acquired, held["proceeds"],
                 held.get("basis"), term, box, held.get("gain"), held.get("discount", Decimal(0)),
                 held.get("wash", Decimal(0)), held.get("withheld", Decimal(0)), page)
+
+
+def _marked_discount(money: dict, row: list[dict]) -> bool:
+    """Whether an amount in the column that market discount and wash sales share has the letter D just right of it."""
+    return any(w["text"] == "D" and 0 <= w["x0"] - money["x1"] < 12 for w in row)
 
 
 def _under_columns(money: list[dict], columns: dict[str, float]) -> list[tuple[str, dict]]:
@@ -198,7 +225,11 @@ def _day(token: str) -> date:
 
 def _year(words: list[dict]) -> int | None:
     """The year on the title's line, which can print in another font, a little off the line of the words around it."""
-    for title in (w for w in words if w["text"] == "1099-B"):
+    for title in (w for w in words if w["text"].rstrip("*") == "1099-B"):
+        before = max((w for w in words if abs(w["top"] - title["top"]) <= TITLE_SLACK and w["x1"] <= title["x0"]),
+                     key=lambda w: w["x0"], default=None)
+        if before and YEAR.fullmatch(before["text"]):
+            return int(before["text"])
         line = sorted((w for w in words if abs(w["top"] - title["top"]) <= TITLE_SLACK and w["x0"] > title["x0"]),
                       key=lambda w: w["x0"])
         if m := YEAR.search(" ".join(w["text"] for w in line)):
@@ -210,6 +241,7 @@ def _fields(form: F1099B, pages: dict[int, list[dict]]) -> None:
     for words in pages.values():
         form.year = form.year or _year(words)
         form.payer_tin = form.payer_tin or next((w["text"] for w in words if EIN.match(w["text"])), "")
+        form.account = form.account or account_on(words)
         form.corrected = form.corrected or any(w["text"] == "CORRECTED" for w in words)
 
 

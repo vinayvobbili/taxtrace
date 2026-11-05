@@ -65,6 +65,46 @@ def test_each_box_is_read_by_its_row_in_its_forms_column(tmp_path: Path):
     assert k1.verify(dividends, text.words(path, 1)) == [] and k1.verify(interest, text.words(path, 1)) == []
 
 
+SUMMARY = [
+    (40, 60.0, "Marlowe Brokerage"), (300, 60.0, "Account"), (345, 60.0, "9QX41775"),
+    (40, 90.0, "PAYER'S TIN:"), (110, 90.0, "47-1029384"),
+    (40, 120.0, "DIVIDENDS AND DISTRIBUTIONS"), (221, 120.0, "2025"), (244, 120.0, "1099-DIV*"),
+    (427, 120.0, "MISCELLANEOUS INFORMATION"), (608, 120.0, "2025"), (631, 120.0, "1099-MISC*"),
+    (42, 135.0, "1a-"), (56, 135.0, "Total ordinary dividends (includes lines 1b, 5, 2e)"), (345, 135.0, "412.60"),
+    (427, 135.0, "2-"), (441, 135.0, "Royalties"), (600, 135.0, "9.99"),
+    (42, 145.0, "1b-"), (56, 145.0, "Qualified dividends"), (345, 145.0, "300.10"),
+    (42, 155.0, "2a-"), (56, 155.0, "Total capital gain distributions (includes lines 2b, 2c)"), (353, 155.0, "0.00"),
+    (42, 165.0, "8-"), (56, 165.0, "Foreign country:"), (182, 165.0, "See detail"),
+    (240, 165.0, "7-"), (252, 165.0, "Foreign tax paid:"), (353, 165.0, "6.25"),
+    (42, 180.0, "Changes to dividend classifications may require an amended form."),
+]
+BLANK_INTEREST = [
+    (300, 60.0, "Account"), (345, 60.0, "9QX41775"),
+    (40, 88.0, "INTEREST INCOME"), (187, 88.0, "2025"), (210, 88.0, "1099-INT"),
+    (360, 88.0, "ORIGINAL ISSUE DISCOUNT"),
+    (46, 120.0, "1-"), (56, 120.0, "Interest income (not included in line 3)"), (300, 120.0, "0.00"),
+]
+SOME_INTEREST = [*BLANK_INTEREST[:-1], (300, 120.0, "18.40")]
+
+
+def test_a_summary_page_is_read_with_two_boxes_on_a_row_and_its_own_columns(tmp_path: Path):
+    path = draw(tmp_path / "1099.pdf", [SUMMARY])
+    [dividends] = read(path)
+    assert (dividends.form, dividends.year, dividends.payer_tin, dividends.account) == (
+        "1099-DIV", 2025, "47-1029384", "9QX41775")
+    assert {box: v.amount for box, v in dividends.amounts.items()} == {
+        "1a": Decimal("412.60"), "1b": Decimal("300.10"), "2a": 0, "7": Decimal("6.25")}
+    assert dividends.words == {"8": "See detail"} and dividends.failed == []
+    assert k1.verify(dividends, text.words(path, 1)) == []
+
+
+def test_a_summary_form_with_nothing_in_it_is_none_and_the_tin_comes_from_another_page(tmp_path: Path):
+    assert read(draw(tmp_path / "blank.pdf", [BLANK_INTEREST])) == []
+    dividends, interest = read(draw(tmp_path / "both.pdf", [SUMMARY, SOME_INTEREST]))
+    assert (interest.form, interest.year) == ("1099-INT", 2025) and interest.amount("1") == Decimal("18.40")
+    assert interest.payer_tin == dividends.payer_tin == "47-1029384"
+
+
 def test_a_part_larger_than_its_whole_fails_and_a_repeat_counts_once(tmp_path: Path):
     more = edited(STATEMENT, **{"1,902.55": "3,100.00"})
     _, dividends, _, copy = read(draw(tmp_path / "1099.pdf", [more, more]))

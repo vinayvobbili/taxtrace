@@ -68,6 +68,53 @@ def test_each_sale_is_read_under_its_heading_and_columns(tmp_path: Path):
     assert any("wash sale" in q.text for q in form.questions)
 
 
+# a broker that names columns by box, prints the date sold first and shares a column between market discount and wash
+LOTS_PAGE = [
+    (40, 40.0, "Marlowe Brokerage"), (500, 40.0, "Account"), (545, 40.0, "9QX41775"),
+    (150, 60.0, "Proceeds from Broker and Barter Exchange Transactions"),
+    (40, 72.0, "2026"), (63, 72.0, "1099-B*"), (100, 72.0, "OMB No. 1545-0715"), (500, 72.0, "02/11/2027"),
+    (40, 100.0, "SHORT TERM TRANSACTIONS FOR COVERED TAX LOTS [Ordinary gains or losses are identified] (Lines 2 & 5)"),
+    (40, 112.0, "Report on Form 8949, Part I with Box A checked. Basis is provided to the IRS. (Line 12)"),
+    (40, 130.0, "1c-Date"), (256, 130.0, "1d-Proceeds&"), (424, 130.0, "1f-Accrued(D)&"), (556, 130.0, "Gain(-)&"),
+    (40, 139.0, "of"), (319, 139.0, "1b-Date"), (378, 139.0, "1e-Cost"), (452, 139.0, "1g-Wash"),
+    (40, 148.0, "disposed"), (178, 148.0, "Quantity"), (318, 148.0, "acquired"), (467, 148.0, "disallowed(W)"),
+    (36, 162.0, "GLOBEX CORP"),
+    (40, 174.0, "10/20/2026"), (190, 174.0, "1.500"), (280, 174.0, "900.00"), (321, 174.0, "Various"),
+    (395, 174.0, "1,300.00"), (503, 174.0, "..."), (586, 174.0, "-400.00"), (623, 174.0, "Total of 2 transactions"),
+    (36, 186.0, "UMBRELLA CORP"),
+    (40, 198.0, "10/21/2026"), (190, 198.0, "2.000"), (280, 198.0, "500.00"), (318, 198.0, "03/02/2026"),
+    (395, 198.0, "600.00"), (480, 198.0, "40.00"), (503, 198.0, "W"), (586, 198.0, "-60.00"), (623, 198.0, "Sale"),
+    (36, 210.0, "HOOLI INC"),
+    (40, 222.0, "10/22/2026"), (190, 222.0, "3.000"), (280, 222.0, "700.00"), (318, 222.0, "04/06/2026"),
+    (395, 222.0, "650.00"), (480, 222.0, "15.00"), (503, 222.0, "D"), (586, 222.0, "65.00"), (623, 222.0, "Sale"),
+    (40, 234.0, "Totals:"), (280, 234.0, "2,100.00"), (395, 234.0, "2,550.00"), (586, 234.0, "-395.00"),
+    (40, 252.0, "LONG TERM TRANSACTIONS FOR NONCOVERED TAX LOTS (Lines 2 & 5)"),
+    (40, 270.0, "1c-Date"), (256, 270.0, "1d-Proceeds&"), (424, 270.0, "1f-Accrued(D)&"), (556, 270.0, "Gain(-)&"),
+    (378, 279.0, "1e-Cost"),
+    (36, 292.0, "INITECH FUND"),
+    (40, 304.0, "11/03/2026"), (190, 304.0, "4.000"), (280, 304.0, "800.00"), (318, 304.0, "05/07/2020"),
+    (395, 304.0, "500.00"), (503, 304.0, "..."), (586, 304.0, "300.00"), (623, 304.0, "Sale"),
+]
+LOTS_SUMMARY = [(40, 90.0, "PAYER'S TIN:"), (110, 90.0, "47-1029384"),
+                (40, 120.0, "DIVIDENDS AND DISTRIBUTIONS"), (221, 120.0, "2026"), (244, 120.0, "1099-DIV*")]
+
+
+def test_a_table_named_by_boxes_is_read_with_the_date_sold_first(tmp_path: Path):
+    path = draw(tmp_path / "1099.pdf", [LOTS_SUMMARY, LOTS_PAGE])
+    form = read(path)
+    assert form.year == 2026 and form.account == "9QX41775" and form.failed == []
+    many, washed, discounted, old = form.sales
+    assert (many.term, many.box, many.acquired, many.sold) == ("short", "A", None, date(2026, 10, 20))
+    assert (many.description, many.proceeds, many.basis, many.gain) == ("GLOBEX CORP", 900, 1300, -400)
+    assert (washed.sold, washed.acquired) == (date(2026, 10, 21), date(2026, 3, 2))
+    assert (washed.wash, washed.discount, washed.gain) == (40, 0, -60)
+    assert (discounted.wash, discounted.discount, discounted.gain) == (0, 15, 65)
+    assert (old.term, old.box, old.gain) == ("long", "E", 300)
+    assert read(draw(tmp_path / "alone.pdf", [LOTS_PAGE])).payer_tin == ""
+    pages = {n: text.words(path, n) for n in (1, 2)}
+    assert f1099b.read(path.name, {2: pages[2]}, {1: pages[1]}).payer_tin == "47-1029384"
+
+
 def test_a_printed_gain_that_doesnt_add_up_fails(tmp_path: Path):
     form = read(draw(tmp_path / "1099.pdf", [edited(PAGE, **{"(400.00)": "(900.00)"})]))
     assert [c.what for c in form.failed] == ["each sale's printed gain or loss is its proceeds less its basis"]

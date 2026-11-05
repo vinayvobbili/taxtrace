@@ -717,7 +717,7 @@ def cmd_1099(args: argparse.Namespace) -> int:
         words = {n: text.words(doc, n, password) for n in forms}
         found = f1099.read(doc.name, words)
         sold_words = {n: text.words(doc, n, password) for n in sold}
-        sales_form = f1099b.read(doc.name, sold_words)
+        sales_form = f1099b.read(doc.name, sold_words, words)
         if sold and not sales_form:
             print(f"{name}: a Form 1099-B is printed here, but no sale was read from it")
             for line in f1099b.survey(sold_words):
