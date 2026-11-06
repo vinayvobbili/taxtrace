@@ -72,8 +72,11 @@ Early. What works today:
 pip install -e ".[dev,mcp]"
 ```
 
-`taxtrace[chat]` adds the chat's Claude SDK, `taxtrace[local]` the model that runs on your Mac and `taxtrace[mcp]`
-an [MCP server](#mcp-server-and-agent-skill).
+`taxtrace[chat]` adds the chat's Claude SDK and `taxtrace[mcp]` an [MCP server](#mcp-server-and-agent-skill). The
+chat's model on your own computer is whatever OpenAI-compatible server answers at `http://127.0.0.1:8010/v1`
+(`vllm-mlx serve <model> --port 8010`, `mlx_lm.server`, LM Studio; `LOCAL_LLM_URL` points elsewhere on the same
+computer). taxtrace never loads a model itself, so one server can hold a single copy for every program, and it
+refuses a server on another machine, since that model sees your values unmasked.
 
 ## Use
 

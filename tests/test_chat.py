@@ -4,7 +4,9 @@ import http.client
 import json
 import subprocess
 import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
@@ -125,6 +127,73 @@ def test_agy_quota_is_a_reason_to_try_the_next_model(monkeypatch):
         args, 1, stdout="", stderr="quota exhausted"))
     with pytest.raises(chat.Unavailable, match="quota exhausted"):
         chat._agy("Rules.", [{"role": "user", "content": "Which form?"}], chat.Settings())
+
+
+class FakeModelServer(BaseHTTPRequestHandler):
+    """An OpenAI-style server streaming "Form 1040" in two pieces; a question saying "busy" gets 503."""
+    asked: ClassVar[list[dict]] = []
+
+    def log_message(self, format, *args):
+        pass
+
+    def do_GET(self):
+        self._reply(200, b'{"data": [{"id": "some-model"}]}', "application/json")
+
+    def do_POST(self):
+        body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        FakeModelServer.asked.append(body)
+        if body["messages"][-1]["content"] == "busy":
+            return self._reply(503, b'{"error": {"message": "memory pressure is critical"}}', "application/json")
+        events = [{"choices": [{"delta": {"content": "Form "}}]}, {"choices": [{"delta": {"content": "1040"}}]},
+                  {"choices": [], "usage": {"prompt_tokens": 40, "completion_tokens": 2}}]
+        self._reply(200, b"".join(b"data: " + json.dumps(e).encode() + b"\n\n" for e in events) + b"data: [DONE]\n\n",
+                    "text/event-stream")
+
+    def _reply(self, code, data, kind):
+        self.send_response(code)
+        self.send_header("Content-Type", kind)
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+
+@pytest.fixture
+def model_server(monkeypatch):
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), FakeModelServer)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    FakeModelServer.asked = []
+    monkeypatch.setenv("LOCAL_LLM_URL", f"http://127.0.0.1:{srv.server_address[1]}/v1/")
+    yield FakeModelServer.asked
+    srv.shutdown()
+    srv.server_close()
+
+
+def test_the_local_model_server_streams_its_answer_and_names_no_model(model_server):
+    pieces = list(chat._local("Rules.", [{"role": "user", "content": "Which form?"}], chat.Settings()))
+    assert pieces[:2] == ["Form ", "1040"]
+    assert pieces[2]["stats"]["input_tokens"] == 40 and pieces[2]["stats"]["output_tokens"] == 2
+    (sent,) = model_server
+    assert sent["model"] == "local" and sent["stream"]
+    assert sent["messages"][0] == {"role": "system", "content": "Rules."}
+    assert sent["chat_template_kwargs"] == {"enable_thinking": False}
+    assert chat.status()[2]["ready"]
+
+
+def test_a_busy_or_missing_local_server_is_a_reason_to_try_the_next_model(model_server, monkeypatch):
+    with pytest.raises(chat.Unavailable, match="503: memory pressure is critical"):
+        chat._local("Rules.", [{"role": "user", "content": "busy"}], chat.Settings())
+    monkeypatch.setenv("LOCAL_LLM_URL", "http://127.0.0.1:9/v1")
+    with pytest.raises(chat.Unavailable, match=r"no local model server at http://127.0.0.1:9/v1"):
+        chat._local("Rules.", [{"role": "user", "content": "Which form?"}], chat.Settings())
+    local = chat.status()[2]
+    assert not local["ready"] and "no local model server answers" in local["why"]
+
+
+def test_the_local_model_must_be_on_this_computer(model_server, monkeypatch):
+    monkeypatch.setenv("LOCAL_LLM_URL", "http://models.globex.example:8010/v1")
+    with pytest.raises(chat.Unavailable, match="must be on this computer"):
+        chat._local("Rules.", [{"role": "user", "content": "Which form?"}], chat.Settings())
+    assert model_server == [] and "must be on this computer" in chat.status()[2]["why"]
 
 
 @pytest.fixture

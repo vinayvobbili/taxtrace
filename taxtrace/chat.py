@@ -5,7 +5,9 @@ Three models, tried in order until one answers:
 - claude: Anthropic's API (pip install 'taxtrace[chat]'), with ANTHROPIC_API_KEY or a macOS Keychain item
   holding the key.
 - agy: Google's Antigravity CLI, on its subscription's quota.
-- local: an MLX model on this Mac (pip install 'taxtrace[local]').
+- local: a model on this Mac, behind any OpenAI-compatible server at http://127.0.0.1:8010/v1 (LOCAL_LLM_URL
+  points elsewhere on this computer): vllm-mlx, mlx_lm.server, LM Studio. One server holds the one copy of the
+  model and queues every program's requests, so taxtrace never loads a model itself.
 
 Claude and agy only ever see masked text. Before anything is sent to them, the instructions, the workspace
 listing and every message of the conversation go through the same masking `taxtrace redact` uses: digits
@@ -20,16 +22,18 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
-import platform
 import shutil
 import subprocess
 import sys
 import tempfile
+import time
+import urllib.error
+import urllib.request
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import date
-from functools import lru_cache
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from . import redact, text, workspace
 
@@ -37,6 +41,8 @@ BACKENDS = ("claude", "agy", "local")  # the default order: the strongest model 
 LABELS = {"claude": "Claude", "agy": "Antigravity (agy)", "local": "On this Mac"}
 CLOUD = {"claude", "agy"}
 KEYCHAIN = "anthropic"  # the Keychain item (its service name) holding the Anthropic API key
+LOCAL_URL = "http://127.0.0.1:8010/v1"  # the local model server, unless LOCAL_LLM_URL names another
+LOOPBACK = {"127.0.0.1", "localhost", "::1"}  # the local model gets unmasked data, so its server must be here
 # Where agy's installer and Homebrew put it: a launchd service's PATH has neither.
 AGY_PLACES = ("~/.local/bin/agy", "/opt/homebrew/bin/agy", "/usr/local/bin/agy")
 MAX_MESSAGE = 8000
@@ -80,13 +86,17 @@ class Settings:
     keychain: str = KEYCHAIN
     claude_model: str = "claude-sonnet-5-5"  # quick, conversational replies
     agy_model: str = "claude-sonnet-5-5-medium"  # `agy models` lists the ids
-    local_model: str = "mlx-community/Qwen3.5-9B-MLX-4bit"
+    local_url: str = ""  # "": LOCAL_LLM_URL, or LOCAL_URL. The server picks the model.
     max_tokens: int = 1500
     max_turns: int = 24  # the most recent messages sent with each question
     agy_timeout: float = 180.0
+    local_timeout: float = 900.0  # a question can wait in the server's line behind other programs
 
     def model(self, backend: str) -> str:
-        return {"claude": self.claude_model, "agy": self.agy_model, "local": self.local_model}[backend]
+        return {"claude": self.claude_model, "agy": self.agy_model, "local": "the local model server"}[backend]
+
+    def server(self) -> str:
+        return (self.local_url or os.environ.get("LOCAL_LLM_URL") or LOCAL_URL).rstrip("/")
 
 
 def clean(messages, turns: int = Settings.max_turns) -> list[dict]:
@@ -269,40 +279,80 @@ def _agy(system: str, messages: list[dict], settings: Settings) -> Iterator[str 
                             "output_tokens": int(used.get("output_tokens") or 0)}}])
 
 
-def apple_silicon() -> bool:
-    return sys.platform == "darwin" and platform.machine() == "arm64"
+def local_problem(url: str) -> str:
+    """Why `url` can't be the local model's server, or "". It gets the user's values unmasked, so it must be on
+    this computer."""
+    parts = urlsplit(url)
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        return f"the local model server's address {url!r} isn't a URL"
+    if parts.hostname not in LOOPBACK:
+        return f"the local model server must be on this computer (127.0.0.1 or localhost), not {parts.hostname}"
+    return ""
 
 
-@lru_cache(maxsize=1)
-def _local_model(name: str):
-    import mlx_lm
+def local_answering(url: str) -> bool:
+    """Whether a server answers at `url` (its model list, which never loads a model)."""
+    try:
+        with urllib.request.urlopen(f"{url}/models", timeout=2) as reply:
+            return reply.status == 200
+    except (OSError, ValueError):
+        return False
 
-    return mlx_lm.load(name)
+
+def _server_says(e: urllib.error.HTTPError) -> str:
+    try:
+        body = json.loads(e.read() or b"{}")
+    except ValueError:
+        body = {}
+    error = body.get("error") if isinstance(body, dict) else None
+    message = error.get("message") if isinstance(error, dict) else error or (body.get("detail") if body else "")
+    return str(message or e.reason).strip()[:300]
 
 
 def _local(system: str, messages: list[dict], settings: Settings) -> Iterator[str | dict]:
-    if not apple_silicon():
-        raise Unavailable("needs a Mac with Apple Silicon")
+    """The local model server, streamed. It names the model itself; the request only turns thinking off, which a
+    template without that switch ignores."""
+    url = settings.server()
+    if problem := local_problem(url):
+        raise Unavailable(problem)
+    body = {"model": "local", "messages": [{"role": "system", "content": system}, *messages],
+            "max_tokens": settings.max_tokens, "stream": True, "stream_options": {"include_usage": True},
+            "chat_template_kwargs": {"enable_thinking": False}}
+    request = urllib.request.Request(f"{url}/chat/completions", json.dumps(body).encode(),
+                                     {"Content-Type": "application/json"})
+    began = time.monotonic()
     try:
-        import mlx_lm  # noqa: F401
-    except ImportError:
-        raise Unavailable("needs: pip install 'taxtrace[local]'") from None
-    return _local_pieces(system, messages, settings)
+        reply = urllib.request.urlopen(request, timeout=settings.local_timeout)
+    except urllib.error.HTTPError as e:
+        raise Unavailable(f"the local model server answered {e.code}: {_server_says(e)}") from None
+    except (OSError, ValueError) as e:
+        why = getattr(e, "reason", e)
+        raise Unavailable(f"no local model server at {url} ({why}); start one there, or set LOCAL_LLM_URL") from None
+    return _local_pieces(reply, began)
 
 
-def _local_pieces(system: str, messages: list[dict], settings: Settings) -> Iterator[str | dict]:
-    import mlx_lm
-
-    model, tokenizer = _local_model(settings.local_model)
-    prompt = tokenizer.apply_chat_template([{"role": "system", "content": system}, *messages],
-                                           add_generation_prompt=True, tokenize=False, enable_thinking=False)
-    last = None
-    for last in mlx_lm.stream_generate(model, tokenizer, prompt, max_tokens=settings.max_tokens):
-        if last.text:
-            yield last.text
-    if last:
-        yield {"stats": {"input_tokens": last.prompt_tokens, "output_tokens": last.generation_tokens,
-                         "tokens_per_sec": round(last.generation_tps, 1)}}
+def _local_pieces(reply, began: float) -> Iterator[str | dict]:
+    """Text from the server's events (`data: {...}` lines) as it comes, then the token counts."""
+    used: dict = {}
+    with reply:
+        for raw in reply:
+            line = raw.decode("utf-8", "replace").strip()
+            if not line.startswith("data:"):
+                continue
+            data = line[5:].strip()
+            if data == "[DONE]":
+                break
+            chunk = json.loads(data)
+            if chunk.get("error"):
+                raise Unavailable(f"the local model server stopped: {chunk['error']}")
+            used = chunk.get("usage") or used
+            for choice in chunk.get("choices") or ():
+                if piece := (choice.get("delta") or {}).get("content"):
+                    yield piece
+    output = int(used.get("completion_tokens") or 0)
+    seconds = time.monotonic() - began
+    yield {"stats": {"input_tokens": int(used.get("prompt_tokens") or 0), "output_tokens": output,
+                     **({"tokens_per_sec": round(output / seconds, 1)} if output and seconds > 0 else {})}}
 
 
 RUNNERS: dict[str, Callable[[str, list[dict], Settings], Iterator[str | dict]]] = {
@@ -310,7 +360,8 @@ RUNNERS: dict[str, Callable[[str, list[dict], Settings], Iterator[str | dict]]] 
 
 
 def status(settings: Settings | None = None) -> list[dict]:
-    """Each model in the order, whether it looks ready and why not. Only looks: no key is read, nothing is called."""
+    """Each model in the order, whether it looks ready and why not. Only looks: no key is read and no model is
+    asked anything (the local server is asked only for its model list)."""
     settings = settings or Settings()
     out = []
     for backend in settings.order:
@@ -323,8 +374,8 @@ def status(settings: Settings | None = None) -> list[dict]:
         elif backend == "agy":
             why = "" if find_agy() else "the Antigravity CLI (agy) isn't installed"
         elif backend == "local":
-            why = ("needs a Mac with Apple Silicon" if not apple_silicon() else
-                   "needs: pip install 'taxtrace[local]'" if importlib_missing("mlx_lm") else "")
+            url = settings.server()
+            why = local_problem(url) or ("" if local_answering(url) else f"no local model server answers at {url}")
         out.append({"backend": backend, "label": LABELS[backend], "model": settings.model(backend),
                     "cloud": backend in CLOUD, "ready": not why, "why": why})
     return out

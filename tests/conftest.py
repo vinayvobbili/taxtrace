@@ -77,3 +77,9 @@ def no_real_gate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     helper = tmp_path / "gate" / "keychain-gate"
     monkeypatch.setattr(gate, "helper_path", lambda: helper)
     return helper
+
+
+@pytest.fixture(autouse=True)
+def no_real_model_server(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Never a local model server running on this computer: a test that wants one starts its own."""
+    monkeypatch.setenv("LOCAL_LLM_URL", "http://127.0.0.1:9/v1")
