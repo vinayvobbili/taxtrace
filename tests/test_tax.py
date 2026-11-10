@@ -37,8 +37,8 @@ def test_brackets_use_the_tables_band_under_100000_and_the_worksheet_above():
 def test_capital_gains_sit_on_top_of_the_other_income():
     assert tax.with_capital_gains(Decimal(50000), Decimal(10000), 2026, "joint") == tax.on_brackets(
         Decimal(40000), 2026, "joint")  # all of it inside the 0% band
-    all_at_15 = tax.with_capital_gains(Decimal(200000), Decimal(20000), 2026, "joint")
-    assert all_at_15 == tax.on_brackets(Decimal(180000), 2026, "joint") + 3000
+    all_at_15 = tax.with_capital_gains(Decimal(190000), Decimal(20000), 2026, "joint")
+    assert all_at_15 == tax.on_brackets(Decimal(170000), 2026, "joint") + 3000
     split = tax.with_capital_gains(Decimal(108900), Decimal(20000), 2026, "joint")
     assert split == tax.on_brackets(Decimal(88900), 2026, "joint") + 1500  # 10,000 at 0%, 10,000 at 15%
     assert tax.with_capital_gains(Decimal(700000), Decimal(200000), 2026, "joint") == tax.on_brackets(
