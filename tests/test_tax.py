@@ -29,7 +29,7 @@ def build(*forms: dict, found: dict | None = None, **kw) -> tax.Form:
 
 def test_brackets_use_the_tables_band_under_100000_and_the_worksheet_above():
     assert tax.on_brackets(Decimal(50000), 2026, "joint") == Decimal(5507)  # on 50,025: 2,480 + 12% of 25,225
-    assert tax.on_brackets(Decimal(200000), 2026, "joint") == Decimal(33424)  # 11,600 + 22% of 99,200
+    assert tax.on_brackets(Decimal(150000), 2026, "joint") == Decimal(22424)  # 11,600 + 22% of 49,200
     assert tax.on_brackets(Decimal(0), 2026, "joint") == 0
     assert tax.on_brackets(Decimal(1000), 2026, "head") is None
 
