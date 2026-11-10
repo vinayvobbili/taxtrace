@@ -41,8 +41,8 @@ def test_capital_gains_sit_on_top_of_the_other_income():
     assert all_at_15 == tax.on_brackets(Decimal(170000), 2026, "joint") + 3000
     split = tax.with_capital_gains(Decimal(108900), Decimal(20000), 2026, "joint")
     assert split == tax.on_brackets(Decimal(88900), 2026, "joint") + 1500  # 10,000 at 0%, 10,000 at 15%
-    assert tax.with_capital_gains(Decimal(700000), Decimal(200000), 2026, "joint") == tax.on_brackets(
-        Decimal(500000), 2026, "joint") + tax.whole(Decimal(113700) * tax.RATE_15 + Decimal(86300) * tax.RATE_20)
+    assert tax.with_capital_gains(Decimal(690000), Decimal(190000), 2026, "joint") == tax.on_brackets(
+        Decimal(500000), 2026, "joint") + tax.whole(Decimal(113700) * tax.RATE_15 + Decimal(76300) * tax.RATE_20)
 
 
 def test_preferred_income_never_costs_more_than_the_brackets():
@@ -174,18 +174,18 @@ def test_each_rule_is_tested_from_the_filed_forms_own_inputs():
 
 
 def test_line_18_takes_out_the_gains_by_how_far_under_the_top_rate_they_were_taxed():
-    assert tax.line_18(Decimal(200000), Decimal(20000), 2026, "joint") == Decimal(200000) - Decimal("11892")
-    assert tax.line_18(Decimal(200000), Decimal(20000), 2026, "joint", Decimal(1000)) == (
-        Decimal(200000) - (Decimal("324.3") + Decimal(19000) * tax.WORLD_AT_15))
+    assert tax.line_18(Decimal(190000), Decimal(20000), 2026, "joint") == Decimal(190000) - Decimal("11892")
+    assert tax.line_18(Decimal(190000), Decimal(20000), 2026, "joint", Decimal(1000)) == (
+        Decimal(190000) - (Decimal("324.3") + Decimal(19000) * tax.WORLD_AT_15))
     assert tax.line_18(Decimal(108900), Decimal(20000), 2026, "joint") == (
         Decimal(108900) - (Decimal(10000) + Decimal(10000) * tax.WORLD_AT_15))
     assert tax.line_18(Decimal(0), Decimal(0), 2026, "joint") == 0
 
 
 def test_a_foreign_gain_is_cut_by_its_rate_and_nothing_at_zero():
-    assert tax.adjusted_gain(Decimal(10000), Decimal(200000), Decimal(20000), 2026, "joint") == Decimal(4054)
+    assert tax.adjusted_gain(Decimal(10000), Decimal(190000), Decimal(20000), 2026, "joint") == Decimal(4054)
     assert tax.adjusted_gain(Decimal(10000), Decimal(50000), Decimal(20000), 2026, "joint") == 0
-    assert tax.adjusted_gain(Decimal(-500), Decimal(200000), Decimal(20000), 2026, "joint") == 0
+    assert tax.adjusted_gain(Decimal(-500), Decimal(190000), Decimal(20000), 2026, "joint") == 0
 
 
 def test_the_adjustment_is_required_from_20000_or_past_the_24_percent_bracket():
