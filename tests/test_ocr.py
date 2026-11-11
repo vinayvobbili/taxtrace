@@ -128,6 +128,37 @@ def test_headings_skip_scanner_noise():
     assert text.headings("#*#*#*\n") == []
 
 
+def test_headings_skip_short_mixed_barcode_tokens():
+    barcode = ["******** | ***#e", "###****#E | *****", "####~Z#E | ###E", "VA###V#Q | #Z##", "###### | #**#**"] * 4
+    address = ["Initech Savings", "100 Main Street", "Boulder, CO 80301"]
+    page = "\n".join([*barcode, *address, *barcode, "Year to Date Statement"])
+    assert text.headings(page, 5) == [*address, "Year to Date Statement"]
+
+
+def test_repeats_in_dense_tables_merge_into_one_run():
+    kinds = ["Large-Cap", "Mid-Cap", "Small-Cap", "Global", "Bond", "Value", "Growth", "Income", "Index", "Balanced"]
+    styles = ["Equity", "Fixed", "Blend", "Core", "Select", "Premier", "Select Plus", "Strategic", "Dynamic"]
+
+    def table(page: int, slip: int = 0) -> str:
+        rows = [f"{kinds[(r * 7 + page * 3) % 10]} {styles[(r * 5 + page * 2) % 9]} Fund {page * 100 + r}"
+                f"  $ {10000 + 937 * r * page:,}.{(r * page * 17) % 100:02d}  {(r * 13 + page * 7) % 97}%"
+                for r in range(40)]
+        # scanned again, a figure here and there is read differently
+        return "\n".join(row[:-2] + str(slip) + "%" if slip and r % 3 == 0 else row for r, row in enumerate(rows))
+
+    pages = [table(n) for n in range(1, 5)] + [table(n, slip=1) for n in range(1, 5)]
+    assert text.repeats(pages) == {5: 1, 6: 2, 7: 3, 8: 4}
+    assert cli._repeat_runs({5: 1, 6: 2, 7: 3, 8: 4}) == ["p5-p8 repeat p1-p4"]
+
+
+@pytest.mark.skipif(shutil.which("ocrmypdf") is None or shutil.which("qpdf") is None, reason="needs ocrmypdf and qpdf")
+def test_a_narrow_column_table_right_side_up_is_not_turned(tmp_path: Path):
+    cells = ["Large-Cap", "Equity", "$ 12,000", "Mid-Cap", "Growth", "$ 8,500", "Bond", "Index", "$ 4,000",
+             "Small-Cap", "Value", "$ 2,500", "Global", "Equity", "$ 6,000"]
+    scan = make_scan(tmp_path / "scan.pdf", cells)
+    assert text.pages(scan, ocr_cache=tmp_path / "ocr-cache").rotated == []
+
+
 def test_outline_shows_the_title_below_barcode_noise(tmp_path: Path, capsys):
     page = ["#*#*#*;; ##**", "*** ### ***", "Year to Date Statement", "Account Summary"]
     doc = make_pdf(tmp_path / "mail.pdf", [page])

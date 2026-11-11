@@ -43,12 +43,13 @@ logging.getLogger("pdfminer").setLevel(logging.ERROR)
 
 
 # Words any English page is full of; a page of OCR noise (a sheet fed upside down) has hardly any.
-COMMON_WORDS = frozenset("""a an and are as at be by for from has have if in into is it its of on or that the this to
+COMMON_WORDS = frozenset("""an and are as at be by for from has have if in into is it its of on or that the this to
 was were will with you your not no all any can may per than then there their they we our us who which what when where
 how date total amount paid account year period page number name address""".split())
 MIN_WORDS = 12  # a page with fewer words says too little to judge
 READS_BADLY = 0.08  # a page with a smaller share of common words is tried again turned over
-READS_BETTER = 0.05  # the turned reading must beat the first by this much to be kept
+READS_BETTER = 0.12  # the turned reading must beat the first by this much to be kept...
+READS_WELL = 0.2  # ...and be at least this much common words (prose has a third), so a table isn't turned by chance
 
 
 class UnsupportedDocument(ValueError):
@@ -276,7 +277,7 @@ def ocr(path: Path, cache: Path) -> Path:
 def common_share(page: str) -> float:
     """The share of a page's words that are common English ones: near 0 for OCR noise, a third or more for prose
     (1.0 for a page too short to judge)."""
-    found = re.findall(r"[a-z]+", page.lower())
+    found = [w for w in re.findall(r"[a-z]+", page.lower()) if len(w) >= 2]  # stray letters are noise either way
     return sum(w in COMMON_WORDS for w in found) / len(found) if len(found) >= MIN_WORDS else 1.0
 
 
@@ -299,6 +300,7 @@ def _upright(path: Path, found: list[str], ocr_cache: Path) -> Pages:
         except UnsupportedDocument:
             return Pages(found)
     rotated = [n for n in bad if n <= len(retry)
+               and common_share(retry[n - 1]) >= READS_WELL
                and common_share(retry[n - 1]) > common_share(found[n - 1]) + READS_BETTER]
     return Pages([retry[n - 1] if n in rotated else page for n, page in enumerate(found, 1)], rotated)
 
@@ -323,9 +325,13 @@ def marks(path: Path, page: int, password: str | None = None) -> list[dict]:
 
 
 def _noise(line: str) -> bool:
-    """A scanner's or barcode's line: mostly '#', '*' and other punctuation, with hardly a letter or digit."""
-    kept = "".join(line.split())
-    return sum(c.isalnum() for c in kept) < max(3, len(kept) // 2)
+    """A scanner's or barcode's line: tokens of '#', '*' and a stray letter ('###*#E | ***#e'). A line reads as prose
+    with a whole word of 4+ letters, two whole words of 2+, or a figure of 3+ digits standing alone."""
+    tokens = [t.strip(",.;:()") for t in line.split()]
+    alpha = [t for t in tokens if t.isalpha()]
+    return not (any(len(t) >= 4 for t in alpha) or sum(len(t) >= 2 for t in alpha) >= 2
+                or any(sum(c.isdigit() for c in t) >= 3 and t.replace(",", "").replace(".", "").isalnum()
+                       for t in tokens))
 
 
 def headings(page: str, lines: int = 2) -> list[str]:
@@ -343,12 +349,16 @@ def repeats(pages: list[str], similar: float = 0.9) -> dict[int, int]:
     seen: list[tuple[int, str]] = []
     found: dict[int, int] = {}
     for n, page in enumerate(pages, 1):
-        flat = " ".join(page.split())[:3000]
+        # noise lines dropped and masked runs closed up, so only the words and figures are compared
+        kept = " ".join(ln for ln in page.splitlines() if not _noise(ln))
+        flat = re.sub(r"([#*])\1+", r"\1", " ".join(kept.split()))[:4000]
         if len(flat) < OCR_MIN_CHARS:
             continue
         for earlier, other in seen:
+            # a long dense table reads less alike each time it is scanned: the bar drops with its length
+            bar = similar if min(len(flat), len(other)) < 1500 else similar - 0.1
             m = SequenceMatcher(None, flat, other, autojunk=False)
-            if m.real_quick_ratio() >= similar and m.quick_ratio() >= similar and m.ratio() >= similar:
+            if m.real_quick_ratio() >= bar and m.quick_ratio() >= bar and m.ratio() >= bar:
                 found[n] = earlier
                 break
         else:
