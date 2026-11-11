@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import re
 import shutil
 import subprocess
 import tempfile
@@ -41,12 +42,29 @@ OCR_MIN_CHARS = 20
 logging.getLogger("pdfminer").setLevel(logging.ERROR)
 
 
+# Words any English page is full of; a page of OCR noise (a sheet fed upside down) has hardly any.
+COMMON_WORDS = frozenset("""a an and are as at be by for from has have if in into is it its of on or that the this to
+was were will with you your not no all any can may per than then there their they we our us who which what when where
+how date total amount paid account year period page number name address""".split())
+MIN_WORDS = 12  # a page with fewer words says too little to judge
+READS_BADLY = 0.08  # a page with a smaller share of common words is tried again turned over
+READS_BETTER = 0.05  # the turned reading must beat the first by this much to be kept
+
+
 class UnsupportedDocument(ValueError):
     pass
 
 
 class Locked(UnsupportedDocument):
     """A password-protected PDF, and the password given (if any) didn't open it."""
+
+
+class Pages(list):
+    """A PDF's page texts; `rotated` holds the numbers (from 1) of the pages that were read turned 180 degrees."""
+
+    def __init__(self, found=(), rotated=()):
+        super().__init__(found)
+        self.rotated = list(rotated)
 
 
 def pages(path: Path, password: str | None = None, ocr_cache: Path | None = None) -> list[str]:
@@ -62,7 +80,9 @@ def pages(path: Path, password: str | None = None, ocr_cache: Path | None = None
                 # among typed ones shouldn't cost the rest
                 if not has_text(found):
                     raise
-        return found
+            else:
+                return _upright(path, found, ocr_cache)
+        return Pages(found)
     if suffix in IMAGE_SUFFIXES:
         return _pdf_pages(layer(path, ocr_cache), None)
     if suffix in TEXT_SUFFIXES:
@@ -253,6 +273,36 @@ def ocr(path: Path, cache: Path) -> Path:
     return out
 
 
+def common_share(page: str) -> float:
+    """The share of a page's words that are common English ones: near 0 for OCR noise, a third or more for prose
+    (1.0 for a page too short to judge)."""
+    found = re.findall(r"[a-z]+", page.lower())
+    return sum(w in COMMON_WORDS for w in found) / len(found) if len(found) >= MIN_WORDS else 1.0
+
+
+def _upright(path: Path, found: list[str], ocr_cache: Path) -> Pages:
+    """`found` with each page that reads as garbage tried again turned 180 degrees (a stack scanned with some sheets
+    fed upside down), keeping whichever reading has more real words. All such pages go through OCR in one run, and
+    only they do, so a clean scan costs nothing more."""
+    bad = [n for n, page in enumerate(found, 1) if common_share(page) < READS_BADLY]
+    exe = shutil.which("qpdf") if bad else None
+    if exe is None:
+        return Pages(found)
+    with tempfile.TemporaryDirectory(prefix="taxtrace-") as tmp:
+        turned = Path(tmp) / "turned.pdf"
+        run = subprocess.run([exe, "--deterministic-id", f"--rotate=+180:{','.join(map(str, bad))}", "--", str(path),
+                              str(turned)], capture_output=True)
+        if run.returncode not in (0, 3):  # 3: qpdf's warnings only
+            return Pages(found)
+        try:
+            retry = _pdf_pages(ocr(turned, ocr_cache), None)
+        except UnsupportedDocument:
+            return Pages(found)
+    rotated = [n for n in bad if n <= len(retry)
+               and common_share(retry[n - 1]) > common_share(found[n - 1]) + READS_BETTER]
+    return Pages([retry[n - 1] if n in rotated else page for n, page in enumerate(found, 1)], rotated)
+
+
 def words(path: Path, page: int, password: str | None = None) -> list[dict]:
     """One PDF page's words with where they sit (points from the top left): what a parser of a printed form, whose
     values aren't in reading order next to their labels, places them by."""
@@ -272,9 +322,38 @@ def marks(path: Path, page: int, password: str | None = None) -> list[dict]:
                  "bottom": round(s["bottom"], 1), "filled": bool(s.get("fill"))} for kind, s in shapes]
 
 
+def _noise(line: str) -> bool:
+    """A scanner's or barcode's line: mostly '#', '*' and other punctuation, with hardly a letter or digit."""
+    kept = "".join(line.split())
+    return sum(c.isalnum() for c in kept) < max(3, len(kept) // 2)
+
+
 def headings(page: str, lines: int = 2) -> list[str]:
-    """A page's first non-blank lines, which on a tax form name the form, with column gaps closed up."""
-    return [" ".join(ln.split()) for ln in page.splitlines() if ln.strip()][:lines]
+    """A page's first meaningful lines, which on a tax form name the form, with column gaps closed up. Blank lines
+    and scanner noise (a barcode read as '#*#*;;') are skipped."""
+    found = [" ".join(ln.split()) for ln in page.splitlines() if ln.strip()]
+    return [ln for ln in found if not _noise(ln)][:lines]
+
+
+def repeats(pages: list[str], similar: float = 0.9) -> dict[int, int]:
+    """Each page (from 1) whose text repeats an earlier page's, with that page: a stack scanned twice, or a form
+    printed again. OCR reads the same sheet a little differently each time, so a likeness of `similar` counts."""
+    from difflib import SequenceMatcher
+
+    seen: list[tuple[int, str]] = []
+    found: dict[int, int] = {}
+    for n, page in enumerate(pages, 1):
+        flat = " ".join(page.split())[:3000]
+        if len(flat) < OCR_MIN_CHARS:
+            continue
+        for earlier, other in seen:
+            m = SequenceMatcher(None, flat, other, autojunk=False)
+            if m.real_quick_ratio() >= similar and m.quick_ratio() >= similar and m.ratio() >= similar:
+                found[n] = earlier
+                break
+        else:
+            seen.append((n, flat))
+    return found
 
 
 def documents(paths: list[Path]) -> list[Path]:

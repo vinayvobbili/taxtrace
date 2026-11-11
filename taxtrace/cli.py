@@ -119,7 +119,9 @@ def cmd_show(args: argparse.Namespace) -> int:
 
 
 def cmd_outline(args: argparse.Namespace) -> int:
-    """Each page's first lines, masked: which forms and worksheets a document holds, and in what order."""
+    """Each page's first lines, masked: which forms and worksheets a document holds, and in what order.
+
+    Scanner noise is skipped, a page read turned over is marked (rotated), and repeated pages are listed."""
     terms = workspace.redact_terms()
     for doc in _documents(args):
         name = redact.redact(doc.name, terms, bare_years=True).text
@@ -129,12 +131,31 @@ def cmd_outline(args: argparse.Namespace) -> int:
             print(f"{name}: skipped, {err}")
             continue
         print(f"{name}: {len(pages)} pages")
+        turned = getattr(pages, "rotated", [])
         for n, page in enumerate(pages, 1):
             heads = [redact.redact(h, terms).text for h in text.headings(page, args.lines)]
             line = ' | '.join(heads) if heads else '(blank)'
             if not args.match or args.match.search(line):
-                print(f"  p{n}: {line}")
+                print(f"  p{n}{' (rotated)' if n in turned else ''}: {line}")
+        if not args.match:
+            for line in _repeat_runs(text.repeats([redact.redact(p, terms).text for p in pages])):
+                print(f"  {line}")
     return 0
+
+
+def _repeat_runs(repeats: dict[int, int]) -> list[str]:
+    """Pages that repeat earlier ones as runs, 'p5-p8 repeat p1-p4': consecutive pages of consecutive pages."""
+    runs: list[list[int]] = []  # [first page, last page, the earlier page the first repeats]
+    for n in sorted(repeats):
+        if runs and runs[-1][1] == n - 1 and repeats[n] == runs[-1][2] + (n - runs[-1][0]):
+            runs[-1][1] = n
+        else:
+            runs.append([n, n, repeats[n]])
+
+    def span(a: int, b: int) -> str:
+        return f"p{a}" if a == b else f"p{a}-p{b}"
+
+    return [f"{span(a, b)} repeat{'s' if a == b else ''} {span(first, first + b - a)}" for a, b, first in runs]
 
 
 def cmd_words(args: argparse.Namespace) -> int:

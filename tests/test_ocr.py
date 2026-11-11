@@ -10,7 +10,7 @@ from conftest import PRIOR_RETURN, make_pdf
 from taxtrace import cli, text
 
 
-def make_scan(path: Path, lines: list[str]) -> Path:
+def make_scan(path: Path, lines: list[str], upside_down: bool = False) -> Path:
     """A PDF whose page is a picture of text, the way a scanner makes one: no text layer."""
     from PIL import Image, ImageDraw, ImageFont
     from reportlab.lib.pagesizes import letter
@@ -22,6 +22,8 @@ def make_scan(path: Path, lines: list[str]) -> Path:
     font = ImageFont.load_default(size=56)
     for i, line in enumerate(lines):
         draw.text((120, 150 + 110 * i), line, fill="black", font=font)
+    if upside_down:
+        img = img.rotate(180)
     path.parent.mkdir(parents=True, exist_ok=True)
     c = canvas.Canvas(str(path), pagesize=letter)
     c.drawImage(ImageReader(img), 0, 0, *letter)
@@ -118,6 +120,42 @@ def test_outline_can_list_only_the_pages_naming_a_form(prior_return: Path, capsy
     assert "2 pages" in out and "  p2: Form 8582" in out and "  p1:" not in out
     with pytest.raises(SystemExit):
         cli.main(["outline", "--match", "(8582"])
+
+
+def test_headings_skip_scanner_noise():
+    page = "#*#*#*;; ##**\n*** ### ***\n\n  Year to Date Statement \n Initech Savings, Boulder, CO\n more"
+    assert text.headings(page, 2) == ["Year to Date Statement", "Initech Savings, Boulder, CO"]
+    assert text.headings("#*#*#*\n") == []
+
+
+def test_outline_shows_the_title_below_barcode_noise(tmp_path: Path, capsys):
+    page = ["#*#*#*;; ##**", "*** ### ***", "Year to Date Statement", "Account Summary"]
+    doc = make_pdf(tmp_path / "mail.pdf", [page])
+    assert cli.main(["outline", str(doc)]) == 0
+    assert "p1: Year to Date Statement | Account Summary\n" in capsys.readouterr().out
+
+
+def test_outline_flags_pages_that_repeat_earlier_ones(tmp_path: Path, capsys):
+    one = ["Year to Date Statement", "Initech Savings account summary for the period", "Opening balance 1,000.00"]
+    two = ["Notice of Change in Terms", "Globex Bank will change the fee on your account", "New monthly fee 10.00"]
+    doc = make_pdf(tmp_path / "mail.pdf", [one, two, one, [*two[:2], "New monthly fee 10.OO"]])  # an OCR slip
+    assert cli.main(["outline", str(doc)]) == 0
+    assert "  p3-p4 repeat p1-p2\n" in capsys.readouterr().out
+    assert text.repeats(["Opening balance 1,000.00 for the account", "", "Another page entirely different"]) == {}
+
+
+@pytest.mark.skipif(shutil.which("ocrmypdf") is None or shutil.which("qpdf") is None, reason="needs ocrmypdf and qpdf")
+def test_an_upside_down_scan_is_turned_and_read(tmp_path: Path, capsys):
+    lines = ["The total of the amounts paid to the account", "for the year is shown in the box on the page"]
+    scan = make_scan(tmp_path / "scan.pdf", lines, upside_down=True)
+    cache = tmp_path / "ocr-cache"
+    found = text.pages(scan, ocr_cache=cache)
+    assert "total of the amounts" in found[0] and found.rotated == [1]
+    right = make_scan(tmp_path / "right.pdf", lines)
+    assert text.pages(right, ocr_cache=cache).rotated == []  # an upright page isn't tried again
+    assert text.pages(scan, ocr_cache=cache) == found  # the same reading from the cache
+    assert cli.main(["outline", str(scan)]) == 0
+    assert "p1 (rotated): The total of the amounts" in capsys.readouterr().out
 
 
 def test_show_opens_one_workspace_file_in_chrome_at_a_page(workspace_home: Path, capsys, monkeypatch):

@@ -89,7 +89,11 @@ A path that isn't one from where you are is looked up in the workspace: `taxtrac
 `<workspace>/2025`.
 
 `taxtrace outline <files>` lists each page's masked heading: which forms a document holds, in order (`--match
-'1116|4562'` lists only the pages naming them). `taxtrace words <pdf> --page 2 --rows` shows a page's words, masked,
+'1116|4562'` lists only the pages naming them). The heading skips scanner and barcode noise (lines of `#`, `*` and
+punctuation), and the outline ends with the pages that repeat earlier ones (`p5-p8 repeat p1-p4`, allowing small OCR
+differences). A scanned page that reads as garbage (a sheet fed upside down) is read again turned 180 degrees and kept
+if that reads better, in `outline`, `redact` and every other command; the outline marks it (`p8 (rotated)`).
+`taxtrace words <pdf> --page 2 --rows` shows a page's words, masked,
 with where each one sits (`--x 300:450` and `--top 70:240` narrow it to a region): the geometry of a printed form, for
 writing a reader of it. `--marks` adds the drawn shapes, so a checkbox ticked with a drawn mark shows. `--page
 19-20,69`, `--page all` and several files take one run, so files that share a Keychain entry cost one approval.
