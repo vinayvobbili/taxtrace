@@ -15,7 +15,7 @@ next when one can't (no key, quota used up, not installed):
   default `anthropic`).
 - `agy`: Google's [Antigravity CLI](https://antigravity.google/docs/cli), on its subscription, run in an
   empty folder.
-- `local`: an MLX model on your Mac.
+- `local`: an AI model running on your Mac (MLX is Apple's software for that), served on this computer only.
 
 Claude and agy only ever see masked text. Every message, and the list of your documents, goes through the
 same masking as `taxtrace redact` first: digits become `#`, and words outside the IRS's own vocabulary

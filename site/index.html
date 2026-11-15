@@ -247,7 +247,7 @@ footer p { margin: 6px auto 0; max-width: 620px; }
   <div class="hero">
     <h1 class="grad">taxtrace</h1>
     <p class="tag grad">Every number on your return, traced to its page.</p>
-    <p class="what">For anyone who does their own US taxes from a pile of PDFs: W-2s, 1099s, K-1s, a rental, a foreign bank account. taxtrace reads them on your own computer and builds the sheet you type into your tax software, with the file, page and exact text behind every value. It never files anything and never guesses: what it can't settle becomes a question for you. Free and open source.</p>
+    <p class="what">For anyone who does their own US taxes from a pile of PDFs: W-2s, 1099s, K-1s (partnership income statements), a rental, a foreign bank account. taxtrace reads them on your own computer and builds the sheet you type into your tax software, with the file, page and exact text behind every value. It never files anything and never guesses: what it can't settle becomes a question for you. Free and open source.</p>
     <div class="uv" id="uv">
       <div class="seg" role="group" aria-label="Your system" hidden>
         <button type="button" data-os="unix" aria-pressed="true">Mac / Linux</button><button type="button" data-os="win" aria-pressed="false">Windows</button>
@@ -284,11 +284,11 @@ footer p { margin: 6px auto 0; max-width: 620px; }
   <section id="what">
     <h2>What it does</h2>
     <div class="grid">
-      <div class="card"><span class="badge">Read</span><h3>Reads what you already have</h3><p>W-2s, 1098s, brokers' 1099s, K-1s and K-3s, a rental's statements, foreign bank statements and last year's filed return. Scanned pages are read on your computer too.</p></div>
+      <div class="card"><span class="badge">Read</span><h3>Reads what you already have</h3><p>W-2s, 1098s, brokers' 1099s, partnership K-1s and K-3s, a rental's statements, foreign bank statements and last year's filed return. Scanned pages are read on your computer too.</p></div>
       <div class="card"><span class="badge">Trace</span><h3>Every number has a source</h3><p>Each value keeps the file, the page and the exact text it was read from. A check throws out any value whose quote isn't on that page.</p></div>
-      <div class="card"><span class="badge">Check</span><h3>The arithmetic is verified</h3><p>A K-1's capital account has to add up, a rental's Schedule E has to tie out, last year's carryovers have to roll forward. A miss is shown, not smoothed over.</p></div>
+      <div class="card"><span class="badge">Check</span><h3>The arithmetic is verified</h3><p>A partnership K-1's capital account has to add up, a rental's income schedule (Schedule E) has to tie out, last year's carryovers have to roll forward. A miss is shown, not smoothed over.</p></div>
       <div class="card"><span class="badge">Ask</span><h3>Questions instead of guesses</h3><p>A receipt that could be a repair or an improvement, a missing 1099, a rate to choose: each is a question for you, with the evidence next to it.</p></div>
-      <div class="card"><span class="badge">Plan</span><h3>The year, ahead of time</h3><p>Estimated-tax payments against the safe harbor, tax-saving moves ranked by the dollars each saves, IRA limits, stock sales and wash-sale windows.</p></div>
+      <div class="card"><span class="badge">Plan</span><h3>The year, ahead of time</h3><p>Quarterly estimated-tax payments checked against the amount that avoids a penalty, tax-saving moves ranked by the dollars each saves, IRA limits, and stock sales with the 30-day wash-sale rule (a loss is disallowed if you rebuy).</p></div>
       <div class="card"><span class="badge">Agents</span><h3>Works with your AI assistant</h3><p>Ask Claude (or another assistant that supports MCP, the standard way to plug tools into AI chat) what's in your workspace and what's left to do. It only ever gets masked text.</p></div>
     </div>
   </section>
@@ -353,12 +353,12 @@ footer p { margin: 6px auto 0; max-width: 620px; }
       <h2>Private by design</h2>
       <p class="cap">Your documents are read on your computer. One optional feature can reach a cloud model, and it only gets text with the values taken out.</p>
       <ul>
-        <li><b>Your documents never leave your computer.</b> Reading, scanned-page OCR, the checks and the entry sheet all run locally. Your workspace is a plain folder on your disk, and taxtrace refuses to put it inside a git repository.</li>
-        <li><b>Passwords stay in the Keychain.</b> A locked PDF's password is kept in the macOS Keychain, never in a file or on a command line, and <code>taxtrace keychain setup</code> makes each read ask for your Touch ID or Apple Watch.</li>
-        <li><b>Where a language model reads your documents, it runs on your Mac.</b> It is a local MLX model, never a public API.</li>
-        <li class="except"><b>The one exception is the optional chat.</b> By default it tries Claude's API, then Google's Antigravity, then a model on your Mac, and a cloud model is used only if you gave it a key or installed it. Cloud models see masked text only: digits become <code>#</code>, and names, streets and towns become <code>*</code>s. A question with an amount in it is answered on your Mac and never sent. Run <code>taxtrace ui --models local</code> to keep the chat on your computer entirely.</li>
+        <li><b>Your documents never leave your computer.</b> Reading, text recognition on scanned pages, the checks and the entry sheet all run locally. Your workspace is a plain folder on your disk, and taxtrace refuses to put it inside a git repository (a folder of tracked code), where it could be published by mistake.</li>
+        <li><b>Passwords stay in the Keychain.</b> A locked PDF's password is kept in the macOS Keychain (your Mac's password vault), never in a file or on a command line, and <code>taxtrace keychain setup</code> makes each read ask for your Touch ID or Apple Watch.</li>
+        <li><b>Any AI model that sees your real values runs on your Mac.</b> Reading the documents is plain code and text recognition, not an AI model. In the chat, the model that answers a question holding your amounts is a local one on your own computer (MLX, Apple's AI software, for example), never a public API.</li>
+        <li class="except"><b>The one exception is the optional chat.</b> By default it tries Claude's API, then Google's Antigravity (its command-line AI assistant), then a model on your Mac, and a cloud model is used only if you gave it a key or installed it. Cloud models see masked text only: digits become <code>#</code>, and names, streets and towns become <code>*</code>s. A question with an amount in it is answered on your Mac and never sent. Run <code>taxtrace ui --models local</code> to keep the chat on your computer entirely.</li>
         <li><b>The MCP server is read-only and masked.</b> A locked document is never opened and the Keychain is never asked.</li>
-        <li><b>No accounts, no usage data.</b> The only outside lookup is public exchange rates from the Federal Reserve and the Treasury, which carries nothing about you.</li>
+        <li><b>No accounts, no usage data.</b> Apart from the optional chat, the only outside lookup is public exchange rates for foreign amounts, from the Federal Reserve, the IRS and the Treasury. Each request names only a currency and a date, nothing about you.</li>
       </ul>
     </div>
   </section>

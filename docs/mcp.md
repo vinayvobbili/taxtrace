@@ -2,7 +2,7 @@
 
 ## MCP server and agent skill
 
-`taxtrace-mcp` lets Claude Code, Claude Desktop or any MCP client look at your workspace: what's in it, what
+`taxtrace-mcp` lets Claude Code, Claude Desktop or any MCP client (MCP, the Model Context Protocol, is the standard way an AI assistant calls tools) look at your workspace: what's in it, what
 each document is, which forms read cleanly, and what's on your to-do list. It returns **masked text only**.
 
 ```bash

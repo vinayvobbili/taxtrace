@@ -2,7 +2,7 @@
 
 The [project README](https://github.com/vinayvobbili/taxtrace/blob/main/README.md) has the short version. These pages hold the detail, one topic each.
 
-- [Install, workspace and documents](https://github.com/vinayvobbili/taxtrace/blob/main/docs/workspace.md): install, the workspace folder, import, outline, OCR, locked PDFs and the Keychain
+- [Install, workspace and documents](https://github.com/vinayvobbili/taxtrace/blob/main/docs/workspace.md): install, the workspace folder, import, outline, reading scanned pages (OCR), locked PDFs and the macOS Keychain (the Mac's password vault)
 - [Commands](https://github.com/vinayvobbili/taxtrace/blob/main/docs/commands.md): every `taxtrace` command, one line each, linked to its page
 - [Carryforwards](https://github.com/vinayvobbili/taxtrace/blob/main/docs/carryforwards.md): depreciation, passive losses and foreign tax read from filed returns
 - [Schedule K-1s](https://github.com/vinayvobbili/taxtrace/blob/main/docs/k1.md): Form 1065 K-1s, North Carolina's K-1, Schedule K-3

@@ -11,12 +11,12 @@ taxtrace does not file anything. You point it at a folder of your documents (W-2
 Three rules hold everywhere:
 
 1. **Nothing is guessed.** Every value carries the file, the page and the exact text it was read from, and a check rejects a value whose text is not on that page.
-2. **Your documents never leave your machine.** Where a language model reads them, it is a local model (Apple's MLX) on your Mac. The chat can use a cloud model, which only ever sees masked text: digits become `#`, and words outside the IRS's own vocabulary become `*`.
+2. **Your documents never leave your machine.** Reading them is plain code and text recognition, not an AI model; the only model that sees your real values is a local one on your Mac (Apple's MLX, for example). The optional chat can use a cloud model, which only ever sees masked text: digits become `#`, and words outside the IRS's own vocabulary become `*`.
 3. **Nothing is decided silently.** A receipt that could be a repair or an improvement, a missing 1099, a rate choice: each is a question with the evidence next to it.
 
 ## What the demo shows
 
-The two-minute demo uses made-up documents only: it opens taxtrace in the browser on a household's folder (the to-do list, the tax-saving moves, the documents by tax year), reads a W-2 box by box, and shows the entry sheet it writes, then the chat and what a cloud model is sent. Every value arrives with its source and a status: ready, estimate or missing. Illustrative output for an invented Initech employee in Boulder, CO, with round figures:
+The two-minute demo uses made-up documents only: it opens taxtrace in the browser on a household's folder (the to-do list, the tax-saving moves, the documents by tax year), reads a W-2 box by box, and shows the entry sheet it writes, then the chat, what a cloud model is sent, and a question with an amount in it staying on the Mac. Every value arrives with its source and a status: ready, estimate or missing. Illustrative output for an invented Initech employee in Boulder, CO, with round figures:
 
 | Entry sheet line | Value | Status | Read from |
 |---|---|---|---|
@@ -61,11 +61,11 @@ Start by putting your documents in a workspace folder, one subfolder per tax yea
 ## Limits
 
 - Not tax advice, and not a filing tool: you type the entry sheet into your own tax software, and a preparer should review the result.
-- Federal tax tables are built in for 2025 and 2026, for single and joint returns. The alternative minimum tax and Form 8995-A are not worked out, and the output says so.
+- Federal tax tables are built in for 2025 and 2026, for single and joint returns. The alternative minimum tax and Form 8995-A (the long form of the business-income deduction) are not worked out, and the output says so.
 - The only state return is North Carolina's Form D-400 (full-year residents).
 - Readers are written for the layouts seen so far: printouts from Drake (a tax preparer's software), common broker and lender forms, and some Indian bank statements. An unfamiliar layout becomes a question, not a guess.
-- macOS is the best-supported system: the Keychain password handling, the always-on service and local MLX models are macOS only.
-- Local-only: nothing is sent anywhere unless you turn on the chat's cloud models, and those see masked text. The MCP server returns masked text only and is read-only.
+- macOS is the best-supported system: the Keychain password handling (for locked PDFs), the always-on service and local MLX models are macOS only.
+- Local-only: nothing is sent anywhere unless you turn on the chat's cloud models, and those see masked text. The only other outside lookup is public exchange rates for foreign amounts (a currency and a date, nothing about you). The MCP server (the way an AI assistant such as Claude calls taxtrace's tools) returns masked text only and is read-only.
 
 ## Documentation
 

@@ -31,6 +31,14 @@ def line(rec, text: str):
     return rec.page.locator(".ln", has_text=text).first
 
 
+def scroll_window(rec, target) -> None:
+    """Bring a line to the middle of the terminal window by scrolling the window's own text: the window stays whole
+    inside the frame (a long output never pushes its edges off the screen)."""
+    target.evaluate("""l => { const out = l.closest('.out');
+        out.scrollTo({top: l.offsetTop - (out.clientHeight - l.offsetHeight) / 2, behavior: 'smooth'}); }""")
+    rec.hold(0.9)
+
+
 def light(rec, *texts: str, hold: float = 1.0, point: bool = True) -> None:
     """Point at each line in turn and give it a glow, one at a time."""
     for text in texts:
@@ -38,7 +46,7 @@ def light(rec, *texts: str, hold: float = 1.0, point: bool = True) -> None:
         rec.page.evaluate("() => document.querySelectorAll('.ln.hl').forEach(l => l.classList.remove('hl'))")
         target.evaluate("l => l.classList.add('hl')")
         if point:
-            rec.scroll_to(target, margin=140)
+            scroll_window(rec, target)
             rec.point_at(target, where=(0.5, 0.5))
         rec.hold(hold)
 
@@ -214,8 +222,9 @@ def entry_card(d: Demo) -> str:
     """The command's masked summary, then the sheet itself (up to where the state's section would start)."""
     sheet = (d.home / "entry" / "2026.txt").read_text(encoding="utf-8")
     sheet = sheet.split("## North Carolina")[0].rstrip()
-    return cards.window("entry/2026.txt", [("cmd", "taxtrace entry --year 2026"), ("out", d.run.said["entry"]),
-                                           ("gap", ""), ("head", "entry/2026.txt"), ("out", sheet)])
+    said = shown(d, d.run.said["entry"])
+    return cards.window("entry/2026.txt", [("cmd", "taxtrace entry --year 2026"), ("out", said), ("gap", ""),
+                                           ("head", "entry/2026.txt"), ("out", sheet)])
 
 
 def mcp_card(d: Demo) -> str:
