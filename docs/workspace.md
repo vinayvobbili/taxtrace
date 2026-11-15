@@ -2,6 +2,8 @@
 
 ## Install
 
+To use taxtrace, install it as the [project README](https://github.com/vinayvobbili/taxtrace/blob/main/README.md#install) says (`uv tool install taxtrace`). From a clone of the repository, to work on it:
+
 ```bash
 pip install -e ".[dev,mcp]"
 ```

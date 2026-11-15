@@ -6,12 +6,12 @@
 
 [Watch the demo](https://vinayvobbili.github.io/taxtrace/)
 
-taxtrace does not file anything. You point it at a folder of your documents (W-2s, 1099s, 1098s, K-1s, property manager statements, foreign bank statements, last year's return). It reads them and writes an entry sheet to type into consumer tax software, an FBAR account list, and a list of questions for you: anything it could not settle from the documents alone.
+taxtrace does not file anything. You point it at a folder of your documents (W-2s, 1099s, 1098 mortgage statements, partnership K-1s, property manager statements, foreign bank statements, last year's return). It reads them and writes an entry sheet to type into consumer tax software, an FBAR (foreign bank account report) account list, and a list of questions for you: anything it could not settle from the documents alone.
 
 Three rules hold everywhere:
 
 1. **Nothing is guessed.** Every value carries the file, the page and the exact text it was read from, and a check rejects a value whose text is not on that page.
-2. **Your documents never leave your machine.** Where a language model reads them, it is a local MLX model on your Mac. The chat can use a cloud model, which only ever sees masked text: digits become `#`, and words outside the IRS's own vocabulary become `*`.
+2. **Your documents never leave your machine.** Where a language model reads them, it is a local model (Apple's MLX) on your Mac. The chat can use a cloud model, which only ever sees masked text: digits become `#`, and words outside the IRS's own vocabulary become `*`.
 3. **Nothing is decided silently.** A receipt that could be a repair or an improvement, a missing 1099, a rate choice: each is a question with the evidence next to it.
 
 ## What the demo shows
@@ -56,14 +56,14 @@ taxtrace ui                                     # the workspace and a chat in th
 taxtrace --help                                 # every command
 ```
 
-Your documents live in a workspace folder (`~/TaxData`, or `$TAXTRACE_HOME`), which taxtrace refuses to place inside a git repository.
+Start by putting your documents in a workspace folder, one subfolder per tax year (`~/TaxData/2026`, or under `$TAXTRACE_HOME`): `import` does that for a preparer's export, or copy the files in yourself. taxtrace refuses to place the workspace inside a git repository.
 
 ## Limits
 
 - Not tax advice, and not a filing tool: you type the entry sheet into your own tax software, and a preparer should review the result.
 - Federal tax tables are built in for 2025 and 2026, for single and joint returns. The alternative minimum tax and Form 8995-A are not worked out, and the output says so.
 - The only state return is North Carolina's Form D-400 (full-year residents).
-- Readers are written for the layouts seen so far: Drake-style preparer printouts, common broker and lender forms, and some Indian bank statements. An unfamiliar layout becomes a question, not a guess.
+- Readers are written for the layouts seen so far: printouts from Drake (a tax preparer's software), common broker and lender forms, and some Indian bank statements. An unfamiliar layout becomes a question, not a guess.
 - macOS is the best-supported system: the Keychain password handling, the always-on service and local MLX models are macOS only.
 - Local-only: nothing is sent anywhere unless you turn on the chat's cloud models, and those see masked text. The MCP server returns masked text only and is read-only.
 
@@ -77,8 +77,10 @@ Everything else is in [docs](https://github.com/vinayvobbili/taxtrace/blob/main/
 - [Planning](https://github.com/vinayvobbili/taxtrace/blob/main/docs/planning.md): estimated tax, IRAs, a job change, stock sales
 - [The return](https://github.com/vinayvobbili/taxtrace/blob/main/docs/return.md): entry sheet, AGI, total tax, North Carolina
 - [Foreign side](https://github.com/vinayvobbili/taxtrace/blob/main/docs/foreign.md): India's return, bank statements, FBAR, Form 1116
-- [Chat](https://github.com/vinayvobbili/taxtrace/blob/main/docs/chat.md) and the [MCP server and agent skill](https://github.com/vinayvobbili/taxtrace/blob/main/docs/mcp.md)
+- [Chat](https://github.com/vinayvobbili/taxtrace/blob/main/docs/chat.md) and the [MCP server and agent skill](https://github.com/vinayvobbili/taxtrace/blob/main/docs/mcp.md): masked, read-only views of your workspace for Claude or another AI assistant (MCP is the protocol they use to call tools)
 - [Development](https://github.com/vinayvobbili/taxtrace/blob/main/docs/development.md)
+
+Also: [PyPI](https://pypi.org/project/taxtrace/), [issues](https://github.com/vinayvobbili/taxtrace/issues).
 
 ## Support and listings
 
