@@ -37,11 +37,68 @@ YEAR = re.compile(r"(?<!\d)(20\d\d)(?!\d)")
 SKIP = {".DS_Store", "Thumbs.db"}
 
 
+# What a file's name says it is, for the page's import screen: the first pattern that matches names the form.
+FORM_NAMES = (
+    (re.compile(r"(?<![A-Za-z0-9])W-?2(?![0-9A-Za-z])", re.I), lambda m: "W-2"),
+    (re.compile(r"(?<!\d)1099[ _-]*(INT|DIV|NEC|MISC|SA|[BRKGSQ])(?![A-Za-z])", re.I),
+     lambda m: f"1099-{m[1].upper()}"),
+    (re.compile(r"(?<!\d)1099(?!\d)"), lambda m: "1099"),
+    (re.compile(r"(?<!\d)1098[ _-]*([TE])(?![A-Za-z])", re.I), lambda m: f"1098-{m[1].upper()}"),
+    (re.compile(r"(?<!\d)1098(?!\d)|mortgage[ _-]*interest", re.I), lambda m: "1098"),
+    (re.compile(r"(?<![A-Za-z0-9])K-?1(?![0-9A-Za-z])", re.I), lambda m: "K-1"),
+    (re.compile(r"(?<![A-Za-z0-9])K-?3(?![0-9A-Za-z])", re.I), lambda m: "K-3"),
+    (re.compile(r"pay[ _-]*(?:stub|slip)|earnings[ _-]*statement", re.I), lambda m: "Pay stub"),
+    (re.compile(r"FBAR|FinCEN", re.I), lambda m: "FBAR"),
+    (re.compile(r"15C[AB]|(?<![A-Za-z])TDS(?![A-Za-z])|challan|26AS|form[ _-]*16(?!\d)|(?<![A-Za-z])ITR(?![A-Za-z])",
+                re.I), lambda m: "India"),
+    (re.compile(r"rental|schedule[ _-]*E(?![A-Za-z])", re.I), lambda m: "Rental"),
+    (re.compile(r"organizer", re.I), lambda m: "Organizer"),
+    (re.compile(r"statement", re.I), lambda m: "Statement"),
+)
+
+
 @dataclass
 class Placement:
     source: str
     dest: str | None  # relative to the workspace; None when skipped
     reason: str
+
+
+def form_type(name: str) -> str | None:
+    """The form a file's name points to (W-2, 1099-INT, K-1...), None when it doesn't say."""
+    filename = PurePosixPath(name).name
+    for pattern, label in FORM_NAMES:
+        if m := pattern.search(filename):
+            return label(m)
+    return None
+
+
+def owner(name: str, terms: list[str]) -> str:
+    """The first of the workspace's redact terms (`redact-terms.txt`, the names to mask) in a file's name, else ""."""
+    filename = PurePosixPath(name).name
+    return next((t for t in terms if re.search(rf"(?<![A-Za-z]){re.escape(t)}(?![A-Za-z])", filename, re.I)), "")
+
+
+def describe(p: Placement, terms: list[str]) -> dict:
+    """What taxtrace made of one file, for the import screen.
+
+    status: "recognised" (a form, filed in its year's folder or with the filed returns), "unrecognised" (filed, but
+    its name says no form, or no year so it waits in unsorted/: check it), or "skipped" (nothing copied, `reason` says
+    why: an identity document, a copy already imported, a web page saved as .pdf).
+    """
+    form = "Filed return" if p.dest and p.dest.startswith(PRIOR_RETURNS + "/") else form_type(p.source)
+    folder = p.dest.split("/")[0] if p.dest else None
+    year = folder if folder and YEAR.fullmatch(folder) else tax_year(p.source) if folder == PRIOR_RETURNS else None
+    if not p.dest:
+        status, note = "skipped", p.reason
+    elif folder == UNSORTED:
+        status, note = "unrecognised", "no year in its name: it waits in unsorted/ until you move it into a year"
+    elif form is None:
+        status, note = "unrecognised", f"its name doesn't say which form it is: filed under {folder}, check it"
+    else:
+        status, note = "recognised", f"{p.reason}: filed under {folder}"
+    return {"source": p.source, "dest": p.dest, "form": form, "year": year, "owner": owner(p.source, terms),
+            "status": status, "note": note, "reason": p.reason}
 
 
 def _sources(src: Path) -> Iterator[tuple[str, Callable[[], bytes]]]:

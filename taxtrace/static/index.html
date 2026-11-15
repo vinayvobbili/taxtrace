@@ -261,6 +261,64 @@ form.input textarea:focus { outline: none; border-color: var(--accent); box-shad
 form.input button { border: 0; border-radius: 13px; background: var(--grad); color: #fff; font: inherit; font-weight: 700; padding: 11px 16px; cursor: pointer; }
 .foot { font-size: 11.5px; color: var(--muted); padding: 0 14px 10px; text-align: center; }
 
+/* screens: Overview, Import (and the entry sheet) share the header's tabs */
+.tabs { display: flex; gap: 4px; padding: 3px; background: var(--chip); border-radius: 12px; }
+.tabs a { display: inline-flex; align-items: center; gap: 7px; padding: 6px 13px; border-radius: 9px; color: var(--muted); font-size: 13.5px; font-weight: 650;
+  text-decoration: none; transition: color .15s, background .15s; white-space: nowrap; }
+.tabs a:hover { color: var(--text); }
+.tabs a[aria-current="page"] { background: var(--panel-solid); color: var(--text); box-shadow: 0 1px 3px rgba(16, 32, 42, .12); }
+.tabs a[aria-current="page"] .ico { color: var(--accent); }
+.view[hidden], .hero[hidden] { display: none; }
+.view { animation: rise .35s cubic-bezier(.2, .7, .2, 1) both; }
+.flash { animation: flash 1.6s ease-out; }
+
+/* import */
+.drop { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 38px 24px 30px; margin-bottom: 22px;
+  border: 2px dashed color-mix(in srgb, var(--accent) 45%, var(--line)); border-radius: 22px; overflow: hidden;
+  background: radial-gradient(520px 200px at 50% 0%, var(--accent-soft), transparent 70%), var(--panel);
+  box-shadow: var(--shadow); transition: transform .2s, border-color .2s, box-shadow .2s, background .2s; animation: rise .5s cubic-bezier(.2, .7, .2, 1) both; }
+.drop:hover { box-shadow: var(--shadow-hover); }
+.drop.over { transform: scale(1.012); border-style: solid; border-color: var(--accent);
+  box-shadow: 0 0 0 6px var(--accent-soft), 0 26px 60px -24px rgba(20, 184, 166, .55);
+  background: radial-gradient(520px 260px at 50% 0%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 72%), var(--panel); }
+.drop .big { width: 62px; height: 62px; border-radius: 20px; display: grid; place-items: center; color: #fff; background: var(--grad); margin-bottom: 6px;
+  box-shadow: 0 16px 34px -12px rgba(20, 150, 170, .8); animation: float 3.4s ease-in-out infinite; }
+.drop.over .big { animation: none; transform: translateY(-6px) scale(1.08); }
+.drop .lead { font-size: 19px; font-weight: 750; letter-spacing: -.01em; }
+.drop .small { color: var(--muted); font-size: 13.5px; max-width: 640px; }
+.drop .acts { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 12px; }
+.btn { border: 1px solid var(--line); background: var(--panel-solid); color: var(--text); font: inherit; font-size: 14px; font-weight: 700; padding: 9px 16px;
+  border-radius: 12px; cursor: pointer; transition: transform .15s, box-shadow .15s, border-color .15s, opacity .15s; display: inline-flex; align-items: center; gap: 8px; }
+.btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: var(--shadow-hover); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.btn.go { border: 0; color: #fff; background: var(--grad); box-shadow: 0 12px 26px -12px rgba(20, 150, 170, .8); }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn:focus-visible, .tabs a:focus-visible, .drop input:focus-visible + label { outline: 3px solid var(--accent-soft); outline-offset: 2px; }
+.imp-bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 0 0 18px; }
+.imp-bar label { font-size: 13px; color: var(--muted); display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+.imp-bar select { font: inherit; font-size: 13.5px; padding: 7px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel-solid); color: var(--text); }
+.imp-bar .spacer { flex: 1; }
+.imp-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.stat.s-ok .num { color: var(--good); } .stat.s-check .num { color: var(--warn); } .stat.s-skip .num { color: var(--muted); }
+.results { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 400px), 1fr)); gap: 12px; align-items: start; }
+.res { --g: var(--good); padding: 13px 15px 12px 18px; position: relative; overflow: hidden; animation: rise .4s cubic-bezier(.2, .7, .2, 1) both;
+  transition: transform .2s, box-shadow .2s, border-color .2s; }
+.res::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 5px; background: var(--g); }
+.res:hover { transform: translateY(-3px); box-shadow: var(--shadow-hover); border-color: color-mix(in srgb, var(--g) 35%, var(--line)); }
+.res[data-status="unrecognised"] { --g: var(--warn); } .res[data-status="skipped"] { --g: var(--muted); } .res[data-status="pending"] { --g: var(--accent-2); }
+.res[data-status="error"] { --g: var(--bad); }
+.res .top { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.res .fname { flex: 1; min-width: 0; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.res .st { flex: none; font-size: 11.5px; font-weight: 750; padding: 2px 10px; border-radius: 99px; color: #fff; background: var(--g); white-space: nowrap; }
+.res dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; margin: 9px 0 0; font-size: 13.5px; }
+.res dt { color: var(--muted); } .res dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.res dd.none { color: var(--muted); font-style: italic; }
+.res .note { margin-top: 8px; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.res .spin { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--accent-2) 30%, transparent); border-top-color: var(--accent-2);
+  animation: spin .7s linear infinite; vertical-align: -1px; margin-right: 6px; }
+.imp-note { margin-top: 18px; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes flash { 0%, 30% { box-shadow: 0 0 0 4px var(--accent-soft), 0 0 0 7px color-mix(in srgb, var(--accent) 55%, transparent); } }
 @keyframes rise { from { opacity: 0; transform: translateY(10px); } }
 @keyframes pop { from { opacity: 0; transform: translateY(14px) scale(.95); } }
 @keyframes float { 50% { transform: translateY(-6px); } }
@@ -270,7 +328,9 @@ form.input button { border: 0; border-radius: 13px; background: var(--grad); col
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 @media (max-width: 980px) { .layout { grid-template-columns: 1fr; } .hero, .todo-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 640px) {
-  .bar { padding: 10px 16px; } .shield span, .widths { display: none; } main { padding: 20px 16px 100px; } h1 { font-size: 26px; }
+  .bar { padding: 10px 16px; flex-wrap: wrap; } .shield span, .widths { display: none; } main { padding: 20px 16px 100px; } h1 { font-size: 26px; }
+  .tabs { order: 9; width: 100%; overflow-x: auto; } .tabs a { flex: 1; justify-content: center; padding: 7px 10px; }
+  .imp-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .drop { padding: 28px 16px 22px; }
   .fab { right: 16px; bottom: 16px; } .pop { right: 16px; bottom: 16px; height: calc(100vh - 32px); }
 }
 </style>
@@ -279,6 +339,10 @@ form.input button { border: 0; border-radius: 13px; background: var(--grad); col
 <header>
   <div class="bar">
     <div class="brand"><img class="mark" src="/icon.svg" alt="" width="34" height="34"><b>taxtrace</b></div>
+    <nav class="tabs" id="tabs" aria-label="Screens">
+      <a id="tab-home" href="#" data-view="home"><svg class="ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg>Overview</a>
+      <a id="tab-import" href="#import" data-view="import"><svg class="ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 20h16"/></svg>Import</a>
+    </nav>
     <div class="spacer"></div>
     <span class="shield" title="Before a question goes to Claude or agy, its amounts become # and names become *. A question with your values in it is answered on this Mac.">
       <svg class="ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg>
@@ -290,6 +354,37 @@ form.input button { border: 0; border-radius: 13px; background: var(--grad); col
   </div>
 </header>
 <main>
+  <div class="view" id="view-import" hidden>
+    <div class="pagehead">
+      <h1>Bring your documents <span class="g">in</span></h1>
+      <p class="sub" id="import-where">Pick files or drop a folder. taxtrace shows what it recognises, then files them in your workspace.</p>
+    </div>
+    <div class="drop" id="drop">
+      <div class="big"><svg class="ico" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/></svg></div>
+      <div class="lead">Drop files or a folder here</div>
+      <div class="small">PDFs, spreadsheets, photos, or a zip from your preparer's portal. They go to this server on your computer and nowhere else; nothing is filed until you press the button below.</div>
+      <div class="acts">
+        <input type="file" id="pick-files" multiple hidden>
+        <input type="file" id="pick-folder" webkitdirectory hidden>
+        <button class="btn" id="choose-files" type="button">Choose files…</button>
+        <button class="btn" id="choose-folder" type="button">Choose a folder…</button>
+      </div>
+    </div>
+    <div class="imp-bar">
+      <label for="import-year">Tax year of the documents
+        <select id="import-year"></select></label>
+      <div class="spacer"></div>
+      <button class="btn" id="import-clear" type="button" disabled>Clear</button>
+      <button class="btn go" id="import-go" type="button" disabled>File them</button>
+    </div>
+    <div class="hero imp-stats" id="import-stats" hidden></div>
+    <div class="results" id="import-results" aria-live="polite"></div>
+    <p class="how imp-note" id="import-how">A document's form, year and owner come from its name and the folder it sat in, the same way <code>taxtrace import</code> sorts them.
+      Filed returns go to <code>prior-returns/</code>, the rest to a folder for their tax year. Identity documents (driver's licenses, Social Security cards, passports) and
+      copies already imported are skipped. Owner is a name from <code>redact-terms.txt</code> found in the file's name.</p>
+  </div>
+
+  <div class="view" id="view-home">
   <div class="pagehead">
     <h1>Your return, <span class="g">every number traced</span></h1>
     <p class="sub" id="where">Loading the workspace…</p>
@@ -318,6 +413,7 @@ form.input button { border: 0; border-radius: 13px; background: var(--grad); col
         the document list masked, the way <code>taxtrace redact</code> masks a document. A question with <b>an amount</b> or a name
         from <code>redact-terms.txt</code> goes only to <b>the model on this Mac</b>.</p>
     </aside>
+  </div>
   </div>
 </main>
 
@@ -450,7 +546,7 @@ function todoCard(t, i) {
   const more = [...t.notes.map(n => html("li", {}, inline(n))),
     ...t.subtasks.map(s => html("li", { class: "task" + (s.done ? " done" : "") }, inline(s.text)))];
   const err = h("div", { class: "err", hidden: true });
-  const card = h("div", { class: `card tcard g-${t.group}`, style: `animation-delay:${Math.min(i * 40, 400)}ms` },
+  const card = h("div", { class: `card tcard g-${t.group}`, "data-line": t.line, id: `todo-${t.line}`, style: `animation-delay:${Math.min(i * 40, 400)}ms` },
     h("div", { class: "row" },
       h("input", { class: "chk", type: "checkbox", "aria-label": "Mark done", title: "Mark done", onchange: async e => {
         const box = e.currentTarget;
@@ -540,6 +636,116 @@ async function loadPlan() {
       ...(d.jobchange ? d.jobchange.cases.map(caseCard) : []), ...(d.sales ? [salesCard(d.sales)] : []));
   } catch (e) { $("plan").hidden = false; $("plan-moves").replaceChildren(h("div", { class: "card empty" }, `Couldn't load the moves: ${e.message}`)); }
 }
+
+// -- screens: the hash picks one (#import, #entry), anything else is the overview; #todo-<line> scrolls to that to-do card
+const VIEWS = ["home", "import"];
+function route() {
+  const hash = decodeURIComponent(location.hash.slice(1)), view = VIEWS.includes(hash) ? hash : "home";
+  for (const v of VIEWS) {
+    $("view-" + v).hidden = v !== view;
+    if (v === view) $("tab-" + v).setAttribute("aria-current", "page"); else $("tab-" + v).removeAttribute("aria-current");
+  }
+  if (view !== "home" || !hash.startsWith("todo")) return;
+  const card = document.querySelector(`[data-line="${CSS.escape(hash.slice(5))}"]`) || $("todo");
+  card.scrollIntoView({ behavior: "smooth", block: "center" });
+  card.classList.remove("flash"); void card.offsetWidth; card.classList.add("flash");
+}
+addEventListener("hashchange", route);
+
+// -- import: files picked or dropped go to this server on this computer, which says what it recognises (a preview), then files them
+const queue = [];  // [{file, rel, results: [...] | null, error, filed}]
+let importing = false;
+const importYear = () => $("import-year").value;
+{
+  const now = new Date().getFullYear(), sel = $("import-year");
+  sel.append(h("option", { value: "" }, "From the names"), ...Array.from({ length: 8 }, (_, i) => h("option", { value: now - i }, now - i)));
+}
+async function send(item, dry) {
+  const q = new URLSearchParams({ name: item.rel, ...(dry ? { dry: "1" } : {}), ...(importYear() ? { year: importYear() } : {}) });
+  const r = await fetch(`/api/import?${q}`, { method: "POST", headers: { "X-Taxtrace-Token": TOKEN, "Content-Type": "application/octet-stream" }, body: item.file });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || r.statusText);
+  return data.results;
+}
+async function preview(items) {
+  for (const item of items) {
+    item.results = null; item.error = null; item.filed = false; renderImport();
+    try { item.results = await send(item, true); } catch (e) { item.error = e.message; }
+    renderImport();
+  }
+}
+function addFiles(found) {
+  const fresh = found.filter(f => !queue.some(q => q.rel === f.rel && q.file.size === f.file.size));
+  const items = fresh.map(f => ({ ...f, results: null, error: null, filed: false }));
+  queue.push(...items);
+  renderImport();
+  preview(items);
+}
+const STATUS = { recognised: "Recognised", unrecognised: "Check it", skipped: "Skipped", pending: "Reading…", error: "Failed" };
+function resultCard(r, i) {
+  const status = r.status;
+  const dd = (v, none) => h("dd", v ? {} : { class: "none" }, v || none);
+  return h("div", { class: "card res", "data-status": status, "data-file": r.source, style: `animation-delay:${Math.min(i * 40, 400)}ms` },
+    h("div", { class: "top" }, r.form ? h("span", { class: "form", style: "--c:var(--accent)" }, r.form) : null,
+      h("span", { class: "fname", title: r.source }, r.source),
+      h("span", { class: "st" }, status === "pending" ? h("span", { class: "spin" }) : null, r.filed ? "Filed" : STATUS[status])),
+    status === "pending" ? null : h("dl", {}, h("dt", {}, "Form"), dd(r.form, "not recognised"), h("dt", {}, "Tax year"), dd(r.year, "not found"),
+      h("dt", {}, "Owner"), dd(r.owner, "not named"), h("dt", {}, r.filed ? "Filed to" : "Goes to"), dd(r.dest, "nowhere")),
+    h("div", { class: "note" }, r.note));
+}
+function renderImport() {
+  const cards = queue.flatMap(q => q.error ? [{ source: q.rel, status: "error", note: q.error }]
+    : q.results ? q.results : [{ source: q.rel, status: "pending", note: "Reading the file's name and folder…" }]);
+  const count = s => cards.filter(c => c.status === s).length, filed = cards.filter(c => c.filed).length;
+  const settled = queue.every(q => q.results || q.error);
+  $("import-results").replaceChildren(...cards.map(resultCard));
+  $("import-stats").hidden = !cards.length;
+  $("import-stats").replaceChildren(stat(cards.length, "files", "lead"), stat(count("recognised"), "recognised", "s-ok"),
+    stat(count("unrecognised"), "to check", "s-check"), stat(filed || count("skipped"), filed ? "filed" : "skipped", filed ? "s-ok" : "s-skip"));
+  const fileable = cards.filter(c => c.dest && !c.filed).length;
+  $("import-go").disabled = importing || !settled || !fileable;
+  $("import-go").textContent = importing ? "Filing…" : fileable ? `File ${fileable} document${fileable > 1 ? "s" : ""}` : filed ? "Filed" : "File them";
+  $("import-clear").disabled = importing || !queue.length;
+}
+async function fileThem() {
+  importing = true; renderImport();
+  for (const item of queue.filter(q => q.results && !q.filed)) {
+    try { item.results = await send(item, false); item.filed = true; } catch (e) { item.error = e.message; }
+    renderImport();
+  }
+  importing = false; renderImport(); load();
+}
+$("import-go").addEventListener("click", fileThem);
+$("import-clear").addEventListener("click", () => { queue.length = 0; renderImport(); });
+$("import-year").addEventListener("change", () => { if (!importing) preview(queue.filter(q => q.file instanceof File && !q.filed)); });
+$("choose-files").addEventListener("click", () => $("pick-files").click());
+$("choose-folder").addEventListener("click", () => $("pick-folder").click());
+$("pick-files").addEventListener("change", e => { addFiles([...e.target.files].map(file => ({ file, rel: file.name }))); e.target.value = ""; });
+$("pick-folder").addEventListener("change", e => { addFiles([...e.target.files].map(file => ({ file, rel: file.webkitRelativePath || file.name }))); e.target.value = ""; });
+async function walk(entry, out) {  // a dropped folder's files, each with its path from the folder dropped
+  if (entry.isFile) { out.push({ file: await new Promise((ok, no) => entry.file(ok, no)), rel: entry.fullPath.replace(/^\//, "") }); return; }
+  const reader = entry.createReader();
+  for (;;) {
+    const batch = await new Promise((ok, no) => reader.readEntries(ok, no));
+    if (!batch.length) return;
+    for (const e of batch) await walk(e, out);
+  }
+}
+for (const type of ["dragenter", "dragover"]) $("drop").addEventListener(type, e => { e.preventDefault(); $("drop").classList.add("over"); });
+for (const type of ["dragleave", "drop"]) $("drop").addEventListener(type, e => { if (type === "drop" || !$("drop").contains(e.relatedTarget)) $("drop").classList.remove("over"); });
+$("drop").addEventListener("drop", async e => {
+  e.preventDefault();
+  const entries = [...e.dataTransfer.items].map(i => i.webkitGetAsEntry?.()).filter(Boolean);  // before any await: the list empties after
+  const found = [];
+  try {
+    if (entries.length) for (const entry of entries) await walk(entry, found);
+    else found.push(...[...e.dataTransfer.files].map(file => ({ file, rel: file.name })));
+  } catch (x) { queue.push({ rel: "the dropped items", file: { size: 0 }, results: null, error: `Couldn't read them: ${x.message}` }); }
+  addFiles(found);
+});
+// a file dropped outside the box would make the browser open it, and leave the page
+for (const type of ["dragover", "drop"]) addEventListener(type, e => { if (!$("drop").contains(e.target)) e.preventDefault(); });
+renderImport();
 
 // -- the chat
 const history = [];  // [{role, content}], kept while the page is open
@@ -642,7 +848,7 @@ $("fab").addEventListener("click", () => { $("pop").hidden = false; $("fab").sty
 $("close").addEventListener("click", () => { $("pop").hidden = true; $("fab").style.visibility = ""; });
 $("clear").addEventListener("click", reset);
 document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("pop").hidden) $("close").click(); });
-reset(); load(); loadTodo(); loadPlan();
+reset(); load(); loadTodo(); loadPlan(); route();
 </script>
 </body>
 </html>

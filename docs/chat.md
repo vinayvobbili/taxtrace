@@ -7,7 +7,7 @@ pip install -e ".[chat,local]"   # Claude's SDK, and the model that runs on your
 taxtrace ui                      # opens http://taxtrace.localhost:8766/
 ```
 
-The page lists your workspace by folder and has a chat for tax rules, forms and what a document is for.
+The page lists your workspace by folder, brings documents in (see [Import](#import)) and has a chat for tax rules, forms and what a document is for.
 It answers with the first model in `--models` (default `claude,agy,local`) that can, and moves on to the
 next when one can't (no key, quota used up, not installed):
 
@@ -23,6 +23,31 @@ become `*`s. A question with an amount in it, or a name from `redact-terms.txt`,
 the model on your Mac answers it, and the page says why. Under each question a cloud model answered, the
 page shows exactly what it was sent. The chat reads only the document list and what you type: it can't open
 a document, change a file or file anything.
+
+## Screens
+
+The page has a tab for each screen, in the header (and at `#import` and so on in the address): **Overview** (the
+workspace by folder, the to-do list, the year's moves and the chat) and **Import**. Standard, Wide
+and Full set how much of a wide monitor the page uses, and the ◐ button picks light, dark or the computer's setting;
+both are kept in the browser.
+
+### Import
+
+Pick files, pick a folder, or drop files, folders or a preparer's zip on the box. The page uploads each one to the
+server on your computer (`/api/import`, with the page's token: nothing goes anywhere else) and shows what taxtrace
+makes of it, a card per file:
+
+- **Recognised**: the form (W-2, 1099-INT, K-1, 1098, a filed return...), the tax year and where it goes.
+- **Check it**: it would be filed, but its name doesn't say which form it is, or has no year, so it waits in
+  `unsorted/`. Choosing the tax year above the cards (the folder's name or the file's own gives it otherwise) moves
+  everything that isn't a filed return into that year.
+- **Skipped**: nothing copied, and the card says why: an identity document, a copy already imported (same bytes), a web
+  page saved as .pdf.
+
+Nothing is filed until you press **File them**. It files exactly as `taxtrace import` does, with the same folders, the
+same skips and a line in `imports.jsonl` for each file. The form and the year come from the file's name and the folder
+it sat in (nothing is opened); the owner is a name from `redact-terms.txt` found in the file's name. An upload is
+staged in a temporary folder for the moment it takes, and the workspace stays outside any git repository.
 
 ### Always on (macOS)
 

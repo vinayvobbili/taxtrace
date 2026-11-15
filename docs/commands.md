@@ -35,7 +35,7 @@ Early. What works today:
 - `taxtrace bank`: reads a foreign bank's statement of account: interest, a tax refund, balances (see
   [Bank statements](https://github.com/vinayvobbili/taxtrace/blob/main/docs/foreign.md#bank-statements)).
 - `taxtrace entry`: the year's entry sheet, to type into a filing site (see [Entry sheet](https://github.com/vinayvobbili/taxtrace/blob/main/docs/return.md#entry-sheet)).
-- `taxtrace ui`: the workspace in the browser, with a chat (see [Chat](https://github.com/vinayvobbili/taxtrace/blob/main/docs/chat.md#chat)).
+- `taxtrace ui`: the workspace in the browser, with an Import screen (drop files in, filed as `import` files them) and a chat (see [Chat](https://github.com/vinayvobbili/taxtrace/blob/main/docs/chat.md#chat)).
 
 - `taxtrace agi`: the year's federal adjusted gross income, against the filed return when there is one (see
   [Adjusted gross income](https://github.com/vinayvobbili/taxtrace/blob/main/docs/return.md#adjusted-gross-income)).

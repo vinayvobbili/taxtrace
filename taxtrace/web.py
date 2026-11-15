@@ -1,28 +1,33 @@
 """`taxtrace ui`: a page on this computer, at http://taxtrace.localhost:8766/, showing the workspace and a chat.
 
 It listens on 127.0.0.1 only and answers only requests that carry its own Host name (which stops DNS
-rebinding) and, for /api/, the token baked into the page (which stops other pages from calling it).
+rebinding) and, for /api/, the token baked into the page (which stops other pages from calling it). Documents
+picked on the Import screen are uploaded to this server alone, and filed the way `taxtrace import` files them.
 """
 
 from __future__ import annotations
 
 import json
+import re
 import secrets
 import socketserver
 import sys
+import tempfile
 import threading
 import time
 import webbrowser
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib import resources
-from urllib.parse import urlparse
+from pathlib import Path, PurePosixPath
+from urllib.parse import parse_qs, urlparse
 
-from . import __version__, chat, text, todo, workspace
+from . import __version__, chat, importer, text, todo, workspace
 
 APP_HOST = "taxtrace.localhost"  # browsers and macOS send every *.localhost name to this machine, never the web
 PORT = 8766  # jobwatch's is 8765
 MAX_BODY = 1_000_000
+MAX_UPLOAD = 200_000_000  # one document (or a portal's zip) sent to /api/import, from this computer to this server
 # What the page links to besides itself, for the tab and for installing it as an app (see scripts/make_icons.py)
 STATIC = {"icon.svg": "image/svg+xml", "icon-192.png": "image/png", "icon-512.png": "image/png",
           "icon-maskable-512.png": "image/png", "apple-touch-icon.png": "image/png",
@@ -57,6 +62,33 @@ def plans() -> dict:
     return {"year": int(year) if year else None,
             **{folder: json.loads(paths[year].read_text()) if year in paths else None
                for folder, paths in saved.items()}}
+
+
+def upload_name(name: str) -> PurePosixPath:
+    """A dropped file's name as the browser gives it ("2025 TAX/W-2.pdf" for one inside a folder), made safe to
+    stage: relative, no `..`, no empty parts."""
+    path = PurePosixPath(name.replace("\\", "/"))
+    if not path.parts or path.is_absolute() or any(p in ("", ".", "..") for p in path.parts) or len(path.parts) > 12:
+        raise ValueError("that file name can't be imported")
+    return path
+
+
+def import_upload(name: str, data: bytes, dry_run: bool = False, year: str | None = None) -> list[dict]:
+    """File one uploaded document (or zip, or a file from a dropped folder) the way `taxtrace import` does, and say
+    what taxtrace made of each file it holds. `dry_run` only reports. The upload is staged in a temporary folder that
+    is removed afterwards, and goes nowhere else."""
+    if year and not re.fullmatch(r"20\d\d", year):
+        raise ValueError("the tax year is four digits, such as 2026")
+    rel = upload_name(name)
+    home = workspace.outside_git(workspace.home())
+    with tempfile.TemporaryDirectory(prefix="taxtrace-upload-") as tmp:
+        staged = Path(tmp, *rel.parts)
+        staged.parent.mkdir(parents=True, exist_ok=True)
+        staged.write_bytes(data)
+        # a folder's own name leads its files' names, as it does for `taxtrace import <folder>`
+        placed = importer.import_documents(Path(tmp, rel.parts[0]), home, dry_run=dry_run, year=year)
+    terms = workspace.redact_terms()
+    return [{**importer.describe(p, terms), "filed": bool(p.dest) and not dry_run} for p in placed]
 
 
 def make_handler(settings: chat.Settings, token: str, port_ref: list[int]):
@@ -132,8 +164,16 @@ def make_handler(settings: chat.Settings, token: str, port_ref: list[int]):
                 return self._json(HTTPStatus.FORBIDDEN, {"error": "missing or wrong token; reload the page"})
             try:
                 length = int(self.headers.get("Content-Length") or 0)
-                if length > MAX_BODY:
+                upload = method == "POST" and url.path == "/api/import"
+                if length > (MAX_UPLOAD if upload else MAX_BODY):
+                    self.close_connection = True  # its body is left unread
                     return self._json(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, {"error": "too large"})
+                if upload:  # one file's bytes, named in the query; the reply says what became of each file in it
+                    query = parse_qs(url.query)
+                    results = import_upload((query.get("name") or [""])[0], self.rfile.read(length),
+                                            dry_run=(query.get("dry") or [""])[0] == "1",
+                                            year=(query.get("year") or [""])[0] or None)
+                    return self._json(HTTPStatus.OK, {"results": results})
                 body = json.loads(self.rfile.read(length) or b"{}") if length else {}
                 if method == "GET" and url.path == "/api/status":
                     return self._json(HTTPStatus.OK, {"models": chat.status(settings), "workspace": overview()})
