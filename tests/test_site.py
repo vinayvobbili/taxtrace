@@ -163,6 +163,9 @@ def test_read_more_links_point_at_this_project():
     names = re.findall(r"<a [^>]*>(.*?)</a>", links)
     assert names == ["The README", "The entry sheet", "The chat", "Use it from Claude (MCP)", "GitHub", "PyPI",
                      "MCP Registry entry"]
+    for doc in re.findall(r"taxtrace/blob/main/docs/([\w.-]+)(?:#([\w-]+))?\"", links):
+        text = (ROOT / "docs" / doc[0]).read_text(encoding="utf-8")
+        assert not doc[1] or re.search(rf"(?mi)^#+ {re.escape(doc[1].replace('-', ' '))}\b", text), doc
     assert '"name": "io.github.vinayvobbili/taxtrace"' in (ROOT / "server.json").read_text(encoding="utf-8")
     assert "io.github.vinayvobbili%2Ftaxtrace/versions/latest" in links
 
