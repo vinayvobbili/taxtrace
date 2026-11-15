@@ -1,0 +1,190 @@
+"""The landing page (site/index.html) says what the README and the code say, and ships what it links."""
+
+import re
+import struct
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+SITE = ROOT / "site"
+PAGE = (SITE / "index.html").read_text(encoding="utf-8")
+README = (ROOT / "README.md").read_text(encoding="utf-8")
+CLI = (ROOT / "taxtrace" / "cli.py").read_text(encoding="utf-8")
+
+
+def jpeg_size(path: Path) -> tuple[int, int]:
+    data = path.read_bytes()
+    assert data[:2] == b"\xff\xd8", path
+    i = 2
+    while i < len(data):
+        marker, length = data[i + 1], struct.unpack(">H", data[i + 2:i + 4])[0]
+        if marker in (0xC0, 0xC1, 0xC2):
+            height, width = struct.unpack(">HH", data[i + 5:i + 9])
+            return width, height
+        i += 2 + length
+    raise AssertionError(f"no size in {path}")
+
+
+def test_page_is_self_contained():
+    assert not re.search(r"<script[^>]+src=", PAGE)
+    for asset in re.findall(r'(?:src|href|poster)="([\w./-]+\.(?:svg|png|jpg))"', PAGE):
+        assert (SITE / asset).is_file(), asset
+
+
+def test_external_links_open_in_a_new_tab():
+    anchors = re.findall(r"<a\b[^>]*>", PAGE)
+    external = [a for a in anchors if 'href="http' in a]
+    assert external
+    for a in external:
+        assert 'target="_blank"' in a and 'rel="noopener"' in a, a
+
+
+def test_title_description_and_link_preview():
+    title = "taxtrace | Every number on your return, traced to its page"
+    desc = ("Free and open source. Reads your tax documents on your own computer and builds an entry sheet where "
+            "every number carries the page and the exact text it came from. Nothing is guessed.")
+    assert f"<title>{title}</title>" in PAGE
+    assert f'<meta name="description" content="{desc}">' in PAGE
+    assert f'<meta property="og:description" content="{desc}">' in PAGE
+    assert f'<meta property="og:title" content="{title}">' in PAGE
+    for tag in ('property="og:type" content="website"', 'name="twitter:card" content="summary_large_image"',
+                'property="og:url" content="https://vinayvobbili.github.io/taxtrace/"',
+                'property="og:image" content="https://vinayvobbili.github.io/taxtrace/og.jpg"',
+                'property="og:image:width" content="1200"', 'property="og:image:height" content="630"'):
+        assert f"<meta {tag}>" in PAGE, tag
+    assert '<link rel="icon" href="icon.svg" type="image/svg+xml">' in PAGE
+    assert jpeg_size(SITE / "og.jpg") == (1200, 630)
+
+
+def test_install_box_is_uv_first_with_one_row_per_step_on_each_system():
+    uv = PAGE.split('<div class="uv" id="uv">')[1].split('<p class="sub">')[0]
+    assert PAGE.count('class="uv"') == 1  # one install box
+    assert uv.count('<div class="uvpanel"') == 2
+    assert "<code>curl -LsSf https://astral.sh/uv/install.sh | sh</code>" in uv
+    assert '<code>powershell -c "irm https://astral.sh/uv/install.ps1 | iex"</code>' in uv
+    assert uv.count("<code>uv tool install taxtrace</code>") == 2 and uv.count("<code>taxtrace ui</code>") == 2
+    labels = re.findall(r'<span class="or">(?:<a [^>]*>)?([^<]+)(?:</a>)?</span>', uv)
+    assert labels == ["Install uv", "Then", "Then run"] * 2
+    # every command has a Copy button, in the same columns on every row
+    assert uv.count("<code>") == 6 and uv.count('<button type="button" aria-live="polite">Copy</button>') == 6
+    assert "grid-template-columns: 5.2em minmax(0, 1fr) 4.6em" in PAGE
+    seg = re.search(r'<div class="seg" role="group" aria-label="Your system" hidden>(.*?)</div>', uv, re.S).group(1)
+    assert re.findall(r'data-os="(\w+)" aria-pressed="(\w+)">([^<]+)</button>', seg) == [
+        ("unix", "true", "Mac / Linux"), ("win", "false", "Windows")]
+    assert '<p class="sub pipx">Already have Python? <code id="cmd">pipx install taxtrace</code>' in PAGE
+    assert "taxtrace ui" in README and '"ui"' in CLI
+
+
+def test_no_claude_desktop_one_click_line_until_a_release_ships_an_mcpb():
+    # no taxtrace release has an .mcpb asset and scripts/build-mcpb doesn't exist here; add the line with the asset
+    assert not (ROOT / "scripts" / "build-mcpb").exists()
+    assert "one click" not in PAGE and ".mcpb" not in PAGE
+
+
+def test_gear_popover_has_theme_and_width_with_icons_and_remembers_them():
+    header = PAGE.split("<header>")[1].split("</header>")[0]
+    gear = re.search(r'<button class="gear"[^>]*>', header).group(0)
+    assert 'aria-label="Display settings"' in gear and 'aria-expanded="false"' in gear
+    pop = header.split('id="pop"')[1]
+    buttons = re.findall(r'<button data-v="(\w+)" aria-pressed="(\w+)"><svg class="ic" viewBox="0 0 24 24" '
+                         r'aria-hidden="true">.*?</svg>(\w+)</button>', pop)
+    assert buttons == [("system", "true", "System"), ("light", "false", "Light"), ("dark", "false", "Dark"),
+                       ("standard", "true", "Standard"), ("wide", "false", "Wide"), ("full", "false", "Full")]
+    for want in ('"tt-theme"', '"tt-width"', "root.dataset.width", "root.dataset.theme", '"Escape"',
+                 'closest(".settings")', "prefers-reduced-motion", "localStorage"):
+        assert want in PAGE, want
+    for width in ("wide", "full"):
+        assert f':root[data-width="{width}"] .wrap' in PAGE
+    assert ':root[data-theme="dark"]' in PAGE and "prefers-color-scheme: dark" in PAGE
+
+
+def test_headings_and_paragraphs_balance_their_lines():
+    assert "h1, h2, h3, summary { text-wrap: balance; }" in PAGE
+    assert "p, li { text-wrap: pretty; }" in PAGE
+    assert re.search(r"\.sub \{[^}]*text-wrap: balance;", PAGE)
+
+
+def test_stat_tiles_link_to_sections_and_private_tile_is_worded_as_asked():
+    tiles = re.findall(r'<a class="tile" href="#(\w+)"', PAGE)
+    assert len(tiles) == 4
+    for anchor in tiles:
+        assert f'id="{anchor}"' in PAGE, anchor
+    assert '<a class="tile" href="#private"><b>Private</b><span>your data stays on your computer</span></a>' in PAGE
+
+
+def test_demo_video_and_every_step_video_are_wired_but_guarded():
+    videos = re.findall(r"<video\b[^>]*>.*?</video>", PAGE)
+    assert len(videos) == 7  # the demo and six steps
+    assert PAGE.count('class="step"') == 6
+    for video in videos:
+        poster, src = re.search(r'poster="([^"]+)" src="([^"]+)"', video).groups()
+        assert 'controls preload="none" playsinline' in video and "autoplay" not in video
+        assert (SITE / poster).is_file() and jpeg_size(SITE / poster) == (1280, 720), poster
+        assert src.endswith(".mp4") and poster.removesuffix(".jpg") == src.removesuffix(".mp4")
+        assert re.search(r'aria-label="Video: [^"]+"', video), video
+        vtt = src.removesuffix(".mp4") + ".vtt"
+        assert f'<track kind="captions" srclang="en" label="English" src="{vtt}" default>' in video
+    # videos come later: a missing file leaves the poster, a "coming soon" note and no controls, not a broken player
+    script = PAGE.split("// videos are added after the page")[1].split("// comments")[0]
+    assert 'method: "HEAD"' in script and 'removeAttribute("controls")' in script
+    assert 'classList.add("soon")' in script and "Video coming soon" in PAGE
+
+
+def test_demo_narration_is_in_a_details():
+    demo = PAGE.split("<h2>See it work</h2>")[1].split("</section>")[0]
+    assert '<details class="narration">' in demo and "<summary>Read the narration</summary>" in demo
+    assert "Demo data: the people, employers and amounts shown are invented." in demo
+
+
+def test_private_section_names_the_cloud_exception_the_code_has():
+    private = PAGE.split('<div class="private" id="private">')[1].split("</section>")[0]
+    assert "Your documents never leave your computer." in private
+    exception = re.search(r'<li class="except">(.*?)</li>', private, re.S).group(1)
+    for fact in ("optional chat", "Claude's API", "Google's Antigravity", "masked text only",
+                 "taxtrace ui --models local"):
+        assert fact in exception, fact
+    # the same facts, in the code
+    chat = (ROOT / "taxtrace" / "chat.py").read_text(encoding="utf-8")
+    assert 'BACKENDS = ("claude", "agy", "local")' in chat
+    assert "Claude and agy only ever see masked text" in chat
+    assert '"--models", default="claude,agy,local"' in CLI
+    assert "No accounts, no usage data." in private and "Federal Reserve" in private
+    assert "FRED" in (ROOT / "taxtrace" / "fx.py").read_text(encoding="utf-8")
+
+
+def test_how_it_works_commands_exist():
+    for command in ("import", "outline", "redact", "w2", "1099", "k1", "1098", "entry", "ui"):
+        assert f'"{command}"' in CLI, command
+    assert (ROOT / "taxtrace" / "mcp_server.py").is_file()
+    assert "taxtrace-mcp" in (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+
+
+def test_read_more_links_point_at_this_project():
+    links = PAGE.split("<h2>Read more</h2>")[1].split("</section>")[0]
+    names = re.findall(r"<a [^>]*>(.*?)</a>", links)
+    assert names == ["The README", "The entry sheet", "The chat", "Use it from Claude (MCP)", "GitHub", "PyPI",
+                     "MCP Registry entry"]
+    assert '"name": "io.github.vinayvobbili/taxtrace"' in (ROOT / "server.json").read_text(encoding="utf-8")
+    assert "io.github.vinayvobbili%2Ftaxtrace/versions/latest" in links
+
+
+def test_join_in_has_giscus_comments_and_a_coffee_card_without_a_price():
+    join = PAGE.split('id="join"')[1].split("</section>")[0]
+    for href in ("https://github.com/vinayvobbili/taxtrace", "https://github.com/vinayvobbili/taxtrace/issues",
+                 "https://ko-fi.com/vinayvobbili"):
+        assert f'href="{href}"' in join
+    assert "$" not in join
+    assert 'id="comments"' in join
+    script = PAGE.split("// comments (giscus")[1].split("// the uv commands")[0]
+    assert 'src = "https://giscus.app/client.js"' in script and "IntersectionObserver" in script
+    for want in ('repo: "vinayvobbili/vinayvobbili.github.io"', '"repo-id": "R_kgDOSZD6Ig"',
+                 'category: "Announcements"', '"category-id": "DIC_kwDOSZD6Is4C-p2b"',
+                 'mapping: "specific"', 'term: "taxtrace"', 'strict: "0"', 'loading: "lazy"'):
+        assert want in script, want
+    assert "setConfig" in script  # follows the System / Light / Dark switch
+
+
+def test_the_page_and_its_pictures_use_only_invented_names():
+    text = PAGE + (ROOT / "scripts" / "site_assets.py").read_text(encoding="utf-8")
+    assert not re.search(r"\b\d{3}-\d{2}-\d{4}\b", text)  # no Social Security number
+    for invented in ("Initech", "Globex", "Umbrella"):
+        assert invented in text

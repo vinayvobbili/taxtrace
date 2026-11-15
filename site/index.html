@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>taxtrace | Every number on your return, traced to its page</title>
+<meta name="description" content="Free and open source. Reads your tax documents on your own computer and builds an entry sheet where every number carries the page and the exact text it came from. Nothing is guessed.">
+<meta property="og:title" content="taxtrace | Every number on your return, traced to its page">
+<meta property="og:description" content="Free and open source. Reads your tax documents on your own computer and builds an entry sheet where every number carries the page and the exact text it came from. Nothing is guessed.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://vinayvobbili.github.io/taxtrace/">
+<meta property="og:image" content="https://vinayvobbili.github.io/taxtrace/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0f766e">
+<style>
+:root {
+  --bg: #f1f8f5; --glow-1: rgba(94, 214, 190, .34); --glow-2: rgba(251, 191, 36, .2);
+  --panel: rgba(255, 255, 255, .88); --panel-solid: #fff; --text: #0f1f1a; --muted: #4d6a61; --line: #d9e9e2;
+  --accent: #0f766e; --accent-2: #d97706; --chip: #e6f2ed;
+  --shadow: 0 1px 2px rgba(15, 31, 26, .04), 0 10px 28px -16px rgba(15, 31, 26, .18);
+  --shadow-hover: 0 2px 4px rgba(15, 31, 26, .05), 0 24px 46px -20px rgba(15, 118, 110, .4);
+  --name-grad: linear-gradient(90deg, #0f766e, #1d4ed8);
+  --grad: linear-gradient(135deg, #0f766e, #15803d);
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --bg: #07110e; --glow-1: rgba(20, 184, 166, .22); --glow-2: rgba(245, 158, 11, .13);
+  --panel: rgba(14, 28, 24, .86); --panel-solid: #0e1c18; --text: #e6f4ef; --muted: #8fb0a6; --line: #1d352e;
+  --accent: #5eead4; --accent-2: #fbbf24; --chip: #132722;
+  --shadow: 0 1px 0 rgba(255, 255, 255, .03) inset, 0 12px 32px -20px rgba(0, 0, 0, .9);
+  --shadow-hover: 0 1px 0 rgba(255, 255, 255, .05) inset, 0 24px 48px -20px rgba(45, 212, 191, .4);
+  --name-grad: linear-gradient(90deg, #5eead4, #93c5fd);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; min-height: 100vh; color: var(--text);
+  font: 16px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  background: radial-gradient(1100px 600px at 8% -12%, var(--glow-1), transparent 62%),
+    radial-gradient(900px 540px at 102% -6%, var(--glow-2), transparent 60%), var(--bg);
+  background-attachment: fixed; -webkit-font-smoothing: antialiased; }
+h1, h2, h3, summary { text-wrap: balance; }
+p, li { text-wrap: pretty; }
+a { color: var(--accent); text-underline-offset: 3px; }
+.wrap { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
+:root[data-width="wide"] .wrap { max-width: 1600px; }
+:root[data-width="full"] .wrap { max-width: none; padding: 0 32px; }
+
+header { position: sticky; top: 0; z-index: 5; border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel-solid) 72%, transparent); backdrop-filter: saturate(1.5) blur(16px);
+  -webkit-backdrop-filter: saturate(1.5) blur(16px); }
+.bar { display: flex; gap: 12px; align-items: center; padding-top: 10px; padding-bottom: 10px; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 9px; font-weight: 800; font-size: 19px; letter-spacing: -.02em;
+  margin-right: auto; color: var(--text); text-decoration: none; }
+.brand img { width: 26px; height: 26px; border-radius: 7px; }
+.brand b, .grad { background: var(--name-grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.seg { display: inline-flex; gap: 2px; padding: 3px; background: var(--chip); border-radius: 11px; }
+.seg button { background: none; border: 0; color: var(--muted); padding: 5px 11px; border-radius: 8px;
+  font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; transition: color .15s, background .15s; }
+.seg button:hover { color: var(--text); }
+.seg button[aria-pressed="true"] { color: var(--text); background: var(--panel-solid); box-shadow: 0 1px 3px rgba(15, 31, 26, .15); }
+.settings { position: relative; }
+.gear { display: inline-grid; place-items: center; width: 36px; height: 36px; padding: 0; border-radius: 11px; cursor: pointer;
+  background: var(--chip); color: var(--muted); border: 1px solid transparent; transition: color .15s, background .15s; }
+.gear:hover, .gear[aria-expanded="true"] { color: var(--text); background: color-mix(in srgb, var(--accent) 14%, var(--chip)); }
+.gear svg { transition: transform .25s; }
+.gear[aria-expanded="true"] svg { transform: rotate(60deg); }
+.gear:focus-visible, .seg button:focus-visible { outline: 3px solid var(--accent-2); outline-offset: 2px; }
+.pop { position: absolute; right: 0; top: calc(100% + 10px); z-index: 10; width: min(300px, calc(100vw - 32px)); padding: 14px;
+  background: var(--panel-solid); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow-hover); animation: rise .18s both; }
+.pop[hidden] { display: none; }
+.pop .grp + .grp { margin-top: 12px; }
+.pop .lbl { display: block; margin: 0 0 6px 2px; font-size: 11.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.pop .seg { display: flex; } .pop .seg button { flex: 1; }
+.pop .seg button { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.ic { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  transition: color .15s, transform .18s; }
+.pop .seg button:hover .ic { transform: translateY(-1px) rotate(-8deg); }
+.pop .seg button[aria-pressed="true"] .ic { color: var(--accent-2); }
+@media (prefers-reduced-motion: reduce) { .pop .seg button:hover .ic { transform: none; } }
+
+.hero { text-align: center; padding: 72px 0 40px; position: relative; }
+.hero h1 { margin: 0; font-size: clamp(44px, 9vw, 84px); letter-spacing: -.04em; line-height: 1; font-weight: 850; }
+.hero .tag { margin: 14px 0 0; font-size: clamp(20px, 3.4vw, 30px); font-weight: 700; letter-spacing: -.02em; }
+.hero p.what { margin: 18px auto 0; max-width: 680px; color: var(--muted); font-size: 18px; text-wrap: pretty; }
+.sub { margin: 14px auto 0; max-width: 560px; font-size: 13.5px; line-height: 1.5; color: var(--muted); text-wrap: balance; }
+.sub a { color: var(--muted); } .sub a::after { content: "\2197"; margin-left: 3px; }
+.sub a[href^="#"]::after { content: none; }
+/* the uv commands: a Mac / Linux | Windows switch (without script both systems show, each under its name) */
+.uv { margin: 30px auto 0; max-width: 700px; display: grid; gap: 8px; justify-items: center; }
+.uv .seg { padding: 2px; border-radius: 10px; } .uv .seg[hidden], .uvpanel[hidden] { display: none; }
+.uv .seg button { padding: 3px 11px; font-size: 12.5px; }
+.uv .seg button:focus-visible, .uvrow button:focus-visible { outline: 3px solid var(--accent-2); outline-offset: 2px; }
+.uvpanel { display: block; width: 100%; max-width: 100%; overflow: hidden; border-radius: 13px; border: 2px solid transparent;
+  box-shadow: 0 10px 30px -12px var(--accent); text-align: left;
+  background: linear-gradient(var(--panel-solid), var(--panel-solid)) padding-box, var(--grad) border-box; }
+.uvrow .or a { color: inherit; text-decoration: underline dotted; text-underline-offset: 3px; }
+.sub.pipx code { white-space: nowrap; font-size: 12.5px; color: var(--text); }
+.sub.pipx button { margin: 0 4px; border: 0; border-radius: 6px; padding: 2px 8px; cursor: pointer; font: inherit; font-size: 11.5px;
+  font-weight: 650; background: var(--chip); color: var(--text); }
+.sub.pipx button:hover { background: var(--line); }
+.uv.js .os { display: none; }
+.os { display: block; padding: 5px 12px 0; font-size: 11.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.uvrow { display: grid; grid-template-columns: 5.2em minmax(0, 1fr) 4.6em; align-items: center; gap: 10px; padding: 4px 6px 4px 12px;
+  font-size: 13px; }
+.uvrow + .uvrow { border-top: 1px solid var(--line); }
+.uvrow .or { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+.uvrow code { background: none; border: 0; padding: 0; font-size: 13px; white-space: nowrap; overflow-x: auto; scrollbar-width: none; }
+.uvrow code::-webkit-scrollbar { display: none; }
+.uvrow button { border: 0; border-radius: 7px; padding: 4px 0; text-align: center; cursor: pointer; font: inherit; font-size: 12.5px;
+  font-weight: 650; background: var(--chip); color: var(--text); transition: background .15s; }
+.uvrow button:hover { background: var(--line); }
+.pain { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; padding: 14px 0 6px; }
+.pain p { margin: 0; padding: 14px 18px; border-radius: 16px; background: var(--panel); border: 1px solid var(--line);
+  border-left: 4px solid var(--accent-2); box-shadow: var(--shadow); font-weight: 650; letter-spacing: -.01em;
+  animation: rise .6s both; }
+.pain p:nth-child(2) { animation-delay: .08s; } .pain p:nth-child(3) { animation-delay: .16s; }
+.demo-note { margin: 8px 0 0; text-align: center; font-size: 13px; color: var(--muted); }
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 30px 0 10px; text-align: left; }
+.tile { display: block; position: relative; border-radius: 16px; padding: 16px 40px 16px 18px; color: #fff; text-decoration: none;
+  cursor: pointer; box-shadow: var(--shadow); animation: rise .6s both; transition: transform .18s, box-shadow .18s, filter .18s; }
+.tile::after { content: "\2192"; position: absolute; right: 14px; bottom: 10px; font-size: 18px; font-weight: 700; transition: transform .18s; }
+.tile:hover { transform: translateY(-4px); box-shadow: var(--shadow-hover); filter: brightness(1.1); }
+.tile:hover::after { transform: translateX(3px); }
+.tile:focus-visible, .links a:focus-visible, .maker a:focus-visible, .btn:focus-visible, .join .card a:focus-visible { outline: 3px solid var(--accent-2); outline-offset: 3px; }
+#private { scroll-margin-top: 70px; }
+.tile b { display: block; font-size: 22px; letter-spacing: -.02em; }
+.tile span { font-size: 13px; opacity: .95; }
+.tile:nth-child(1) { background: linear-gradient(135deg, #0f766e, #047857); }
+.tile:nth-child(2) { background: linear-gradient(135deg, #047857, #1d4ed8); animation-delay: .08s; }
+.tile:nth-child(3) { background: linear-gradient(135deg, #b45309, #c2410c); animation-delay: .16s; }
+.tile:nth-child(4) { background: linear-gradient(135deg, #1e40af, #0f766e); animation-delay: .24s; }
+
+section { padding: 36px 0; }
+h2 { margin: 0 0 18px; font-size: clamp(24px, 4vw, 34px); letter-spacing: -.03em; }
+.video { border-radius: 20px; overflow: hidden; border: 1px solid var(--line); box-shadow: var(--shadow-hover);
+  background: var(--panel-solid); max-width: 960px; margin: 0 auto; }
+.vid { position: relative; }
+.vid video { display: block; width: 100%; aspect-ratio: 16 / 9; height: auto; border: 0; background: #07110e; object-fit: cover; }
+/* a clip that isn't published yet keeps its poster and says so (the script marks it) */
+.vid.soon video { pointer-events: none; }
+.vid.soon::after { content: "Video coming soon"; position: absolute; left: 12px; bottom: 12px; padding: 4px 11px; border-radius: 999px;
+  font-size: 12px; font-weight: 700; color: #fff; background: rgba(7, 17, 14, .72); backdrop-filter: blur(6px); }
+.narration { max-width: 960px; margin: 14px auto 0; }
+.narration summary, .more summary { cursor: pointer; font-weight: 650; padding: 10px 14px; border-radius: 12px; list-style: none;
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel-solid)); border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+  transition: background .2s, box-shadow .2s; }
+.narration summary::-webkit-details-marker { display: none; }
+.narration summary:hover { background: color-mix(in srgb, var(--accent) 16%, var(--panel-solid)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+.narration summary:focus-visible { outline: 3px solid var(--accent-2); outline-offset: 3px; }
+.narration summary::after { content: "+"; float: right; color: var(--accent); font-weight: 800; }
+.narration[open] summary::after { content: "\2212"; }
+.narration p { margin: 12px 4px 0; color: var(--muted); }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 16px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 22px; box-shadow: var(--shadow);
+  transition: transform .2s, box-shadow .2s, border-color .2s; animation: rise .6s both; }
+.card:hover { transform: translateY(-4px); box-shadow: var(--shadow-hover); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.card:nth-child(2) { animation-delay: .06s; } .card:nth-child(3) { animation-delay: .12s; }
+.card:nth-child(4) { animation-delay: .18s; } .card:nth-child(5) { animation-delay: .24s; } .card:nth-child(6) { animation-delay: .3s; }
+.lead { margin: -8px 0 18px; color: var(--muted); }
+.lead.center { text-align: center; margin: 14px 0 0; }
+.steps { display: grid; gap: 22px; }
+.step { display: grid; grid-template-columns: 1fr 1.25fr; gap: 28px; align-items: center; padding: 20px; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 22px; box-shadow: var(--shadow); animation: rise .6s both;
+  transition: transform .2s, box-shadow .2s, border-color .2s; scroll-margin-top: 70px; }
+.step:hover { transform: translateY(-3px); box-shadow: var(--shadow-hover); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.step:nth-child(even) .vid { order: -1; }
+.step .vid video { border-radius: 14px; border: 1px solid var(--line); }
+.step .vid.soon::after { left: 12px; bottom: 12px; }
+.step h3 { margin: 10px 0 8px; font-size: 24px; letter-spacing: -.02em; }
+.step p { margin: 0; color: var(--muted); }
+/* every inline command: a monospace chip */
+:where(code) { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .9em;
+  background: color-mix(in srgb, var(--accent) 10%, var(--chip)); color: var(--text); padding: 2px 7px; border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line)); overflow-wrap: anywhere; }
+.num { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; color: #fff; font-weight: 750; background: var(--grad); }
+section[id], .private { scroll-margin-top: 70px; }
+@media (max-width: 760px) { .step { grid-template-columns: 1fr; } .step:nth-child(even) .vid { order: 0; } }
+.badge { display: inline-block; font-size: 12px; font-weight: 700; color: #fff; background: var(--grad); border-radius: 999px;
+  padding: 3px 10px; margin-bottom: 10px; }
+.card h3 { margin: 0 0 6px; font-size: 18px; letter-spacing: -.01em; }
+.card p { margin: 0; color: var(--muted); font-size: 15px; }
+
+.private { border-radius: 22px; padding: 32px; background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow);
+  position: relative; overflow: hidden; }
+.private::before { content: ""; position: absolute; width: 420px; height: 420px; right: -120px; top: -160px;
+  background: radial-gradient(closest-side, var(--glow-2), transparent); pointer-events: none; }
+.private h2, .private .cap { position: relative; }
+.private .cap { margin: 0 0 18px; color: var(--muted); }
+.private ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 12px; position: relative; }
+.private li { padding-left: 30px; position: relative; color: var(--muted); }
+.private li::before { content: ""; position: absolute; left: 0; top: 7px; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--grad); }
+.private li.except::before { background: linear-gradient(135deg, #b45309, #d97706); }
+.private li b { color: var(--text); }
+
+.links { display: flex; flex-wrap: wrap; gap: 10px; }
+.links a { padding: 9px 16px; border-radius: 999px; background: var(--panel); border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--line));
+  font-weight: 600; text-decoration: none; color: var(--text); transition: transform .18s, box-shadow .18s; }
+.links a::after, .maker a::after { content: "\2197"; margin-left: 6px; color: var(--accent); font-weight: 700; }
+.links a:hover { transform: translateY(-2px); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent), var(--shadow-hover);
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel)); }
+.made { font-weight: 650; color: var(--text); }
+.join .card h3 { margin-top: 0; }
+.join .card a { font-weight: 650; }
+.join .card a::after { content: "\2197"; margin-left: 4px; font-weight: 700; }
+.join .card .emoji { font-size: 26px; display: block; margin-bottom: 6px; }
+#comments { margin-top: 22px; min-height: 120px; }
+.maker { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin: 12px 0 16px; }
+.maker a { display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 999px; background: var(--panel);
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--line)); font-weight: 600; font-size: 14px; color: var(--text); text-decoration: none;
+  transition: transform .18s, box-shadow .18s; }
+.maker a:hover { transform: translateY(-2px); box-shadow: var(--shadow-hover); }
+footer { padding: 30px 0 50px; color: var(--muted); font-size: 14px; text-align: center; }
+footer p { margin: 6px auto 0; max-width: 620px; }
+@keyframes rise { from { opacity: 0; transform: translateY(12px); } }
+@media (max-width: 560px) { .hero { padding-top: 44px; } .private { padding: 22px; } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap bar">
+    <a class="brand" href="#top"><img src="icon.svg" alt=""><b>taxtrace</b></a>
+    <div class="settings">
+      <button class="gear" id="gear" type="button" aria-label="Display settings" aria-expanded="false" aria-controls="pop"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+      <div class="pop" id="pop" role="group" aria-label="Display settings" hidden>
+        <div class="grp"><span class="lbl">Theme</span>
+          <div class="seg" id="theme" role="group" aria-label="Theme">
+            <button data-v="system" aria-pressed="true"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>System</button><button data-v="light" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>Light</button><button data-v="dark" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>Dark</button>
+          </div></div>
+        <div class="grp"><span class="lbl">Width</span>
+          <div class="seg" id="width" role="group" aria-label="Width">
+            <button data-v="standard" aria-pressed="true"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="4" width="10" height="16" rx="2"/></svg>Standard</button><button data-v="wide" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/></svg>Wide</button><button data-v="full" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>Full</button>
+          </div></div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="wrap" id="top">
+  <div class="hero">
+    <h1 class="grad">taxtrace</h1>
+    <p class="tag grad">Every number on your return, traced to its page.</p>
+    <p class="what">For anyone who does their own US taxes from a pile of PDFs: W-2s, 1099s, K-1s, a rental, a foreign bank account. taxtrace reads them on your own computer and builds the sheet you type into your tax software, with the file, page and exact text behind every value. It never files anything and never guesses: what it can't settle becomes a question for you. Free and open source.</p>
+    <div class="uv" id="uv">
+      <div class="seg" role="group" aria-label="Your system" hidden>
+        <button type="button" data-os="unix" aria-pressed="true">Mac / Linux</button><button type="button" data-os="win" aria-pressed="false">Windows</button>
+      </div>
+      <div class="uvpanel" data-os="unix">
+        <span class="os">Mac / Linux</span>
+        <div class="uvrow"><span class="or"><a target="_blank" rel="noopener" href="https://docs.astral.sh/uv/getting-started/installation/">Install uv</a></span><code>curl -LsSf https://astral.sh/uv/install.sh | sh</code><button type="button" aria-live="polite">Copy</button></div>
+        <div class="uvrow"><span class="or">Then</span><code>uv tool install taxtrace</code><button type="button" aria-live="polite">Copy</button></div>
+        <div class="uvrow"><span class="or">Then run</span><code>taxtrace ui</code><button type="button" aria-live="polite">Copy</button></div>
+      </div>
+      <div class="uvpanel" data-os="win">
+        <span class="os">Windows</span>
+        <div class="uvrow"><span class="or"><a target="_blank" rel="noopener" href="https://docs.astral.sh/uv/getting-started/installation/">Install uv</a></span><code>powershell -c "irm https://astral.sh/uv/install.ps1 | iex"</code><button type="button" aria-live="polite">Copy</button></div>
+        <div class="uvrow"><span class="or">Then</span><code>uv tool install taxtrace</code><button type="button" aria-live="polite">Copy</button></div>
+        <div class="uvrow"><span class="or">Then run</span><code>taxtrace ui</code><button type="button" aria-live="polite">Copy</button></div>
+      </div>
+    </div>
+    <p class="sub">Run <code>taxtrace ui</code> and your workspace opens in the browser. Built and tested on a Mac: the Keychain passwords and the on-device AI model are macOS only.</p>
+    <p class="sub pipx">Already have Python? <code id="cmd">pipx install taxtrace</code><button type="button" aria-live="polite">Copy</button> works too.</p>
+    <div class="tiles">
+      <a class="tile" href="#how"><b>Traced</b><span>every value shows its file, page and exact text</span></a>
+      <a class="tile" href="#how"><b>Checked</b><span>a value its page doesn't show is rejected</span></a>
+      <a class="tile" href="#what"><b>Asked, not guessed</b><span>anything unclear comes back as a question</span></a>
+      <a class="tile" href="#private"><b>Private</b><span>your data stays on your computer</span></a>
+    </div>
+  </div>
+
+  <div class="pain">
+    <p>Forty PDFs from six different places.</p>
+    <p>Numbers retyped into tax software with no way to check them.</p>
+    <p>Last year's carryovers, buried on page 71.</p>
+  </div>
+
+  <section id="what">
+    <h2>What it does</h2>
+    <div class="grid">
+      <div class="card"><span class="badge">Read</span><h3>Reads what you already have</h3><p>W-2s, 1098s, brokers' 1099s, K-1s and K-3s, a rental's statements, foreign bank statements and last year's filed return. Scanned pages are read on your computer too.</p></div>
+      <div class="card"><span class="badge">Trace</span><h3>Every number has a source</h3><p>Each value keeps the file, the page and the exact text it was read from. A check throws out any value whose quote isn't on that page.</p></div>
+      <div class="card"><span class="badge">Check</span><h3>The arithmetic is verified</h3><p>A K-1's capital account has to add up, a rental's Schedule E has to tie out, last year's carryovers have to roll forward. A miss is shown, not smoothed over.</p></div>
+      <div class="card"><span class="badge">Ask</span><h3>Questions instead of guesses</h3><p>A receipt that could be a repair or an improvement, a missing 1099, a rate to choose: each is a question for you, with the evidence next to it.</p></div>
+      <div class="card"><span class="badge">Plan</span><h3>The year, ahead of time</h3><p>Estimated-tax payments against the safe harbor, tax-saving moves ranked by the dollars each saves, IRA limits, stock sales and wash-sale windows.</p></div>
+      <div class="card"><span class="badge">Agents</span><h3>Works with your AI assistant</h3><p>Ask Claude (or another assistant that supports MCP, the standard way to plug tools into AI chat) what's in your workspace and what's left to do. It only ever gets masked text.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>See it work</h2>
+    <div class="video vid"><video controls preload="none" playsinline poster="taxtrace-demo.jpg" src="taxtrace-demo.mp4" aria-label="Video: taxtrace from a folder of documents to an entry sheet (2 min)"><track kind="captions" srclang="en" label="English" src="taxtrace-demo.vtt" default></video></div>
+    <p class="lead center">From a folder of documents to an entry sheet, in about two minutes.</p>
+    <p class="demo-note">Demo data: the people, employers and amounts shown are invented.</p>
+    <details class="narration">
+      <summary>Read the narration</summary>
+      <p>A tax preparer's export lands in a folder. taxtrace import sorts it into the workspace by tax year and leaves out identity documents. The page lists each document and which forms it holds.</p>
+      <p>Next, the W-2 from Initech. taxtrace w2 reads each box by the words of its label, and every value shows the page and the exact line it came from. Box 4 has to be 6.2 percent of box 3, and it is.</p>
+      <p>A K-1 from Globex Partners goes through the same way. The capital account adds up, so it passes. A receipt that could be a repair or an improvement becomes a question, with the receipt beside it.</p>
+      <p>The entry sheet then lists everything your tax software will ask, in the order it asks. Each row is ready, an estimate, or missing, and names the command that fills it.</p>
+      <p>Last, the chat. Before anything goes to a cloud model, digits become pound signs and names become stars. A question with an amount in it stays on your Mac, and the page shows exactly what was sent.</p>
+    </details>
+  </section>
+
+  <section id="how">
+    <h2>How it works</h2>
+    <p class="lead">Six parts, each with a short video.</p>
+    <div class="steps">
+      <article class="step" id="import">
+        <div class="copy"><span class="num">1</span><h3>Import</h3>
+          <p>Point <code>taxtrace import</code> at a folder or a zip, such as a preparer's portal export. Documents are sorted by tax year, filed returns go to their own folder, and identity documents and repeats are skipped.</p></div>
+        <div class="vid"><video controls preload="none" playsinline poster="tutorials/taxtrace-01-import.jpg" src="tutorials/taxtrace-01-import.mp4" aria-label="Video: Import your documents (1 min)"><track kind="captions" srclang="en" label="English" src="tutorials/taxtrace-01-import.vtt" default></video></div>
+      </article>
+      <article class="step" id="layout">
+        <div class="copy"><span class="num">2</span><h3>See the layout</h3>
+          <p><code>taxtrace outline</code> lists which forms each document holds, page by page. <code>taxtrace redact</code> masks a page down to its shape, so a form can be studied without its values, names or towns.</p></div>
+        <div class="vid"><video controls preload="none" playsinline poster="tutorials/taxtrace-02-see-the-layout.jpg" src="tutorials/taxtrace-02-see-the-layout.mp4" aria-label="Video: See a document's layout without its values (1 min)"><track kind="captions" srclang="en" label="English" src="tutorials/taxtrace-02-see-the-layout.vtt" default></video></div>
+      </article>
+      <article class="step" id="read">
+        <div class="copy"><span class="num">3</span><h3>Read the forms</h3>
+          <p>Commands such as <code>taxtrace w2</code>, <code>1099</code>, <code>k1</code> and <code>1098</code> read each form box by box. Every value carries its page and quote, and each form's own arithmetic is checked.</p></div>
+        <div class="vid"><video controls preload="none" playsinline poster="tutorials/taxtrace-03-read-the-forms.jpg" src="tutorials/taxtrace-03-read-the-forms.mp4" aria-label="Video: Read your forms and see where each value came from (1 min)"><track kind="captions" srclang="en" label="English" src="tutorials/taxtrace-03-read-the-forms.vtt" default></video></div>
+      </article>
+      <article class="step" id="entry">
+        <div class="copy"><span class="num">4</span><h3>Get the entry sheet</h3>
+          <p><code>taxtrace entry</code> writes everything your tax software will ask, in its order. Each row is ready, an estimate or missing, and the questions still open are gathered at the end. Names, Social Security numbers and bank numbers are left for you to type.</p></div>
+        <div class="vid"><video controls preload="none" playsinline poster="tutorials/taxtrace-04-entry-sheet.jpg" src="tutorials/taxtrace-04-entry-sheet.mp4" aria-label="Video: The entry sheet (1 min)"><track kind="captions" srclang="en" label="English" src="tutorials/taxtrace-04-entry-sheet.vtt" default></video></div>
+      </article>
+      <article class="step" id="chat">
+        <div class="copy"><span class="num">5</span><h3>Ask in the chat</h3>
+          <p><code>taxtrace ui</code> opens your workspace in the browser with a chat for tax rules, forms and what a document is for. Under each answer from a cloud model, the page shows exactly what was sent. It can't open a document or file anything.</p></div>
+        <div class="vid"><video controls preload="none" playsinline poster="tutorials/taxtrace-05-ask-the-chat.jpg" src="tutorials/taxtrace-05-ask-the-chat.mp4" aria-label="Video: Ask the chat, and see what it was sent (1 min)"><track kind="captions" srclang="en" label="English" src="tutorials/taxtrace-05-ask-the-chat.vtt" default></video></div>
+      </article>
+      <article class="step" id="assistant">
+        <div class="copy"><span class="num">6</span><h3>Use it from your AI assistant</h3>
+          <p><code>taxtrace-mcp</code> lets Claude Code, Claude Desktop or any MCP client see what's in your workspace and what's on your to-do list. Every tool is read-only and returns masked text only, never an amount or a name.</p></div>
+        <div class="vid"><video controls preload="none" playsinline poster="tutorials/taxtrace-06-ai-assistant.jpg" src="tutorials/taxtrace-06-ai-assistant.mp4" aria-label="Video: Connect your AI assistant (1 min)"><track kind="captions" srclang="en" label="English" src="tutorials/taxtrace-06-ai-assistant.vtt" default></video></div>
+      </article>
+    </div>
+  </section>
+
+  <section id="private-section">
+    <div class="private" id="private">
+      <h2>Private by design</h2>
+      <p class="cap">Your documents are read on your computer. One optional feature can reach a cloud model, and it only gets text with the values taken out.</p>
+      <ul>
+        <li><b>Your documents never leave your computer.</b> Reading, scanned-page OCR, the checks and the entry sheet all run locally. Your workspace is a plain folder on your disk, and taxtrace refuses to put it inside a git repository.</li>
+        <li><b>Passwords stay in the Keychain.</b> A locked PDF's password is kept in the macOS Keychain, never in a file or on a command line, and <code>taxtrace keychain setup</code> makes each read ask for your Touch ID or Apple Watch.</li>
+        <li><b>Where a language model reads your documents, it runs on your Mac.</b> It is a local MLX model, never a public API.</li>
+        <li class="except"><b>The one exception is the optional chat.</b> By default it tries Claude's API, then Google's Antigravity, then a model on your Mac, and a cloud model is used only if you gave it a key or installed it. Cloud models see masked text only: digits become <code>#</code>, and names, streets and towns become <code>*</code>s. A question with an amount in it is answered on your Mac and never sent. Run <code>taxtrace ui --models local</code> to keep the chat on your computer entirely.</li>
+        <li><b>The MCP server is read-only and masked.</b> A locked document is never opened and the Keychain is never asked.</li>
+        <li><b>No accounts, no usage data.</b> The only outside lookup is public exchange rates from the Federal Reserve and the Treasury, which carries nothing about you.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <h2>Read more</h2>
+    <div class="links">
+      <a target="_blank" rel="noopener" href="https://github.com/vinayvobbili/taxtrace#readme">The README</a>
+      <a target="_blank" rel="noopener" href="https://github.com/vinayvobbili/taxtrace#entry-sheet">The entry sheet</a>
+      <a target="_blank" rel="noopener" href="https://github.com/vinayvobbili/taxtrace#chat">The chat</a>
+      <a target="_blank" rel="noopener" href="https://github.com/vinayvobbili/taxtrace#mcp-server-and-agent-skill">Use it from Claude (MCP)</a>
+      <a target="_blank" rel="noopener" href="https://github.com/vinayvobbili/taxtrace">GitHub</a>
+      <a target="_blank" rel="noopener" href="https://pypi.org/project/taxtrace/">PyPI</a>
+      <a target="_blank" rel="noopener" href="https://registry.modelcontextprotocol.io/v0.1/servers/io.github.vinayvobbili%2Ftaxtrace/versions/latest">MCP Registry entry</a>
+    </div>
+  </section>
+  <section class="join" id="join">
+    <h2>Join in</h2>
+    <div class="grid">
+      <div class="card"><span class="emoji" aria-hidden="true">&#11088;</span><h3>Star it on GitHub</h3><p>taxtrace collects no usage data, so a star is how I know it helped.</p>
+        <a target="_blank" rel="noopener" href="https://github.com/vinayvobbili/taxtrace">Star on GitHub</a></div>
+      <div class="card"><span class="emoji" aria-hidden="true">&#128161;</span><h3>Issues and PRs welcome</h3><p>Found a bug, a form that won't read, or want to add something? Open an issue or send a pull request.</p>
+        <a target="_blank" rel="noopener" href="https://github.com/vinayvobbili/taxtrace/issues">Issues</a> &middot; <a target="_blank" rel="noopener" href="https://github.com/vinayvobbili/taxtrace">The repo</a></div>
+      <div class="card"><span class="emoji" aria-hidden="true">&#9749;</span><h3>Buy me a coffee</h3><p>If it saved you an evening of retyping, a coffee says thanks.</p>
+        <a target="_blank" rel="noopener" href="https://ko-fi.com/vinayvobbili">Buy a coffee</a></div>
+    </div>
+    <div id="comments"></div>
+  </section>
+</main>
+<footer class="wrap">
+  <div class="made">Made by Vinay Vobbilichetty</div>
+  <div class="maker">
+    <a target="_blank" rel="noopener" href="https://www.linkedin.com/in/vinay-vobbilichetty/"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M20.45 20.45h-3.56v-5.57c0-1.33-.03-3.04-1.85-3.04-1.86 0-2.14 1.45-2.14 2.94v5.67H9.34V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28zM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z"/></svg>LinkedIn</a>
+    <a target="_blank" rel="noopener" href="https://github.com/vinayvobbili"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.26.8-.58v-2.03c-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.74.08-.73.08-.73 1.2.09 1.84 1.24 1.84 1.24 1.07 1.83 2.81 1.3 3.5 1 .1-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.14-.3-.54-1.52.1-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.28-1.55 3.29-1.23 3.29-1.23.64 1.66.24 2.88.12 3.18.77.84 1.23 1.91 1.23 3.22 0 4.61-2.81 5.63-5.48 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.19.7.8.58A12 12 0 0 0 12 .3"/></svg>GitHub</a>
+  </div>
+  <div>taxtrace is open source under the MIT license.</div>
+  <p>taxtrace prepares a return and shows its work. It doesn't file anything, and it isn't tax advice.</p></footer>
+
+<script>
+const root = document.documentElement;
+const get = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+const put = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+const dark = matchMedia("(prefers-color-scheme: dark)");
+
+function applyTheme(v) {
+  root.dataset.theme = v === "system" ? (dark.matches ? "dark" : "light") : v;
+}
+function setup(id, key, fallback, apply) {
+  const box = document.getElementById(id);
+  const set = v => {
+    box.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === v)));
+    apply(v);
+  };
+  box.addEventListener("click", e => {
+    const b = e.target.closest("button");
+    if (b) { put(key, b.dataset.v); set(b.dataset.v); }
+  });
+  set(get(key) || fallback);
+}
+setup("theme", "tt-theme", "system", applyTheme);
+dark.addEventListener("change", () => applyTheme(get("tt-theme") || "system"));
+setup("width", "tt-width", "standard", v => { root.dataset.width = v; });
+
+// the gear opens the display settings; an outside click or Esc closes them
+const gear = document.getElementById("gear"), pop = document.getElementById("pop");
+const showPop = open => { pop.hidden = !open; gear.setAttribute("aria-expanded", String(open)); };
+gear.addEventListener("click", () => showPop(pop.hidden));
+document.addEventListener("click", e => { if (!pop.hidden && !e.target.closest(".settings")) showPop(false); });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !pop.hidden) { showPop(false); gear.focus(); } });
+
+// videos are added after the page: a clip that isn't published yet keeps its poster and says "coming soon"
+document.querySelectorAll("video[src]").forEach(v => {
+  const soon = () => { v.removeAttribute("controls"); v.closest(".vid").classList.add("soon"); };
+  fetch(v.getAttribute("src"), { method: "HEAD" }).then(r => { if (!r.ok) soon(); }).catch(soon);
+});
+
+// comments (giscus, on the blog's discussions) load only when the section scrolls into view
+const giscusTheme = () => root.dataset.theme === "dark" ? "dark" : "light";
+const sendGiscusTheme = () => {
+  const f = document.querySelector("iframe.giscus-frame");
+  if (f) f.contentWindow.postMessage({ giscus: { setConfig: { theme: giscusTheme() } } }, "https://giscus.app");
+};
+new MutationObserver(sendGiscusTheme).observe(root, { attributes: true, attributeFilter: ["data-theme"] });
+new IntersectionObserver((entries, io) => {
+  if (!entries.some(e => e.isIntersecting)) return;
+  io.disconnect();
+  const s = document.createElement("script");
+  s.src = "https://giscus.app/client.js";
+  s.async = true;
+  s.crossOrigin = "anonymous";
+  Object.entries({
+    repo: "vinayvobbili/vinayvobbili.github.io", "repo-id": "R_kgDOSZD6Ig",
+    category: "Announcements", "category-id": "DIC_kwDOSZD6Is4C-p2b",
+    mapping: "specific", term: "taxtrace", strict: "0", "reactions-enabled": "1",
+    "emit-metadata": "0", "input-position": "bottom", theme: giscusTheme(), lang: "en", loading: "lazy",
+  }).forEach(([k, v]) => s.setAttribute("data-" + k, v));
+  document.getElementById("comments").appendChild(s);
+}, { rootMargin: "300px" }).observe(document.getElementById("comments"));
+
+// the uv commands show the visitor's system first (nothing is remembered); without script both systems show
+const uv = document.getElementById("uv"), osSwitch = uv.querySelector(".seg");
+const pickOs = os => {
+  uv.querySelectorAll(".uvpanel[data-os]").forEach(p => { p.hidden = p.dataset.os !== os; });
+  osSwitch.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.os === os)));
+};
+osSwitch.hidden = false;
+uv.classList.add("js");
+osSwitch.addEventListener("click", e => { const b = e.target.closest("button"); if (b) pickOs(b.dataset.os); });
+pickOs(/win/i.test(navigator.platform || navigator.userAgent) ? "win" : "unix");
+
+document.querySelectorAll(".uvrow button, .pipx button").forEach(b => b.addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText(b.parentElement.querySelector("code").textContent); b.textContent = "Copied"; }
+  catch (err) { b.textContent = "Press Ctrl+C"; }
+  setTimeout(() => { b.textContent = "Copy"; }, 1800);
+}));
+</script>
+</body>
+</html>

@@ -23,3 +23,7 @@ redacted/
 # except the app's own icons, rendered from the SVGs beside them by scripts/make_icons.py
 !taxtrace/static/icon-*.png
 !taxtrace/static/apple-touch-icon.png
+# and the landing page's pictures, rendered from made-up data by scripts/site_assets.py
+!site/og.jpg
+!site/taxtrace-demo.jpg
+!site/tutorials/taxtrace-*.jpg
