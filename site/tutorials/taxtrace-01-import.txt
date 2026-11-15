@@ -1,0 +1,9 @@
+A preparer's portal hands you a zip. There's a driver's license in it, forms named whatever, and some of them twice.
+
+Every number, traced to its page.
+
+Once your documents are imported, this page shows them sorted by tax year, with filed returns in a folder of their own.
+
+To import, point taxtrace at the folder or the zip. Each file goes to its tax year, last year's filed return goes to prior-returns, and the driver's license is skipped: it's no tax input, and a copy not made can't leak.
+
+Import the same folder again, and nothing changes. Files already in the workspace are skipped.

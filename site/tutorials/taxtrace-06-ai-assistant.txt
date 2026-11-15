@@ -1,0 +1,9 @@
+Your AI assistant could be a real help with your taxes, but you wouldn't paste your whole tax folder into it.
+
+Every number, traced to its page.
+
+Everything on this page is what your AI assistant can see too, but only in masked form. It connects through M C P, the standard way to plug tools into an assistant.
+
+One command adds taxtrace to Claude Code. The assistant is offered five tools: status, the list of documents, a document's outline, form checks, and the to-do list. Every one is read-only.
+
+What comes back is counts and masked text. The dates are real, but the wording is masked, and no tool returns an amount or a name. A locked document is never opened, and the Keychain is never asked.

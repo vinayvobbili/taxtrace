@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Record and render taxtrace's videos (the tour and the six tutorials) from a made-up household.
+#
+#   scripts/videos/make-videos [--dry] [--clips-only] [--out DIR] [NAME ...]
+#
+# See scripts/videos/README.md. Set PYTHON to use another interpreter.
+set -euo pipefail
+cd "$(dirname "$0")/../.."
+exec "${PYTHON:-.venv/bin/python}" scripts/videos/build.py "$@"

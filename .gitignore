@@ -20,6 +20,8 @@ build/
 *.heic
 TaxData/
 redacted/
+# Rendered videos and their clips (scripts/videos/make-videos); the published ones are copied to site/
+scripts/videos/out/
 # except the app's own icons, rendered from the SVGs beside them by scripts/make_icons.py
 !taxtrace/static/icon-*.png
 !taxtrace/static/apple-touch-icon.png

@@ -1,0 +1,43 @@
+WEBVTT
+
+00:00:03.000 --> 00:00:06.310
+Your AI assistant could be a real help with your taxes,
+
+00:00:06.310 --> 00:00:09.500
+but you wouldn't paste your whole tax folder into it.
+
+00:00:10.000 --> 00:00:12.625
+Every number, traced to its page.
+
+00:00:13.040 --> 00:00:17.240
+Everything on this page is what your AI assistant can see too,
+
+00:00:17.240 --> 00:00:18.866
+but only in masked form.
+
+00:00:18.866 --> 00:00:24.015
+It connects through M C P, the standard way to plug tools into an assistant.
+
+00:00:27.120 --> 00:00:30.018
+One command adds taxtrace to Claude Code.
+
+00:00:30.018 --> 00:00:34.753
+The assistant is offered five tools: status, the list of documents,
+
+00:00:34.753 --> 00:00:38.569
+a document's outline, form checks, and the to-do list.
+
+00:00:38.569 --> 00:00:40.195
+Every one is read-only.
+
+00:00:40.520 --> 00:00:43.293
+What comes back is counts and masked text.
+
+00:00:43.293 --> 00:00:46.330
+The dates are real, but the wording is masked,
+
+00:00:46.330 --> 00:00:48.971
+and no tool returns an amount or a name.
+
+00:00:48.971 --> 00:00:53.395
+A locked document is never opened, and the Keychain is never asked.

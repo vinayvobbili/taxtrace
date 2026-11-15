@@ -4,7 +4,7 @@
 
 **Prepare a US federal and state return from your own documents, on your own machine, with every number traced to the page it came from.**
 
-[Watch the demo](https://vinayvobbili.github.io/taxtrace/)
+[![Watch the demo](https://raw.githubusercontent.com/vinayvobbili/taxtrace/main/site/taxtrace-demo.jpg)](https://vinayvobbili.github.io/taxtrace/)
 
 taxtrace does not file anything. You point it at a folder of your documents (W-2s, 1099s, 1098 mortgage statements, partnership K-1s, property manager statements, foreign bank statements, last year's return). It reads them and writes an entry sheet to type into consumer tax software, an FBAR (foreign bank account report) account list, and a list of questions for you: anything it could not settle from the documents alone.
 
@@ -16,7 +16,7 @@ Three rules hold everywhere:
 
 ## What the demo shows
 
-The demo uses made-up documents only: it feeds taxtrace a household's forms and shows the entry sheet filling in as they are read. Every value arrives with its source and a status: ready, estimate or missing. Illustrative output for an invented Initech employee in Boulder, CO, with round figures:
+The two-minute demo uses made-up documents only: it opens taxtrace in the browser on a household's folder (the to-do list, the tax-saving moves, the documents by tax year), reads a W-2 box by box, and shows the entry sheet it writes, then the chat and what a cloud model is sent. Every value arrives with its source and a status: ready, estimate or missing. Illustrative output for an invented Initech employee in Boulder, CO, with round figures:
 
 | Entry sheet line | Value | Status | Read from |
 |---|---|---|---|

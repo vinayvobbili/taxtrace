@@ -1,0 +1,79 @@
+WEBVTT
+
+00:00:03.000 --> 00:00:07.634
+Tax season often starts with a folder of PDFs and a quiet worry.
+
+00:00:07.634 --> 00:00:10.312
+Which page did that number come from?
+
+00:00:10.312 --> 00:00:11.615
+Is a form missing?
+
+00:00:11.615 --> 00:00:15.525
+And do you really want to hand all of it to a chatbot?
+
+00:00:15.960 --> 00:00:18.585
+Every number, traced to its page.
+
+00:00:19.000 --> 00:00:22.889
+This is taxtrace, running in your browser, on your own Mac.
+
+00:00:22.889 --> 00:00:26.911
+At the top, your to-do list, and the year's tax-saving moves,
+
+00:00:26.911 --> 00:00:29.350
+ranked by the dollars each one saves.
+
+00:00:31.920 --> 00:00:35.944
+Further down are your documents, in a plain folder on your disk,
+
+00:00:35.944 --> 00:00:37.139
+sorted by tax year.
+
+00:00:37.139 --> 00:00:39.780
+Each one is tagged with the form it holds,
+
+00:00:39.780 --> 00:00:42.295
+and none of them has left your computer.
+
+00:00:46.360 --> 00:00:50.437
+Behind the page, taxtrace reads each form box by box.
+
+00:00:50.437 --> 00:00:56.130
+Here is the W-2 from Initech: eight values read, and all five checks pass,
+
+00:00:56.130 --> 00:00:59.592
+including that box 4 is 6.2 percent of box 3.
+
+00:00:59.592 --> 00:01:04.285
+Every value keeps the page, and the exact text, it came from.
+
+00:01:06.480 --> 00:01:09.784
+From those readings, taxtrace writes an entry sheet:
+
+00:01:09.784 --> 00:01:13.596
+everything your tax software will ask, in the order it asks.
+
+00:01:13.596 --> 00:01:16.328
+Each row is ready, an estimate, or missing,
+
+00:01:16.328 --> 00:01:19.505
+and a missing row names the command that fills it.
+
+00:01:21.560 --> 00:01:25.399
+Last, the chat, for questions about tax rules and forms.
+
+00:01:25.399 --> 00:01:28.004
+Before anything goes to a cloud model,
+
+00:01:28.004 --> 00:01:32.049
+digits become pound signs and names and towns become stars,
+
+00:01:32.049 --> 00:01:34.860
+and the page shows exactly what was sent.
+
+00:01:35.840 --> 00:01:39.621
+And a question with an amount in it never leaves your Mac.
+
+00:01:39.621 --> 00:01:42.815
+The model here answers it, and the page says why.

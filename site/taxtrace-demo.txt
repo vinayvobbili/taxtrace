@@ -1,0 +1,15 @@
+Tax season often starts with a folder of PDFs and a quiet worry. Which page did that number come from? Is a form missing? And do you really want to hand all of it to a chatbot?
+
+Every number, traced to its page.
+
+This is taxtrace, running in your browser, on your own Mac. At the top, your to-do list, and the year's tax-saving moves, ranked by the dollars each one saves.
+
+Further down are your documents, in a plain folder on your disk, sorted by tax year. Each one is tagged with the form it holds, and none of them has left your computer.
+
+Behind the page, taxtrace reads each form box by box. Here is the W-2 from Initech: eight values read, and all five checks pass, including that box 4 is 6.2 percent of box 3. Every value keeps the page, and the exact text, it came from.
+
+From those readings, taxtrace writes an entry sheet: everything your tax software will ask, in the order it asks. Each row is ready, an estimate, or missing, and a missing row names the command that fills it.
+
+Last, the chat, for questions about tax rules and forms. Before anything goes to a cloud model, digits become pound signs and names and towns become stars, and the page shows exactly what was sent.
+
+And a question with an amount in it never leaves your Mac. The model here answers it, and the page says why.

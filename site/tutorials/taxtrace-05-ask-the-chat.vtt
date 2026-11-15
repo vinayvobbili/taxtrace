@@ -1,0 +1,43 @@
+WEBVTT
+
+00:00:03.000 --> 00:00:04.967
+You have a question about a form,
+
+00:00:04.967 --> 00:00:08.842
+but your documents are full of details you'd rather keep private,
+
+00:00:08.842 --> 00:00:10.750
+and the chatbot is in the cloud.
+
+00:00:11.360 --> 00:00:13.985
+Every number, traced to its page.
+
+00:00:14.400 --> 00:00:18.021
+Click the chat button and ask about a rule or a form.
+
+00:00:18.021 --> 00:00:22.871
+Under the answer, open what Claude was sent: digits became pound signs,
+
+00:00:22.871 --> 00:00:25.125
+and names and towns became stars.
+
+00:00:28.480 --> 00:00:32.881
+The page also shows who answers, in order: Claude, then Antigravity,
+
+00:00:32.881 --> 00:00:34.498
+then a model on your Mac.
+
+00:00:34.498 --> 00:00:38.575
+Cloud models are marked masked, and the one on your Mac is not,
+
+00:00:38.575 --> 00:00:40.905
+because it never leaves the machine.
+
+00:00:43.120 --> 00:00:47.576
+Ask something with an amount in it, and the question stays on your Mac.
+
+00:00:47.576 --> 00:00:50.651
+The model here answers it, and the page says why.
+
+00:00:50.651 --> 00:00:55.420
+Or ask Claude as well, with the amount masked, and see exactly what it gets.
