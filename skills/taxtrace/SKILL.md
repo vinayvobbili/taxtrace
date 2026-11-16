@@ -70,6 +70,12 @@ taxtrace`) and upload it under Settings, Capabilities, Skills. The MCP server ab
 6. **See the tax-saving moves.** `get_moves` gives the year's moves in the order `taxtrace moves` ranked them, with
    real deadlines; the dollar amounts are masked, so say the order and dates, and that the person's own
    `taxtrace moves --show` or page has the figures.
+7. **Compare a job change.** `get_jobchange` gives what `taxtrace jobchange` saved: the leave and start dates,
+   the rollover deadline, paychecks left and the quarters short are real; every amount is masked. Say which dates
+   matter and that the person's own `taxtrace jobchange` output has the figures.
+8. **See the stock sales.** `get_sales` gives what `taxtrace sales` saved: the wash-sale windows with real dates
+   (which are open, which lost for good), the amounts, symbols and accounts masked. Say what to avoid buying
+   until when, by date only, and that the figures are in `taxtrace sales`.
 
 ## Rules
 

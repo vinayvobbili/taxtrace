@@ -28,7 +28,9 @@ server = MCPServer(
         "forms it holds; get_form_checks says which Form 1098, 1099-DIV, 1099-INT and K-1 readings passed their "
         "checks (every value traced to its page) and which failed or raised a question; get_todo lists the person's "
         "money and tax to-dos by due date (the dates are real, the wording masked); get_moves lists the year's "
-        "tax-saving moves in rank order with their deadlines (amounts and savings masked). "
+        "tax-saving moves in rank order with their deadlines (amounts and savings masked); "
+        "get_jobchange compares the year with a change of job against the year without one, and get_sales "
+        "summarizes the year's stock sales and wash-sale windows (dates real, amounts masked). "
         "taxtrace never files anything and these tools change nothing."
     ),
     version=__version__,
@@ -131,6 +133,32 @@ def get_moves(
     what you can read. Also the items left for the return and the questions the plan still has. Nothing is
     worked out or changed here; the person runs `taxtrace moves` to refresh it. For the to-dos use get_todo."""
     return _call(review.moves_list, year)
+
+
+@server.tool(annotations=READ)
+def get_jobchange(
+    year: Annotated[int | None, Field(ge=2000, le=2100, description=(
+        "The tax year (default: the latest year `taxtrace jobchange` saved)."))] = None,
+) -> dict:
+    """The year with a change of job against the year without one, as `taxtrace jobchange` saved it: the leave and
+    start dates, the rollover deadline, how many paychecks are left, whether a 401(k) limit is passed and which
+    quarters fall short of the safe harbor (all real), and per case (stay or leave) its wages, withholding, Social
+    Security, 401(k), loan, tax and balance masked, plus the questions left. Nothing is worked out or changed here;
+    the person runs `taxtrace jobchange` to refresh it. For the year's ranked actions use get_moves."""
+    return _call(review.jobchange_list, year)
+
+
+@server.tool(annotations=READ)
+def get_sales(
+    year: Annotated[int | None, Field(ge=2000, le=2100, description=(
+        "The tax year (default: the latest year `taxtrace sales` saved)."))] = None,
+) -> dict:
+    """The year's stock sales as `taxtrace sales` saved them: Schedule D and Form 8949 totals by box, the loss
+    allowed and carried, and the room left for losses (all amounts masked), and the wash-sale windows with their
+    real sale and end dates, whether each is still open and lost for good, and the purchases inside it (real
+    dates, masked symbol and account). Also the questions left. Nothing is worked out or changed here; the person
+    runs `taxtrace sales` to refresh it. For the year's ranked actions use get_moves."""
+    return _call(review.sales_list, year)
 
 
 def main() -> None:

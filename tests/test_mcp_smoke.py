@@ -69,4 +69,4 @@ def test_handshake_with_the_real_server(smoke, monkeypatch):
     info, tools = smoke.handshake([sys.executable, "-m", "taxtrace.mcp_server"], timeout=60)
     assert info["name"] == "taxtrace"
     assert {"get_status", "list_documents", "get_document_outline", "get_form_checks", "get_todo",
-            "get_moves"} <= set(tools)
+            "get_moves", "get_jobchange", "get_sales"} <= set(tools)

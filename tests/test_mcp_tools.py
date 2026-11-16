@@ -47,6 +47,7 @@ def test_allowed_values_match_the_code():
     ("list_documents", "get_document_outline"), ("get_document_outline", "get_form_checks"),
     ("get_document_outline", "list_documents"), ("get_form_checks", "get_document_outline"),
     ("get_todo", "list_documents"), ("get_moves", "get_todo"),
+    ("get_jobchange", "get_moves"), ("get_sales", "get_moves"),
 ])
 def test_overlapping_tools_point_to_each_other(tool, sibling):
     assert sibling in TOOLS[tool].description
@@ -207,6 +208,78 @@ def test_moves_for_a_year_not_saved_says_which_are(workspace_home):
     save_moves(workspace_home)
     with pytest.raises(Exception, match="saved: 2026"):
         call("get_moves", year=2024)
+
+
+JOBCHANGE_PLAN = {
+    "year": 2026, "leave": "2026-12-11", "start": "2027-01-04", "after_year": False,
+    "rollover_deadline": "2027-04-15",
+    "cases": [
+        {"name": "Stay at Initech", "paychecks": 2, "wages": "187654.32", "old_wages": "187654.32",
+         "new_wages": "0", "withheld": "31234.56", "social_security": "10453.20", "social_security_back": "0",
+         "deferred": "23500", "room": None, "over_limit": False, "loan_taxed": "0", "loan_cost": "0",
+         "tax": "35432.10", "balance": "-1234.56", "quarters_short": []},
+        {"name": "Leave for Globex", "paychecks": 1, "wages": "198765.43", "old_wages": "170000",
+         "new_wages": "28765.43", "withheld": "33333.33", "social_security": None, "social_security_back": "987.65",
+         "deferred": "19876.54", "room": "3623.46", "over_limit": True, "loan_taxed": "5432.10",
+         "loan_cost": "2109.87", "tax": "36543.21", "balance": "2345.67", "quarters_short": [4]},
+    ],
+    "questions": ["the new salary of 196,000 isn't confirmed: `--confirm new_salary=196,000`"],
+}
+
+SALES_PLAN = {
+    "year": 2026, "from_forms": True,
+    "boxes": {"A": {"proceeds": "45678.90", "basis": "56789.01", "wash": "1234.56", "gain": "-9876.54"}},
+    "short": "-9876.54", "long": "4321.09", "distributions": "210.98", "carry_short": "0", "carry_long": "8765.43",
+    "net": "-5555.45", "allowed": "3000", "carries_on": "2555.45", "room": "1357.91",
+    "windows": [{"symbol": "INTC", "sold": "2026-11-02", "until": "2026-12-02", "open": True, "lost_for_good": False,
+                 "bought": [{"day": "2026-11-10", "account": "Globex Brokerage 4567", "reinvested": True}]}],
+    "questions": ["INTC bought on 2026-11-10 inside the window: 12,345 of the loss is disallowed"],
+}
+
+
+def save_year(home: Path, folder: str, plan: dict) -> None:
+    (home / folder).mkdir(parents=True)
+    (home / folder / "2026.json").write_text(json.dumps(plan))
+
+
+def test_jobchange_keeps_dates_and_masks_every_amount(workspace_home):
+    save_year(workspace_home, workspace.JOBCHANGE, JOBCHANGE_PLAN)
+    out = call("get_jobchange")
+    assert out["year"] == 2026 and out["leave"] == "2026-12-11" and out["rollover_deadline"] == "2027-04-15"
+    assert [(c["paychecks"], c["over_limit"], c["quarters_short"]) for c in out["cases"]] == [
+        (2, False, []), (1, True, [4])]
+    assert out["cases"][0]["room"] is None and out["cases"][0]["tax"] == "##,###.##"
+    blob = json.dumps(out)
+    for secret in ["187654", "187,654", "31234", "35432", "1234.56", "198765", "19876", "36543", "196,000",
+                   "Initech", "Globex"]:
+        assert secret not in blob, secret
+    assert call("get_jobchange", year=2026) == out
+
+
+def test_sales_keep_window_dates_and_mask_amounts_symbols_and_accounts(workspace_home):
+    save_year(workspace_home, workspace.SALES, SALES_PLAN)
+    out = call("get_sales")
+    assert out["year"] == 2026 and out["net"] == "#,###.##" and out["boxes"]["A"]["gain"] == "#,###.##"
+    window = out["windows"][0]
+    assert (window["sold"], window["until"], window["open"], window["lost_for_good"]) == (
+        "2026-11-02", "2026-12-02", True, False)
+    assert window["bought"][0]["day"] == "2026-11-10" and window["bought"][0]["reinvested"] is True
+    blob = json.dumps(out)
+    for secret in ["45678", "56789", "9876", "4321", "8765", "5555", "2555", "1357", "12,345", "INTC", "Globex",
+                   "4567"]:
+        assert secret not in blob, secret
+    assert call("get_sales", year=2026) == out
+
+
+@pytest.mark.parametrize("tool, folder, plan, key", [
+    ("get_jobchange", workspace.JOBCHANGE, JOBCHANGE_PLAN, "cases"),
+    ("get_sales", workspace.SALES, SALES_PLAN, "windows")])
+def test_saved_results_missing_say_so_and_name_the_saved_years(workspace_home, tool, folder, plan, key):
+    out = call(tool)
+    assert out["exists"] is False and out[key] == []
+    save_year(workspace_home, folder, plan)
+    with pytest.raises(Exception, match="saved: 2026"):
+        call(tool, year=2024)
 
 
 # -- privacy

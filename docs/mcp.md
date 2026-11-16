@@ -34,6 +34,8 @@ if `which taxtrace-mcp` isn't on the app's `PATH`, such as `~/.local/bin/taxtrac
 | `get_form_checks` | Per Form 1098, 1099-DIV or 1099-INT, or K-1: checks passed of total, the ones that failed, the questions left |
 | `get_todo` | `todo.md` by due date: section, date, days left, group, and masked text, notes and sub-tasks |
 | `get_moves` | The year's tax-saving moves in rank order: name, action, deadline, done flag; amounts and savings masked |
+| `get_jobchange` | The year with a change of job against staying: leave and start dates, rollover deadline, paychecks left, quarters short; wages, withholding, 401(k), loan, tax and balance masked |
+| `get_sales` | The year's stock sales: Schedule D and Form 8949 totals masked; wash-sale windows with real dates, open or lost for good, symbols and accounts masked |
 
 Every tool is read-only. The masking is the one the chat uses for a cloud model and `taxtrace redact` writes:
 digits become `#`, words outside the IRS's own vocabulary become `*`s, and names in `redact-terms.txt` go first.

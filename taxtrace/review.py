@@ -181,20 +181,72 @@ def checks(form: str, doc_id: int | None = None) -> dict:
             "documents_skipped": skipped, "documents_locked": locked, "forms": out}
 
 
+def _saved_year(folder_name: str, year: int | None, command: str) -> tuple[int, dict] | None:
+    """The saved `<folder>/<year>.json` of a command (the latest year when none is given), or None when nothing is
+    saved yet."""
+    folder = workspace.outside_git(workspace.home()) / folder_name
+    years = sorted(p.stem for p in folder.glob("*.json") if YEAR_FOLDER.fullmatch(p.stem)) if folder.is_dir() else []
+    if not years:
+        return None
+    if year is None:
+        year = int(years[-1])
+    elif str(year) not in years:
+        raise ReviewError(f"no {command} saved for {year}; saved: {', '.join(years)}")
+    return year, json.loads((folder / f"{year}.json").read_text())
+
+
+def _money(mask: Callable[..., str], value: str | None) -> str | None:
+    """A saved amount, masked, its sign too (a loss or a refund is a figure); None stays None."""
+    return None if value is None else mask(f"{abs(Decimal(value)):,.2f}")
+
+
+def jobchange_list(year: int | None = None) -> dict:
+    """The saved job-change comparison: dates, paycheck counts, quarters and flags as they are, every amount and the
+    questions masked. The latest year saved when none is given."""
+    mask = masker()
+    saved = _saved_year(workspace.JOBCHANGE, year, "jobchange")
+    if saved is None:
+        return {"exists": False, "year": year, "cases": [],
+                "message": "No job change saved yet: run `taxtrace jobchange`."}
+    year, plan = saved
+    amounts = ("wages", "old_wages", "new_wages", "withheld", "social_security", "social_security_back", "deferred",
+               "room", "loan_taxed", "loan_cost", "tax", "balance")
+    cases = [{"name": mask(c["name"], names=True), "paychecks": c["paychecks"], "over_limit": c["over_limit"],
+              "quarters_short": c["quarters_short"], **{k: _money(mask, c[k]) for k in amounts}}
+             for c in plan["cases"]]
+    return {"exists": True, "year": year, "leave": plan["leave"], "start": plan["start"],
+            "after_year": plan["after_year"], "rollover_deadline": plan["rollover_deadline"], "cases": cases,
+            "questions": [mask(q) for q in plan["questions"]]}
+
+
+def sales_list(year: int | None = None) -> dict:
+    """The saved stock-sales summary: wash-sale windows with their real dates, the symbol, every amount, the accounts
+    and the questions masked. The latest year saved when none is given."""
+    mask = masker()
+    saved = _saved_year(workspace.SALES, year, "sales")
+    if saved is None:
+        return {"exists": False, "year": year, "windows": [],
+                "message": "No sales saved yet: run `taxtrace sales`."}
+    year, t = saved
+    totals = ("short", "long", "distributions", "carry_short", "carry_long", "net", "allowed", "carries_on", "room")
+    windows = [{"symbol": mask(w["symbol"]), "sold": w["sold"], "until": w["until"], "open": w["open"],
+                "lost_for_good": w["lost_for_good"],
+                "bought": [{"day": b["day"], "account": mask(b["account"]), "reinvested": b["reinvested"]}
+                           for b in w["bought"]]} for w in t["windows"]]
+    return {"exists": True, "year": year, "from_forms": t["from_forms"],
+            "boxes": {b: {k: _money(mask, v) for k, v in row.items()} for b, row in t["boxes"].items()},
+            **{k: _money(mask, t[k]) for k in totals}, "windows": windows,
+            "questions": [mask(q) for q in t["questions"]]}
+
+
 def moves_list(year: int | None = None) -> dict:
     """The year's saved tax-saving moves in rank order: names, deadlines and done flags as they are, the amounts, the
     saving and any figure inside the action text masked. The latest year saved when none is given."""
     mask = masker()
-    home = workspace.outside_git(workspace.home())
-    folder = home / workspace.MOVES
-    years = sorted(p.stem for p in folder.glob("*.json") if YEAR_FOLDER.fullmatch(p.stem)) if folder.is_dir() else []
-    if not years:
+    saved = _saved_year(workspace.MOVES, year, "moves")
+    if saved is None:
         return {"exists": False, "year": year, "moves": [], "message": "No moves saved yet: run `taxtrace moves`."}
-    if year is None:
-        year = int(years[-1])
-    elif str(year) not in years:
-        raise ReviewError(f"no moves saved for {year}; saved: {', '.join(years)}")
-    plan = json.loads((folder / f"{year}.json").read_text())
+    year, plan = saved
     rows = [{"rank": n, "key": m["key"], "name": m["name"], "action": mask(m["action"]), "by": m["by"],
              "amount": mask(f"{Decimal(m['amount']):,.2f}"), "saving": mask(f"{Decimal(m['saving']):,.2f}"),
              "done": m["done"]} for n, m in enumerate(plan["moves"], 1)]
