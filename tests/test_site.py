@@ -122,7 +122,7 @@ def test_demo_video_and_every_step_video_are_wired_but_guarded():
         assert src.endswith(".mp4") and poster.removesuffix(".jpg") == src.removesuffix(".mp4")
         assert re.search(r'aria-label="Video: [^"]+"', video), video
         vtt = src.removesuffix(".mp4") + ".vtt"
-        assert f'<track kind="captions" srclang="en" label="English" src="{vtt}" default>' in video
+        assert f'<track kind="captions" srclang="en" label="English" src="{vtt}">' in video
     # videos come later: a missing file leaves the poster, a "coming soon" note and no controls, not a broken player
     script = PAGE.split("// videos are added after the page")[1].split("// comments")[0]
     assert 'method: "HEAD"' in script and 'removeAttribute("controls")' in script

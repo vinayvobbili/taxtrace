@@ -114,7 +114,7 @@ def test_every_video_on_the_page_has_an_aria_label_captions_and_a_plain_text_nar
     for src, video in videos:
         assert re.search(r'aria-label="Video: [^"]+"', video), src
         stem = src.removesuffix(".mp4")
-        assert f'<track kind="captions" srclang="en" label="English" src="{stem}.vtt" default>' in video
+        assert f'<track kind="captions" srclang="en" label="English" src="{stem}.vtt">' in video
         for ext in ("mp4", "vtt", "txt"):
             assert (site / f"{stem}.{ext}").is_file(), f"{stem}.{ext}"
         words = (site / f"{stem}.txt").read_text(encoding="utf-8")
