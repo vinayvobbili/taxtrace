@@ -1944,6 +1944,22 @@ def cmd_tax(args: argparse.Namespace) -> int:
     return 1 if bad else 0
 
 
+def entry_sheet(home: Path, year: int, expected: list[str] | None = None):
+    """The year's entry sheet from what the other commands saved in the workspace (`taxtrace entry` and the page)."""
+    from . import entry
+
+    def saved(folder: str) -> dict | None:
+        path = home / folder / f"{year}.json"
+        return json.loads(path.read_text()) if path.exists() else None
+
+    return entry.build(year, forms=_forms(home), k1s=_k1s(home), returns=_returns(home), expected=expected,
+                       nc=saved(workspace.D400), federal=saved(workspace.AGI), filing=_filing(home, year),
+                       rental=saved(workspace.SCHEDULE_E), found=saved(workspace.FOREIGN),
+                       sales=saved(workspace.SALES), passive=saved(workspace.PASSIVE),
+                       form_8995=saved(workspace.QBI), plan=saved(workspace.ESTIMATES),
+                       moves=saved(workspace.MOVES))
+
+
 def cmd_entry(args: argparse.Namespace) -> int:
     """A year's entry sheet into <workspace>/entry/<year>.txt: everything the return asks for, section by section,
     each value with its source and whether it's ready, an estimate or missing, from what the other commands saved.
@@ -1960,10 +1976,6 @@ def cmd_entry(args: argparse.Namespace) -> int:
     def masked(line: str) -> str:
         return redact.redact(line, terms).text.strip()
 
-    def saved(folder: str) -> dict | None:
-        path = home / folder / f"{args.year}.json"
-        return json.loads(path.read_text()) if path.exists() else None
-
     out = home / workspace.ENTRY
     kept = out / f"{args.year}-expected.json"  # the forms said to wait for stay on the list until they're read
     expected = json.loads(kept.read_text()) if kept.exists() else []
@@ -1975,12 +1987,7 @@ def cmd_entry(args: argparse.Namespace) -> int:
     out.mkdir(parents=True, exist_ok=True)
     if args.expect:
         kept.write_text(json.dumps(expected, indent=2) + "\n")
-    sheet = entry.build(args.year, forms=_forms(home), k1s=_k1s(home), returns=_returns(home), expected=expected,
-                        nc=saved(workspace.D400), federal=saved(workspace.AGI),
-                        filing=_filing(home, args.year), rental=saved(workspace.SCHEDULE_E),
-                        found=saved(workspace.FOREIGN), sales=saved(workspace.SALES),
-                        passive=saved(workspace.PASSIVE), form_8995=saved(workspace.QBI),
-                        plan=saved(workspace.ESTIMATES), moves=saved(workspace.MOVES))
+    sheet = entry_sheet(home, args.year, expected)
     print(f"{args.year} entry sheet: {sheet.count(entry.READY)} ready, {sheet.count(entry.ESTIMATE)} estimates, "
           f"{sheet.count(entry.MISSING)} missing")
     for section in sheet.sections:

@@ -16,13 +16,14 @@ import tempfile
 import threading
 import time
 import webbrowser
+from datetime import date
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib import resources
 from pathlib import Path, PurePosixPath
 from urllib.parse import parse_qs, urlparse
 
-from . import __version__, chat, importer, text, todo, workspace
+from . import __version__, chat, cli, entry, importer, text, todo, workspace
 
 APP_HOST = "taxtrace.localhost"  # browsers and macOS send every *.localhost name to this machine, never the web
 PORT = 8766  # jobwatch's is 8765
@@ -62,6 +63,59 @@ def plans() -> dict:
     return {"year": int(year) if year else None,
             **{folder: json.loads(paths[year].read_text()) if year in paths else None
                for folder, paths in saved.items()}}
+
+
+STOP_WORDS = {"form", "forms", "year", "last", "entry", "what", "adjusted", "gross", "income", "status", "filing",
+              "check", "checks", "other", "about", "their", "which", "where", "ending", "payer", "account", "accounts"}
+FORM_ROOTS = re.compile(r"\b(?:W-?2|1099|1098|K-?[13]|8949|8938|8582|8995|1116|FBAR|D-?40[03]|Schedule [A-E])\b", re.I)
+
+
+def _keywords(text_: str) -> set[str]:
+    """What a to-do item would have to mention to be about a section or an item of the sheet: its forms (1099-INT
+    and 1099-DIV both give 1099) and its names and topics (Initech, Umbrella, wages), without the filler words."""
+    forms = {re.sub(r"[-\s]", "", m).lower() for m in FORM_ROOTS.findall(text_)}
+    return forms | {w for w in re.findall(r"[A-Za-z]{5,}", text_.lower()) if w not in STOP_WORDS}
+
+
+def _mentions(item: dict, words: set[str]) -> bool:
+    hay = " ".join([item["text"], *item["notes"]]).lower()
+    squeezed = re.sub(r"[-\s]", "", hay)  # "W-2" and "w2" are the same form
+    return any(w in (squeezed if w[0].isdigit() or len(w) < 5 else hay) for w in words)
+
+
+def entry_years(home: Path) -> list[int]:
+    """The tax years with documents or saved results in the workspace."""
+    years = {int(p.name) for p in home.glob("[0-9][0-9][0-9][0-9]") if p.is_dir()}
+    for folder in (workspace.ENTRY, workspace.SALES, workspace.MOVES, workspace.SCHEDULE_E, workspace.ESTIMATES):
+        years |= {int(p.stem) for p in (home / folder).glob("[0-9][0-9][0-9][0-9].json")}
+    years |= {int(r["year"]) for r in [*cli._forms(home), *cli._k1s(home)] if str(r.get("year", "")).isdigit()}
+    return sorted(years)
+
+
+def entry_screen(year: int | None = None) -> dict:
+    """A year's entry sheet for the page: `taxtrace entry`'s rows with their values, from what the other commands
+    saved (nothing is read from a document or written here), each section with the to-do items that mention it."""
+    home = workspace.home()
+    years = entry_years(home)
+    year = year or (years[-1] if years else date.today().year)
+    kept = home / workspace.ENTRY / f"{year}-expected.json"
+    sheet = cli.entry_sheet(home, year, json.loads(kept.read_text()) if kept.exists() else [])
+    on = todo.today()
+    items = todo.to_json(todo.load(on) or [], on)
+
+    def related(label: str) -> list[dict]:
+        words = _keywords(label)
+        return [{"line": i["line"], "title": i["title"], "group": i["group"]} for i in items if _mentions(i, words)]
+
+    out = sheet.to_json()
+    for section, data in zip(sheet.sections, out["sections"], strict=True):
+        data["counts"] = {s: section.count(s) for s in (entry.READY, entry.ESTIMATE, entry.MISSING)}
+        data["todo"] = related(section.title) if section.count(entry.MISSING) or section.count(entry.ESTIMATE) else []
+    out["coming"] = [{"text": c, "todo": related(c)} for c in sheet.coming]
+    file = home / workspace.ENTRY / f"{year}.txt"
+    return {**out, "years": sorted({*years, year}), "counts": {s: sheet.count(s) for s in
+            (entry.READY, entry.ESTIMATE, entry.MISSING)}, "yourself": entry.YOURSELF, "coming_note": entry.COMING_NOTE,
+            "file": str(file) if file.exists() else None, "open_todo": len(items)}
 
 
 def upload_name(name: str) -> PurePosixPath:
@@ -184,6 +238,11 @@ def make_handler(settings: chat.Settings, token: str, port_ref: list[int]):
                                                       "path": str(todo.path()), "exists": items is not None})
                 if method == "GET" and url.path == "/api/moves":
                     return self._json(HTTPStatus.OK, plans())
+                if method == "GET" and url.path == "/api/entry":
+                    asked = (parse_qs(url.query).get("year") or [""])[0]
+                    if asked and not re.fullmatch(r"20\d\d", asked):
+                        raise ValueError("the tax year is four digits, such as 2026")
+                    return self._json(HTTPStatus.OK, entry_screen(int(asked) if asked else None))
                 if method == "POST" and url.path == "/api/todo/done":
                     line, expect = int(body.get("line", 0)), str(body.get("text", ""))
                     try:

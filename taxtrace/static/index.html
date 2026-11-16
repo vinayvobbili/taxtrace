@@ -317,6 +317,61 @@ form.input button { border: 0; border-radius: 13px; background: var(--grad); col
   animation: spin .7s linear infinite; vertical-align: -1px; margin-right: 6px; }
 .imp-note { margin-top: 18px; }
 
+/* entry sheet */
+.entry-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.stat.s-miss .num { color: var(--bad); } .stat.s-est .num { color: var(--warn); }
+.sheet-bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 0 0 18px; }
+.sheet-bar label { font-size: 13px; color: var(--muted); display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+.sheet-bar select { font: inherit; font-size: 13.5px; padding: 7px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel-solid); color: var(--text); }
+.sheet-bar .spacer { flex: 1; }
+.seg { display: flex; gap: 2px; padding: 3px; background: var(--chip); border-radius: 11px; }
+.seg button { border: 0; background: none; color: var(--muted); font: inherit; font-size: 12.5px; font-weight: 650; padding: 5px 12px; border-radius: 8px; cursor: pointer; }
+.seg button:hover { color: var(--text); }
+.seg button.on { background: var(--panel-solid); color: var(--text); box-shadow: 0 1px 3px rgba(16, 32, 42, .12); }
+.todolink { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700; color: var(--accent); text-decoration: none; padding: 3px 10px; border-radius: 99px;
+  background: var(--accent-soft); transition: transform .15s, box-shadow .15s; max-width: 100%; }
+.todolink:hover { transform: translateY(-1px); box-shadow: var(--shadow); }
+.todolink span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.todolink.warn { color: var(--warn); background: color-mix(in srgb, var(--warn) 13%, transparent); }
+.sections { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 560px), 1fr)); gap: 16px; align-items: start; }
+.sec { --g: var(--good); position: relative; overflow: hidden; animation: rise .45s cubic-bezier(.2, .7, .2, 1) both; transition: transform .2s, box-shadow .2s, border-color .2s; }
+.sec::before { content: ""; position: absolute; left: 0; top: 0; right: 0; height: 4px; background: var(--grad); }
+.sec.has-est { --g: var(--warn); } .sec.has-miss { --g: var(--bad); }
+.sec.has-est::before { background: var(--grad-warm); } .sec.has-miss::before { background: linear-gradient(135deg, #f43f5e, #f59e0b); }
+.sec:hover { transform: translateY(-3px); box-shadow: var(--shadow-hover); }
+.sec-head { display: flex; align-items: flex-start; gap: 10px; padding: 16px 18px 8px; }
+.sec-head h3 { flex: 1; min-width: 0; margin: 0; font-size: 15.5px; letter-spacing: -.01em; overflow-wrap: anywhere; }
+.sec-head .pills { display: flex; gap: 5px; flex: none; }
+.cnt { font-size: 11.5px; font-weight: 750; padding: 2px 9px; border-radius: 99px; white-space: nowrap; }
+.cnt.ready { color: var(--good); background: color-mix(in srgb, var(--good) 14%, transparent); }
+.cnt.estimate { color: var(--warn); background: color-mix(in srgb, var(--warn) 15%, transparent); }
+.cnt.missing { color: var(--bad); background: color-mix(in srgb, var(--bad) 14%, transparent); }
+.etable { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.etable th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); padding: 6px 18px; font-weight: 700; border-bottom: 1px solid var(--line); }
+.etable th.num, .etable td.val { text-align: right; }
+.etable td { padding: 8px 18px; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); vertical-align: top; }
+.etable tr:last-child td { border-bottom: 0; }
+.etable tbody tr { transition: background .15s; }
+.etable tbody tr:hover { background: color-mix(in srgb, var(--chip) 70%, transparent); }
+.etable td.what { overflow-wrap: anywhere; }
+.etable td.val { font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; }
+.etable td.src { color: var(--muted); font-size: 12.5px; overflow-wrap: anywhere; }
+.etable td.st { white-space: nowrap; }
+.etable tr[data-status="missing"] td.what { color: var(--bad); font-weight: 650; }
+.etable tr[data-status="missing"] { background: color-mix(in srgb, var(--bad) 5%, transparent); }
+.etable tr[data-status="estimate"] td.val { color: var(--warn); }
+.etable tr.empty-row td { color: var(--muted); font-style: italic; }
+.sec-notes { margin: 0; padding: 8px 18px 4px; list-style: none; display: grid; gap: 5px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line); }
+.sec-foot { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 18px 14px; }
+.sec-foot .lbl { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.entry-extra { margin-top: 18px; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: 16px; align-items: start; }
+.entry-extra .card { padding: 16px 18px; }
+.entry-extra h3 { margin: 0 0 10px; font-size: 15.5px; }
+.entry-extra ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 9px; font-size: 13.5px; }
+.entry-extra li { overflow-wrap: anywhere; display: grid; gap: 5px; justify-items: start; }
+.entry-extra .hint { margin: 0 0 12px; font-size: 12.5px; color: var(--muted); }
+.entry-extra .ok { color: var(--good); font-weight: 650; }
+
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes flash { 0%, 30% { box-shadow: 0 0 0 4px var(--accent-soft), 0 0 0 7px color-mix(in srgb, var(--accent) 55%, transparent); } }
 @keyframes rise { from { opacity: 0; transform: translateY(10px); } }
@@ -330,7 +385,12 @@ form.input button { border: 0; border-radius: 13px; background: var(--grad); col
 @media (max-width: 640px) {
   .bar { padding: 10px 16px; flex-wrap: wrap; } .shield span, .widths { display: none; } main { padding: 20px 16px 100px; } h1 { font-size: 26px; }
   .tabs { order: 9; width: 100%; overflow-x: auto; } .tabs a { flex: 1; justify-content: center; padding: 7px 10px; }
-  .imp-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .drop { padding: 28px 16px 22px; }
+  .imp-stats, .entry-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .drop { padding: 28px 16px 22px; }
+  .etable thead { display: none; } .etable, .etable tbody { display: block; }
+  .etable tr { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 9px 16px; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
+  .etable td { display: block; padding: 0; border: 0; } .etable td.what { grid-column: 1; } .etable td.val { grid-column: 2; grid-row: 1; }
+  .etable td.st { grid-column: 1; } .etable td.src { grid-column: 1 / -1; } .etable tr:last-child { border-bottom: 0; }
+  .sec-head, .sec-foot { padding-left: 16px; padding-right: 16px; } .sec-notes { padding-left: 16px; padding-right: 16px; }
   .fab { right: 16px; bottom: 16px; } .pop { right: 16px; bottom: 16px; height: calc(100vh - 32px); }
 }
 </style>
@@ -342,6 +402,7 @@ form.input button { border: 0; border-radius: 13px; background: var(--grad); col
     <nav class="tabs" id="tabs" aria-label="Screens">
       <a id="tab-home" href="#" data-view="home"><svg class="ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg>Overview</a>
       <a id="tab-import" href="#import" data-view="import"><svg class="ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 20h16"/></svg>Import</a>
+      <a id="tab-entry" href="#entry" data-view="entry"><svg class="ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>Entry sheet</a>
     </nav>
     <div class="spacer"></div>
     <span class="shield" title="Before a question goes to Claude or agy, its amounts become # and names become *. A question with your values in it is answered on this Mac.">
@@ -382,6 +443,25 @@ form.input button { border: 0; border-radius: 13px; background: var(--grad); col
     <p class="how imp-note" id="import-how">A document's form, year and owner come from its name and the folder it sat in, the same way <code>taxtrace import</code> sorts them.
       Filed returns go to <code>prior-returns/</code>, the rest to a folder for their tax year. Identity documents (driver's licenses, Social Security cards, passports) and
       copies already imported are skipped. Owner is a name from <code>redact-terms.txt</code> found in the file's name.</p>
+  </div>
+
+  <div class="view" id="view-entry" hidden>
+    <div class="pagehead">
+      <h1>The entry sheet, <span class="g" id="entry-title">section by section</span></h1>
+      <p class="sub" id="entry-where">What the return asks for, in the order its interview asks, each value with the document it came from.</p>
+    </div>
+    <div class="sheet-bar">
+      <label for="entry-year">Tax year <select id="entry-year"></select></label>
+      <a class="todolink" id="entry-todo" href="#todo"></a>
+      <div class="spacer"></div>
+      <div class="seg" id="entry-filter" role="group" aria-label="Rows shown">
+        <button type="button" data-f="" class="on">All rows</button><button type="button" data-f="attention">Estimates and missing</button>
+      </div>
+    </div>
+    <div class="hero entry-stats" id="entry-stats"></div>
+    <div class="sections" id="entry-sections"></div>
+    <div class="entry-extra" id="entry-extra"></div>
+    <p class="how imp-note" id="entry-how"></p>
   </div>
 
   <div class="view" id="view-home">
@@ -638,9 +718,11 @@ async function loadPlan() {
 }
 
 // -- screens: the hash picks one (#import, #entry), anything else is the overview; #todo-<line> scrolls to that to-do card
-const VIEWS = ["home", "import"];
+const VIEWS = ["home", "import", "entry"];
+let entryLoaded = false;
 function route() {
   const hash = decodeURIComponent(location.hash.slice(1)), view = VIEWS.includes(hash) ? hash : "home";
+  if (view === "entry" && !entryLoaded) { entryLoaded = true; loadEntry(); }
   for (const v of VIEWS) {
     $("view-" + v).hidden = v !== view;
     if (v === view) $("tab-" + v).setAttribute("aria-current", "page"); else $("tab-" + v).removeAttribute("aria-current");
@@ -746,6 +828,64 @@ $("drop").addEventListener("drop", async e => {
 // a file dropped outside the box would make the browser open it, and leave the page
 for (const type of ["dragover", "drop"]) addEventListener(type, e => { if (!$("drop").contains(e.target)) e.preventDefault(); });
 renderImport();
+
+// -- the entry sheet: each section's rows as a table (value, status, the document it came from), what is still to come,
+// and links to the to-do items that mention a section
+const ESTATUS = { ready: "Ready", estimate: "Estimate", missing: "Missing" };
+let entryFilter = "", entryYear = "";
+function todoLink(t) { return h("a", { class: "todolink", href: `#todo-${t.line}`, title: `To do: ${t.title}` }, "✓ ", h("span", {}, t.title)); }
+function entryRow(r) {
+  return h("tr", { "data-status": r.status },
+    html("td", { class: "what" }, inline(r.what)), h("td", { class: "val" }, r.value || (r.status === "missing" ? "—" : "")),
+    h("td", { class: "st" }, h("span", { class: "cnt " + r.status }, ESTATUS[r.status])), html("td", { class: "src" }, inline(r.source)));
+}
+function sectionCard(s, i) {
+  const rows = s.rows.filter(r => !entryFilter || r.status !== "ready"), c = s.counts;
+  const cls = c.missing ? "has-miss" : c.estimate ? "has-est" : "";
+  return h("div", { class: `card sec ${cls}`, "data-section": s.title, style: `animation-delay:${Math.min(i * 40, 400)}ms` },
+    h("div", { class: "sec-head" }, h("h3", {}, s.title), h("div", { class: "pills" },
+      ...["ready", "estimate", "missing"].filter(k => c[k]).map(k => h("span", { class: "cnt " + k }, `${c[k]} ${k === "estimate" ? (c[k] > 1 ? "estimates" : "estimate") : k}`)))),
+    h("table", { class: "etable" }, h("thead", {}, h("tr", {}, h("th", {}, "What"), h("th", { class: "num" }, "Value"), h("th", {}, "Status"), h("th", {}, "From"))),
+      h("tbody", {}, rows.length ? rows.map(entryRow) : [h("tr", { class: "empty-row" }, h("td", { colspan: 4 },
+        s.rows.length ? "Everything here is ready." : "Nothing for this year so far."))])),
+    s.notes.length ? h("ul", { class: "sec-notes" }, s.notes.map(n => html("li", {}, inline(n)))) : null,
+    s.todo.length || c.missing || c.estimate ? h("div", { class: "sec-foot" }, h("span", { class: "lbl" }, "To do"),
+      ...(s.todo.length ? s.todo.slice(0, 3).map(todoLink) : [h("a", { class: "todolink warn", href: "#todo" }, "Nothing in your list yet: open it")])) : null);
+}
+function renderEntry(d) {
+  const c = d.counts;
+  $("entry-title").textContent = `for ${d.year}`;
+  $("entry-where").textContent = d.file ? `Also written to ${d.file}. Re-run taxtrace entry ${d.year} after new documents are read.`
+    : `Built now from what the other commands saved. taxtrace entry ${d.year} writes it to a file in the workspace.`;
+  const yr = $("entry-year");
+  yr.replaceChildren(...d.years.map(y => h("option", { value: y, selected: y === d.year }, y)));
+  $("entry-todo").textContent = d.open_todo ? `${d.open_todo} open to-do item${d.open_todo > 1 ? "s" : ""}` : "To-do list";
+  $("entry-stats").replaceChildren(stat(c.ready, "ready to type", "lead"), stat(c.estimate, "estimates that can still change", "s-est"),
+    stat(c.missing, "missing: nothing read yet", "s-miss"), stat(d.coming.length, "forms still to come", d.coming.length ? "warn" : "good"));
+  $("entry-sections").replaceChildren(...d.sections.map(sectionCard));
+  $("entry-extra").replaceChildren(
+    h("div", { class: "card" }, h("h3", {}, "Still to come"), h("p", { class: "hint" }, d.coming_note),
+      d.coming.length ? h("ul", { id: "entry-coming" }, d.coming.map(x => h("li", {}, html("span", {}, inline(x.text)), ...x.todo.slice(0, 2).map(todoLink))))
+        : h("div", { class: "ok", id: "entry-coming" }, "Nothing is waiting on a form.")),
+    d.questions.length ? h("div", { class: "card" }, h("h3", {}, "Questions still open"),
+      h("ul", { id: "entry-questions" }, d.questions.map(q => html("li", {}, inline(q))))) : null);
+  $("entry-how").textContent = d.yourself;
+}
+let entryData = null;
+async function loadEntry(year) {
+  try {
+    entryData = await api("/api/entry" + (year ? `?year=${year}` : ""));
+    renderEntry(entryData);
+  } catch (e) { entryLoaded = false; $("entry-sections").replaceChildren(h("div", { class: "card empty" }, `Couldn't load the entry sheet: ${e.message}`)); }
+}
+$("entry-year").addEventListener("change", e => loadEntry(e.target.value));
+$("entry-filter").addEventListener("click", e => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  entryFilter = b.dataset.f;
+  for (const x of $("entry-filter").children) x.classList.toggle("on", x === b);
+  if (entryData) $("entry-sections").replaceChildren(...entryData.sections.map(sectionCard));
+});
 
 // -- the chat
 const history = [];  // [{role, content}], kept while the page is open

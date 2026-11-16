@@ -27,7 +27,7 @@ a document, change a file or file anything.
 ## Screens
 
 The page has a tab for each screen, in the header (and at `#import` and so on in the address): **Overview** (the
-workspace by folder, the to-do list, the year's moves and the chat) and **Import**. Standard, Wide
+workspace by folder, the to-do list, the year's moves and the chat), **Import** and **Entry sheet**. Standard, Wide
 and Full set how much of a wide monitor the page uses, and the ◐ button picks light, dark or the computer's setting;
 both are kept in the browser.
 
@@ -48,6 +48,27 @@ Nothing is filed until you press **File them**. It files exactly as `taxtrace im
 same skips and a line in `imports.jsonl` for each file. The form and the year come from the file's name and the folder
 it sat in (nothing is opened); the owner is a name from `redact-terms.txt` found in the file's name. An upload is
 staged in a temporary folder for the moment it takes, and the workspace stays outside any git repository.
+
+### Entry sheet
+
+The year's `taxtrace entry` sheet as tables, one card per section (the wages on a W-2, a 1099's boxes, a K-1, the
+rental, deductions, payments and the checks the filing site should come to). Each row has its value, a status and the
+document it came from:
+
+- **Ready**: read off a final form, or worked out from them.
+- **Estimate**: it can still change (the year isn't over, a statement is missing, or a pay stub stands in for the W-2).
+- **Missing**: nothing has been read for it yet; the row names the command that fills it.
+
+The numbers on top count each status and the forms still to come (what came last year and hasn't yet, and what
+`--expect` added); the year picker covers every year with documents or saved results, and *Estimates and missing*
+hides the rows that are ready. Under a section that isn't finished, and under each form still to come, the page
+links the items of your `todo.md` that mention it (by its form or its names: Initech, 1099, wages), and opens the
+to-do list at that item; with none, it links to the list. Questions the other commands left open and what you type
+yourself (names, Social Security numbers, bank numbers) are never on it.
+
+The screen only reads what the other commands saved: it opens no document and writes no file. Run
+`taxtrace entry --year 2026` after documents are read to write the sheet to `<workspace>/entry/2026.txt`, and `--expect`
+to add a form to wait for; the page shows the same sheet. It shows the amounts, on this computer only, as `moves` does.
 
 ### Always on (macOS)
 
