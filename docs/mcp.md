@@ -33,6 +33,7 @@ if `which taxtrace-mcp` isn't on the app's `PATH`, such as `~/.local/bin/taxtrac
 | `get_document_outline` | A document's pages by masked heading: which forms it holds, in order (a locked PDF is reported, not opened) |
 | `get_form_checks` | Per Form 1098, 1099-DIV or 1099-INT, or K-1: checks passed of total, the ones that failed, the questions left |
 | `get_todo` | `todo.md` by due date: section, date, days left, group, and masked text, notes and sub-tasks |
+| `get_moves` | The year's tax-saving moves in rank order: name, action, deadline, done flag; amounts and savings masked |
 
 Every tool is read-only. The masking is the one the chat uses for a cloud model and `taxtrace redact` writes:
 digits become `#`, words outside the IRS's own vocabulary become `*`s, and names in `redact-terms.txt` go first.

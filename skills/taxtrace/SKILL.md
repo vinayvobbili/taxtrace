@@ -67,6 +67,9 @@ taxtrace`) and upload it under Settings, Capabilities, Skills. The MCP server ab
 5. **See what is due.** `get_todo` lists the open items soonest first with real due dates and masked wording;
    `days` limits it to the overdue and the next N days. Summarize by group (overdue, today, week, later,
    undated) and say plainly that item wording is masked.
+6. **See the tax-saving moves.** `get_moves` gives the year's moves in the order `taxtrace moves` ranked them, with
+   real deadlines; the dollar amounts are masked, so say the order and dates, and that the person's own
+   `taxtrace moves --show` or page has the figures.
 
 ## Rules
 

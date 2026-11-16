@@ -27,7 +27,8 @@ server = MCPServer(
         "each document (masked) with an id; get_document_outline lists a document's pages by masked heading, which "
         "forms it holds; get_form_checks says which Form 1098, 1099-DIV, 1099-INT and K-1 readings passed their "
         "checks (every value traced to its page) and which failed or raised a question; get_todo lists the person's "
-        "money and tax to-dos by due date (the dates are real, the wording masked). "
+        "money and tax to-dos by due date (the dates are real, the wording masked); get_moves lists the year's "
+        "tax-saving moves in rank order with their deadlines (amounts and savings masked). "
         "taxtrace never files anything and these tools change nothing."
     ),
     version=__version__,
@@ -118,6 +119,18 @@ def get_todo(
     are real; the wording is masked, so ask the person what an item says if it matters). Nothing is changed:
     the person ticks items on the taxtrace page. For the documents use list_documents."""
     return _call(review.todo_list, days)
+
+
+@server.tool(annotations=READ)
+def get_moves(
+    year: Annotated[int | None, Field(ge=2000, le=2100, description=(
+        "The tax year (default: the latest year `taxtrace moves` saved)."))] = None,
+) -> dict:
+    """The year's tax-saving moves as `taxtrace moves` ranked them (most dollars first): each one's name, what to
+    do, its deadline (real), whether it's done, and its amount and saving masked, so the order and the dates are
+    what you can read. Also the items left for the return and the questions the plan still has. Nothing is
+    worked out or changed here; the person runs `taxtrace moves` to refresh it. For the to-dos use get_todo."""
+    return _call(review.moves_list, year)
 
 
 def main() -> None:

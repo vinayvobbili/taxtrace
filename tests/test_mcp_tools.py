@@ -46,7 +46,7 @@ def test_allowed_values_match_the_code():
     ("get_status", "list_documents"), ("get_status", "get_todo"), ("list_documents", "get_status"),
     ("list_documents", "get_document_outline"), ("get_document_outline", "get_form_checks"),
     ("get_document_outline", "list_documents"), ("get_form_checks", "get_document_outline"),
-    ("get_todo", "list_documents"),
+    ("get_todo", "list_documents"), ("get_moves", "get_todo"),
 ])
 def test_overlapping_tools_point_to_each_other(tool, sibling):
     assert sibling in TOOLS[tool].description
@@ -165,6 +165,48 @@ def test_todo_groups_by_due_date_with_masked_text(workspace_with_documents):
 def test_todo_without_a_list(workspace_home):
     out = call("get_todo")
     assert out["exists"] is False and out["items"] == []
+
+
+MOVES_PLAN = {
+    "year": 2026, "income": "187654.32", "open_saving": "3456.78",
+    "moves": [
+        {"key": "401k", "name": "Fill the 401(k)", "action": "raise the pre-tax deferral to 17% of salary",
+         "by": "2026-12-15", "amount": "9876.54", "saving": "2345.67", "done": False},
+        {"key": "charity", "name": "Give to charity in cash", "action": "only giving you'd do anyway",
+         "by": "2026-12-31", "amount": "2000", "saving": "1111.11", "done": True},
+    ],
+    "at_the_return": ["the foreign tax credit and last year's carryover (`foreign`)"],
+    "questions": ["the 2025 Form 1040's income lines aren't read: `--confirm other=87,654` for 2026"],
+}
+
+
+def save_moves(home: Path) -> None:
+    (home / workspace.MOVES).mkdir(parents=True)
+    (home / workspace.MOVES / "2026.json").write_text(json.dumps(MOVES_PLAN))
+
+
+def test_moves_come_ranked_with_dates_and_masked_amounts(workspace_home):
+    save_moves(workspace_home)
+    out = call("get_moves")
+    assert out["year"] == 2026 and out["open_moves"] == 1
+    assert [(m["rank"], m["key"], m["by"], m["done"]) for m in out["moves"]] == [
+        (1, "401k", "2026-12-15", False), (2, "charity", "2026-12-31", True)]
+    assert out["moves"][0]["amount"] == "#,###.##" and out["moves"][0]["saving"] == "#,###.##"
+    blob = json.dumps(out)
+    for secret in ["9,876", "9876", "2345", "2,345", "1111", "87,654", "187654", "17%"]:
+        assert secret not in blob, secret
+    assert call("get_moves", year=2026) == out
+
+
+def test_moves_without_a_saved_plan(workspace_home):
+    out = call("get_moves")
+    assert out["exists"] is False and out["moves"] == []
+
+
+def test_moves_for_a_year_not_saved_says_which_are(workspace_home):
+    save_moves(workspace_home)
+    with pytest.raises(Exception, match="saved: 2026"):
+        call("get_moves", year=2024)
 
 
 # -- privacy

@@ -12,8 +12,10 @@ can't cause an approval prompt, and the document's password stays where it is.
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Callable
+from decimal import Decimal
 from pathlib import Path
 
 from . import redact, text, todo, workspace
@@ -177,6 +179,28 @@ def checks(form: str, doc_id: int | None = None) -> dict:
             out.append({"id": ids[doc], "name": mask(doc.name, names=True), **row})
     return {"form": form, "forms_found": len(out), "forms_failing": sum(not r["ok"] for r in out),
             "documents_skipped": skipped, "documents_locked": locked, "forms": out}
+
+
+def moves_list(year: int | None = None) -> dict:
+    """The year's saved tax-saving moves in rank order: names, deadlines and done flags as they are, the amounts, the
+    saving and any figure inside the action text masked. The latest year saved when none is given."""
+    mask = masker()
+    home = workspace.outside_git(workspace.home())
+    folder = home / workspace.MOVES
+    years = sorted(p.stem for p in folder.glob("*.json") if YEAR_FOLDER.fullmatch(p.stem)) if folder.is_dir() else []
+    if not years:
+        return {"exists": False, "year": year, "moves": [], "message": "No moves saved yet: run `taxtrace moves`."}
+    if year is None:
+        year = int(years[-1])
+    elif str(year) not in years:
+        raise ReviewError(f"no moves saved for {year}; saved: {', '.join(years)}")
+    plan = json.loads((folder / f"{year}.json").read_text())
+    rows = [{"rank": n, "key": m["key"], "name": m["name"], "action": mask(m["action"]), "by": m["by"],
+             "amount": mask(f"{Decimal(m['amount']):,.2f}"), "saving": mask(f"{Decimal(m['saving']):,.2f}"),
+             "done": m["done"]} for n, m in enumerate(plan["moves"], 1)]
+    return {"exists": True, "year": year, "open_moves": sum(not r["done"] for r in rows), "moves": rows,
+            "at_the_return": [mask(t) for t in plan["at_the_return"]],
+            "questions": [mask(q) for q in plan["questions"]]}
 
 
 def todo_list(days: int | None = None) -> dict:
