@@ -1,11 +1,9 @@
-"""The cards around the screen recordings: the title card (also the closing card's base), the animated problem scene,
-and the terminal window that shows what a command printed or a file holds. 1920 x 1080 for the first two, the
-recorder's 1536 x 864 page for the window. taxtrace's teal look; accent text takes the brand gradient."""
+"""The cards around the screen recordings: the title card (also the closing card's base) and the animated problem
+scene, 1920 x 1080. taxtrace's teal look; accent text takes the brand gradient."""
 
 from __future__ import annotations
 
 import html
-import re
 
 from slidecast import Theme
 
@@ -69,68 +67,3 @@ def problem_scene(lines: list[str], seconds: float, delays: list[float] | None =
     @keyframes drop { to { opacity: 1; transform: translateY(0) rotate(var(--tilt)); } }
     """
     return _page(css, f'<div class="stack">{cards}</div>')
-
-
-# -- the terminal window: what a command printed, or a file's lines, recorded like any page ------------------------
-
-WINDOW_CSS = """
-* { box-sizing: border-box; margin: 0; padding: 0; }
-html { color-scheme: dark; }
-body { height: 100vh; overflow: hidden; padding: 36px 48px 48px; color: #d8ece5;
-  font: 16px/1.5 -apple-system, "SF Pro Text", "Segoe UI", sans-serif;
-  background: radial-gradient(1000px 560px at 6% -12%, rgba(20,184,166,.28), transparent 62%),
-    radial-gradient(900px 520px at 100% -8%, rgba(99,102,241,.2), transparent 60%),
-    radial-gradient(700px 500px at 60% 110%, rgba(245,158,11,.1), transparent 60%), #07110e; }
-.win { max-width: 1380px; max-height: 100%; margin: 0 auto; border-radius: 18px; overflow: hidden;
-  display: flex; flex-direction: column; background: rgba(10,22,19,.94);
-  border: 1px solid #1d352e; box-shadow: 0 34px 70px -30px rgba(45,212,191,.45), 0 2px 6px rgba(0,0,0,.4);
-  animation: rise .6s cubic-bezier(.2,.9,.3,1) both; }
-@keyframes rise { from { opacity: 0; transform: translateY(14px); } }
-.bar { display: flex; align-items: center; gap: 8px; padding: 12px 16px; background: #14261f;
-  border-bottom: 1px solid #1d352e; }
-.bar i { width: 12px; height: 12px; border-radius: 50%; background: #fb7185; }
-.bar i:nth-child(2) { background: #fbbf24; } .bar i:nth-child(3) { background: #34d399; }
-.bar b { margin-left: 10px; font-weight: 650; font-size: 14px; color: #8fb0a6; }
-.out { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; padding: 18px 24px 22px;
-  font: 16.5px/1.62 ui-monospace, "SF Mono", Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
-.ln { padding: 0 10px; margin: 0 -10px; border-radius: 8px; transition: background .35s, box-shadow .35s; }
-.ln.hl { background: rgba(94,234,212,.17); box-shadow: 0 0 0 1px rgba(94,234,212,.4); }
-.prompt { color: #5eead4; } .cmd { color: #f2fbf7; font-weight: 650; }
-.head { color: #93c5fd; font-weight: 700; margin-top: 10px; }
-.dim { color: #7f9b91; } .ok { color: #5eead4; } .est { color: #fbbf24; } .miss { color: #fb7185; }
-.mask { color: #c4b5fd; }
-.gap { height: 12px; }
-"""
-
-STATUS = (("ready", "ok"), ("[estimate]", "est"), ("[missing]", "miss"), ("failed", "miss"), ("pass", "ok"),
-          ("already imported", "est"), ("identity document", "est"))
-
-
-def tint(line: str) -> str:
-    """One line of output as HTML: the status words coloured (ready, estimate, missing, failed), masks (#, *) violet."""
-    safe = html.escape(line)
-    for word, css in STATUS:
-        safe = re.sub(rf"(?<![\w-])({re.escape(html.escape(word))})(?!\w)", rf'<span class="{css}">\1</span>', safe,
-                      count=1)
-    return re.sub(r"([#*]{2,}(?:[#*.,\-]*[#*])?)", r'<span class="mask">\1</span>', safe)
-
-
-def window(title: str, blocks: list[tuple[str, str]]) -> str:
-    """A terminal-like page. `blocks` are (kind, text): "cmd" a prompt line, "out" a command's output (a line each),
-    "head" a heading, "gap" a space, "dim" a note. Every line is a `.ln` the recorder can point at."""
-    rows = []
-    for kind, text in blocks:
-        if kind == "gap":
-            rows.append('<div class="gap"></div>')
-        elif kind == "cmd":
-            rows.append('<div class="ln"><span class="prompt">$</span> '
-                        f'<span class="cmd">{html.escape(text)}</span></div>')
-        elif kind == "head":
-            rows.append(f'<div class="ln head">{html.escape(text)}</div>')
-        elif kind == "dim":
-            rows.append(f'<div class="ln dim">{html.escape(text)}</div>')
-        else:
-            rows.extend(f'<div class="ln">{tint(line) or "&nbsp;"}</div>' for line in text.splitlines())
-    return (f'<!doctype html><html lang="en"><head><meta charset="utf-8"><title>{html.escape(title)}</title>'
-            f'<style>{WINDOW_CSS}</style></head><body><div class="win"><div class="bar"><i></i><i></i><i></i>'
-            f'<b>{html.escape(title)}</b></div><div class="out">{"".join(rows)}</div></div></body></html>')

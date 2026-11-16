@@ -16,7 +16,7 @@ Three rules hold everywhere:
 
 ## What the demo shows
 
-The two-minute demo uses made-up documents only: it opens taxtrace in the browser on a household's folder (the to-do list, the tax-saving moves, the documents by tax year), reads a W-2 box by box, and shows the entry sheet it writes, then the chat, what a cloud model is sent, and a question with an amount in it staying on the Mac. Every value arrives with its source and a status: ready, estimate or missing. Illustrative output for an invented Initech employee in Boulder, CO, with round figures:
+The two-minute demo uses made-up documents only: it opens taxtrace in the browser on a household's workspace (the to-do list, the tax-saving moves), imports a second batch of documents on the Import screen, shows the Entry sheet screen with each value's document and page, then the chat, what a cloud model is sent, and a question with an amount in it staying on the Mac. Every video is filmed in the page, never in a terminal. Every value arrives with its source and a status: ready, estimate or missing. Illustrative output for an invented Initech employee in Boulder, CO, with round figures:
 
 | Entry sheet line | Value | Status | Read from |
 |---|---|---|---|

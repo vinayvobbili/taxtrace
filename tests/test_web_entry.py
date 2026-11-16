@@ -151,3 +151,11 @@ def test_the_page_has_the_entry_screen_with_stable_ids():
                   "entry-extra", "entry-todo"):
         assert f'id="{ident}"' in html
     assert "/api/entry" in html
+
+
+def test_the_entry_sheet_never_hands_a_null_to_replace_children():
+    """`replaceChildren(card, null)` writes the word "null" on the page: a missing card must be an empty list."""
+    html = web.page("t0ken").decode()
+    render = html.split("function renderEntry")[1].split("let entryData")[0]
+    assert "Questions still open" in render
+    assert ": null)" not in render

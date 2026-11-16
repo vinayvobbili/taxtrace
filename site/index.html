@@ -302,10 +302,11 @@ footer p { margin: 6px auto 0; max-width: 620px; }
       <summary>Read the narration</summary>
       <p>Tax season often starts with a folder of PDFs and a quiet worry. Which page did that number come from? Is a form missing? And do you really want to hand all of it to a chatbot?</p>
       <p>Every number, traced to its page.</p>
-      <p>This is taxtrace, running in your browser, on your own Mac. At the top, your to-do list, and the year's tax-saving moves, ranked by the dollars each one saves.</p>
-      <p>Further down are your documents, in a plain folder on your disk, sorted by tax year. Each one is tagged with the form it holds, and none of them has left your computer.</p>
-      <p>Behind the page, taxtrace reads each form box by box. Here is the W-2 from Initech: eight values read, and all five checks pass, including that box 4 is 6.2 percent of box 3. Every value keeps the page, and the exact text, it came from.</p>
-      <p>From those readings, taxtrace writes an entry sheet: everything your tax software will ask, in the order it asks. Each row is ready, an estimate, or missing, and a missing row names the command that fills it.</p>
+      <p>This is taxtrace, running in your browser, on your own Mac. At the top, what your workspace holds, then your to-do list, and the year's tax-saving moves, ranked by the dollars each one saves.</p>
+      <p>When your preparer sends more documents, open the Import tab and choose the files. taxtrace shows what it makes of each one: its form, its tax year and its owner. A passport, or a copy you already have, is skipped.</p>
+      <p>One button files the rest. The page then lists your documents by folder, sorted by tax year, each tagged with the form it holds, and none of them has left your computer.</p>
+      <p>Then the entry sheet: everything your tax software will ask, in the order it asks. Each value shows whether it is ready, an estimate or missing, and the document and page it was read from.</p>
+      <p>Switch to estimates and missing, and only the rows that need you are left. Each section links to the to-do items that mention it, so nothing waits unnoticed.</p>
       <p>Last, the chat, for questions about tax rules and forms. Before anything goes to a cloud model, digits become pound signs and names and towns become stars, and the page shows exactly what was sent.</p>
       <p>And a question with an amount in it never leaves your Mac. The model here answers it, and the page says why.</p>
     </details>
@@ -313,37 +314,27 @@ footer p { margin: 6px auto 0; max-width: 620px; }
 
   <section id="how">
     <h2>How it works</h2>
-    <p class="lead">Six parts, each with a short video.</p>
+    <p class="lead">Four parts of <code>taxtrace ui</code>, each with a short video.</p>
     <div class="steps">
       <article class="step" id="import">
         <div class="copy"><span class="num">1</span><h3>Import</h3>
-          <p>Point <code>taxtrace import</code> at a folder or a zip, such as a preparer's portal export. Documents are sorted by tax year, filed returns go to their own folder, and identity documents and repeats are skipped.</p></div>
-        <div class="vid"><video controls preload="none" playsinline poster="tutorials/taxtrace-01-import.jpg" src="tutorials/taxtrace-01-import.mp4" aria-label="Video: Import your documents (1 min)"><track kind="captions" srclang="en" label="English" src="tutorials/taxtrace-01-import.vtt" default></video></div>
-      </article>
-      <article class="step" id="layout">
-        <div class="copy"><span class="num">2</span><h3>See the layout</h3>
-          <p><code>taxtrace outline</code> lists which forms each document holds, page by page. <code>taxtrace redact</code> masks a page down to its shape, so a form can be studied without its values, names or towns.</p></div>
-        <div class="vid"><video controls preload="none" playsinline poster="tutorials/taxtrace-02-see-the-layout.jpg" src="tutorials/taxtrace-02-see-the-layout.mp4" aria-label="Video: See a document's layout without its values (1 min)"><track kind="captions" srclang="en" label="English" src="tutorials/taxtrace-02-see-the-layout.vtt" default></video></div>
-      </article>
-      <article class="step" id="read">
-        <div class="copy"><span class="num">3</span><h3>Read the forms</h3>
-          <p>Commands such as <code>taxtrace w2</code>, <code>1099</code>, <code>k1</code> and <code>1098</code> read each form box by box. Every value carries its page and quote, and each form's own arithmetic is checked.</p></div>
-        <div class="vid"><video controls preload="none" playsinline poster="tutorials/taxtrace-03-read-the-forms.jpg" src="tutorials/taxtrace-03-read-the-forms.mp4" aria-label="Video: Read your forms and see where each value came from (1 min)"><track kind="captions" srclang="en" label="English" src="tutorials/taxtrace-03-read-the-forms.vtt" default></video></div>
+          <p>On the Import screen, choose files or a folder, or drop a preparer's portal zip. taxtrace shows each file's form, tax year and owner before anything is filed. Documents are sorted by tax year, filed returns go to their own folder, and identity documents and repeats are skipped. <code>taxtrace import</code> does the same from the terminal.</p></div>
+        <div class="vid"><video controls preload="none" playsinline poster="tutorials/taxtrace-01-import.jpg" src="tutorials/taxtrace-01-import.mp4" aria-label="Video: Import your documents on the Import screen (1 min)"><track kind="captions" srclang="en" label="English" src="tutorials/taxtrace-01-import.vtt" default></video></div>
       </article>
       <article class="step" id="entry">
-        <div class="copy"><span class="num">4</span><h3>Get the entry sheet</h3>
-          <p><code>taxtrace entry</code> writes everything your tax software will ask, in its order. Each row is ready, an estimate or missing, and the questions still open are gathered at the end. Names, Social Security numbers and bank numbers are left for you to type.</p></div>
-        <div class="vid"><video controls preload="none" playsinline poster="tutorials/taxtrace-04-entry-sheet.jpg" src="tutorials/taxtrace-04-entry-sheet.mp4" aria-label="Video: The entry sheet (1 min)"><track kind="captions" srclang="en" label="English" src="tutorials/taxtrace-04-entry-sheet.vtt" default></video></div>
+        <div class="copy"><span class="num">2</span><h3>Read the forms, get the entry sheet</h3>
+          <p>The Entry sheet screen lists everything your tax software will ask, in its order, from forms taxtrace read box by box (<code>taxtrace w2</code>, <code>1099</code>, <code>k1</code>, <code>1098</code> and more). Each value shows the document and page it came from and whether it is ready, an estimate or missing, and each section links to the to-do items that mention it. Names, Social Security numbers and bank numbers are left for you to type. <code>taxtrace entry</code> writes the same sheet to a file.</p></div>
+        <div class="vid"><video controls preload="none" playsinline poster="tutorials/taxtrace-02-entry-sheet.jpg" src="tutorials/taxtrace-02-entry-sheet.mp4" aria-label="Video: The entry sheet, and where each value came from (1 min)"><track kind="captions" srclang="en" label="English" src="tutorials/taxtrace-02-entry-sheet.vtt" default></video></div>
+      </article>
+      <article class="step" id="plan">
+        <div class="copy"><span class="num">3</span><h3>Plan the year</h3>
+          <p>The Overview shows what your workspace holds, your to-do list grouped by due date, and the year's tax-saving moves ranked by what each saves. The list is a plain <code>todo.md</code> in your workspace, and ticking an item on the page marks it done there. <code>taxtrace moves</code> works the moves out.</p></div>
+        <div class="vid"><video controls preload="none" playsinline poster="tutorials/taxtrace-03-todo-and-moves.jpg" src="tutorials/taxtrace-03-todo-and-moves.mp4" aria-label="Video: The to-do list and the year's moves (1 min)"><track kind="captions" srclang="en" label="English" src="tutorials/taxtrace-03-todo-and-moves.vtt" default></video></div>
       </article>
       <article class="step" id="chat">
-        <div class="copy"><span class="num">5</span><h3>Ask in the chat</h3>
-          <p><code>taxtrace ui</code> opens your workspace in the browser with a chat for tax rules, forms and what a document is for. Under each answer from a cloud model, the page shows exactly what was sent. It can't open a document or file anything.</p></div>
-        <div class="vid"><video controls preload="none" playsinline poster="tutorials/taxtrace-05-ask-the-chat.jpg" src="tutorials/taxtrace-05-ask-the-chat.mp4" aria-label="Video: Ask the chat, and see what it was sent (1 min)"><track kind="captions" srclang="en" label="English" src="tutorials/taxtrace-05-ask-the-chat.vtt" default></video></div>
-      </article>
-      <article class="step" id="assistant">
-        <div class="copy"><span class="num">6</span><h3>Use it from your AI assistant</h3>
-          <p><code>taxtrace-mcp</code> lets Claude Code, Claude Desktop or any MCP client see what's in your workspace and what's on your to-do list. Every tool is read-only and returns masked text only, never an amount or a name.</p></div>
-        <div class="vid"><video controls preload="none" playsinline poster="tutorials/taxtrace-06-ai-assistant.jpg" src="tutorials/taxtrace-06-ai-assistant.mp4" aria-label="Video: Connect your AI assistant (1 min)"><track kind="captions" srclang="en" label="English" src="tutorials/taxtrace-06-ai-assistant.vtt" default></video></div>
+        <div class="copy"><span class="num">4</span><h3>Ask in the chat</h3>
+          <p>The chat answers questions about tax rules, forms and what a document is for. Under each answer from a cloud model, the page shows exactly what was sent: digits as <code>#</code>, names and towns as <code>*</code>. <code>taxtrace redact</code> masks a document the same way, to study a form without its values. The chat can't open a document or file anything.</p></div>
+        <div class="vid"><video controls preload="none" playsinline poster="tutorials/taxtrace-04-ask-the-chat.jpg" src="tutorials/taxtrace-04-ask-the-chat.mp4" aria-label="Video: Ask the chat, and see what it was sent (1 min)"><track kind="captions" srclang="en" label="English" src="tutorials/taxtrace-04-ask-the-chat.vtt" default></video></div>
       </article>
     </div>
   </section>

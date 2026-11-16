@@ -113,8 +113,8 @@ def test_stat_tiles_link_to_sections_and_private_tile_is_worded_as_asked():
 
 def test_demo_video_and_every_step_video_are_wired_but_guarded():
     videos = re.findall(r"<video\b[^>]*>.*?</video>", PAGE)
-    assert len(videos) == 7  # the demo and six steps
-    assert PAGE.count('class="step"') == 6
+    assert len(videos) == 5  # the demo and four steps
+    assert PAGE.count('class="step"') == 4
     for video in videos:
         poster, src = re.search(r'poster="([^"]+)" src="([^"]+)"', video).groups()
         assert 'controls preload="none" playsinline' in video and "autoplay" not in video

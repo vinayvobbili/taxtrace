@@ -13,7 +13,7 @@ import threading
 import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -54,29 +54,17 @@ class Demo:
     home: Path
     run: demo.Run
     browser: object
-    pages: Path
-    extra: dict = field(default_factory=dict)
-
-    def card(self, name: str, html: str) -> str:
-        """Write a terminal card page and give its address."""
-        path = self.pages / f"{name}.html"
-        path.write_text(html, encoding="utf-8")
-        return path.as_uri()
 
 
 @dataclass
 class Scene:
-    """One narrated clip: open the page (or the card `card` builds from the demo), say `say`, and do `run(rec, demo)`
-    meanwhile."""
+    """One narrated clip: open the page, say `say`, and do `run(rec, demo)` meanwhile. A scene may set the page up
+    first with plain page calls and then `rec.begin()`: the clip starts there, so it opens on the state it needs."""
 
     say: str
     run: Callable | None = None
-    card: Callable[[Demo], str] | None = None  # a terminal window instead of the page, built from the real output
     min_seconds: float = 0.0
     name: str = ""
-
-    def url(self, d: Demo, index: int = 0) -> str:
-        return d.card(f"card{index:02d}", self.card(d)) if self.card else d.url
 
 
 @dataclass
@@ -159,26 +147,28 @@ def demo_running() -> Iterator[Demo]:
     with tempfile.TemporaryDirectory(prefix="taxtrace-video-") as tmp:
         root = Path(tmp)
         home = (root / "TaxData").resolve()
-        pages = root / "pages"
-        pages.mkdir()
         with demo.workspace_at(home), pretend_models():
             run = demo.build(home, root / "export")
-            shown = web.overview
+            shown, sheet = web.overview, web.entry_screen
 
             def overview() -> dict:
                 return {**shown(), "path": SHOWN_HOME}
 
-            web.overview = overview
+            def entry_screen(year: int | None = None) -> dict:  # the sheet's file path, as the person's own folder
+                data = sheet(year)
+                return {**data, "file": data["file"] and data["file"].replace(str(home), SHOWN_HOME)}
+
+            web.overview, web.entry_screen = overview, entry_screen
             server = web.serve(port=0, open_browser=False)
             threading.Thread(target=server.serve_forever, daemon=True).start()
             try:
                 with sync_playwright() as p:
                     browser = p.chromium.launch()
                     try:
-                        yield Demo(url=server.url, home=home, run=run, browser=browser, pages=pages)
+                        yield Demo(url=server.url, home=home, run=run, browser=browser)
                     finally:
                         browser.close()
             finally:
-                web.overview = shown
+                web.overview, web.entry_screen = shown, sheet
                 server.shutdown()
                 server.server_close()

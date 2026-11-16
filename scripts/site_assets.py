@@ -36,28 +36,21 @@ ROWS = {
              ("Interest, Globex Bank", "1,200", "est:estimate"), ("1099-DIV", "&mdash;", "miss:missing")],
     "import": [("2026/ W-2 Initech.pdf", "", "ok:sorted"), ("2026/ K-1 Globex Partners.pdf", "", "ok:sorted"),
                ("prior-returns/ 2025 Return.pdf", "", "ok:sorted"), ("Driver license.jpg", "", "est:skipped")],
-    "layout": [("Wages, tips, other compensation", "###,###.##", ""), ("Employer's name", "********", ""),
-               ("Box 4 Social security tax", "#,###.##", ""), ("Form W-2, page 1", "", "ok:outline")],
-    "read": [("Box 1 wages", "100,000", "ok:p1"), ("Box 3 social security wages", "100,000", "ok:p1"),
-             ("Box 4 = 6.2% of box 3", "6,200", "ok:check passed"), ("Box 12 code", "", "est:question")],
     "entry": [("Wages (W-2, Initech)", "100,000", "ok:ready"), ("Dividends (Globex Brokerage)", "800", "ok:ready"),
               ("Estimated tax paid", "10,000", "est:estimate"), ("Rental expenses", "", "miss:missing")],
+    "plan": [("Send the Q4 estimated payment", "", "est:due soon"), ("Fill the 401(k)", "saves 350", "ok:move 1"),
+             ("Give to charity in cash", "saves 240", "ok:move 2"), ("Move the year-end cash", "", "ok:done")],
     "chat": [("You", "Is the Umbrella bill a repair?", ""),
              ("Sent to the cloud", "Is the ******** bill a repair?", "est:masked"),
              ("Question with an amount", "", "ok:stays on your Mac")],
-    "ai": [("get_status", "3 tax years, 41 documents", ""),
-           ("get_form_checks", "12 of 12 checks passed", "ok:read-only"),
-           ("get_todo", "2 due this month", ""), ("Amounts and names", "", "ok:never returned")],
 }
 
 POSTERS = {
     "taxtrace-demo": ("demo", "Demo", "Documents in, entry sheet out", "Every number traced to its page."),
     "tutorials/taxtrace-01-import": ("import", "Step 1", "Import", "Sort a preparer's export by tax year."),
-    "tutorials/taxtrace-02-see-the-layout": ("layout", "Step 2", "See the layout", "A form's shape, minus its values."),
-    "tutorials/taxtrace-03-read-the-forms": ("read", "Step 3", "Read the forms", "Each value with its page and quote."),
-    "tutorials/taxtrace-04-entry-sheet": ("entry", "Step 4", "Get the entry sheet", "Ready, estimate or missing."),
-    "tutorials/taxtrace-05-ask-the-chat": ("chat", "Step 5", "Ask in the chat", "Cloud models see only masked text."),
-    "tutorials/taxtrace-06-ai-assistant": ("ai", "Step 6", "Use your AI assistant", "Read-only, masked, no amounts."),
+    "tutorials/taxtrace-02-entry-sheet": ("entry", "Step 2", "Get the entry sheet", "Ready, estimate or missing."),
+    "tutorials/taxtrace-03-todo-and-moves": ("plan", "Step 3", "Plan the year", "The to-do list and the moves."),
+    "tutorials/taxtrace-04-ask-the-chat": ("chat", "Step 4", "Ask in the chat", "Cloud models see only masked text."),
 }
 
 

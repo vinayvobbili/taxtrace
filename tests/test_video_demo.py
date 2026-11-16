@@ -83,6 +83,33 @@ def test_the_to_do_list_is_dated_from_the_day_it_is_built(household):
     assert re.findall(r"^## (\w+)", todo, re.M) == ["Taxes", "Money"]
 
 
+def test_the_second_batch_waits_for_the_import_screens_file_picker(demo, household):
+    """What the video's file picker is given: two files the page recognises, a passport and a copy it skips."""
+    from taxtrace import web
+
+    assert [p.name for p in household.incoming] == list(demo.INCOMING)
+    assert not (household.home / "2026" / "2026 Globex Bank 1099-INT.pdf").exists()
+    with demo.workspace_at(household.home):
+        seen = {p.name: web.import_upload(p.name, p.read_bytes(), dry_run=True)[0] for p in household.incoming}
+    assert {name: r["status"] for name, r in seen.items()} == {
+        "2026 Globex Bank 1099-INT.pdf": "recognised", "2024 Tax Return Rivera signed.pdf": "recognised",
+        "2026 W-2 Initech.pdf": "skipped", "Passport Rivera.pdf": "skipped"}
+    assert seen["2024 Tax Return Rivera signed.pdf"]["owner"] == "Rivera"
+    assert seen["2026 W-2 Initech.pdf"]["reason"] == "already imported"
+    assert seen["Passport Rivera.pdf"]["reason"] == "identity document"
+
+
+def test_the_to_do_items_mention_the_entry_sheets_sections(household):
+    """So the sheet's sections link to them (the video follows one of the links)."""
+    from taxtrace import web
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("TAXTRACE_HOME", str(household.home))
+        sheet = web.entry_screen(2026)
+    linked = {s["title"].split(" (")[0]: [t["title"] for t in s["todo"]] for s in sheet["sections"] if s["todo"]}
+    assert "Stock and property sales" in linked and "Payments" in linked
+
+
 def test_what_the_commands_print_never_holds_an_amount_or_a_name(household):
     for said in household.said.values():
         for secret in ("120,000", "20,000", "9,000", "Initech Payroll", "Globex", "Rivera"):

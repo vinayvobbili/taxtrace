@@ -1,9 +1,0 @@
-Sometimes you want help with a form, but you'd rather not show anyone your numbers, your name, or your town.
-
-Every number, traced to its page.
-
-Every document in your workspace is listed here, tagged with the form it holds. To see inside one without its values, taxtrace has two views.
-
-The first is the outline: each page's first lines, so you can see which forms a document holds, and in what order. Names and amounts are already masked.
-
-The second is the redacted layout. It keeps the form's shape, and replaces every digit with a pound sign, and every name, street and town with stars. That is safe to show to whoever is helping you.

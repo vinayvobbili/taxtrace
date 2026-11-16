@@ -1,9 +1,0 @@
-A number on a form is only useful if you can trust it. Is it from the right box? Did a digit slip? And who has time to check every one by hand?
-
-Every number, traced to its page.
-
-On the page, each document wears a badge for the form it holds: W-2, 1098 or 1099. Reading them is one command each.
-
-Here the W-2 and the mortgage statement are read. Every box is found by the words of its label, so a payroll company's own layout reads too, and each reading says how many of its checks pass.
-
-Each value is saved with its page, its place on it, and the exact text it was read from. A check throws out any value whose text isn't on that page, and the form's own arithmetic is checked: box 4 must be 6.2 percent of box 3.

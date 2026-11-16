@@ -1,9 +1,0 @@
-Typing a return into tax software means answering question after question, in an order you don't choose, and wondering where each figure was.
-
-Every number, traced to its page.
-
-Start on the page. The to-do list shows what's due, and the moves show what could still lower the tax.
-
-The entry sheet lists everything your tax software will ask, in the order it asks. Under each form, each value shows the document and page it was read from.
-
-Each row is ready, an estimate, or missing. A missing row names the command that fills it, and names, Social Security numbers and bank numbers are left for you to type.

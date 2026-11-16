@@ -1,23 +1,19 @@
 """The videos' stories: each scene's narration and what the mouse does while it is said.
 
-Short, plain sentences. The page (`taxtrace ui`) comes first; a command's own output shows in a terminal window only
-where the page has nothing to show (reading a form, the entry sheet, the layout). The windows hold what the real
-commands printed on the made-up household (demo.py): nothing in them is typed in by hand but the command line.
+Short, plain sentences. Every scene is filmed in the real `taxtrace ui` on the made-up household (demo.py): the
+Overview (status, to-do list, moves), the Import screen (files chosen with the file picker), the Entry sheet, and the
+chat with its "what was sent" panel. Nothing is filmed that the page cannot show: no terminal, no command output.
+A scene that needs the page in a state (files already chosen, say) sets it up before `rec.begin()`, so its clip
+opens on that state.
 """
 
 from __future__ import annotations
 
-import asyncio
-import json
-import re
-from concurrent.futures import ThreadPoolExecutor
-
-import cards
 from common import TAGLINE, Demo, Scene, Video  # noqa: F401  (TAGLINE is part of the story, re-exported)
 
 ASK_CLOUD = "I live in Boulder and my employer is Initech. Which form shows my wages for 2026?"
 ASK_LOCAL = "My wages were 120,000 dollars. Is box 1 right?"
-IMPORT_COMMAND = "taxtrace import '~/Downloads/2026 TAX' '~/Downloads/2025 TAX'"
+PICKED = 4  # the files the picker is given (demo.INCOMING)
 
 
 # -- finding things on the page ---------------------------------------------------------------------------------------
@@ -26,30 +22,226 @@ def folder(rec, name: str):
     return rec.page.locator(".folder", has_text=name).first
 
 
-def line(rec, text: str):
-    """A line of a terminal window by what it says."""
-    return rec.page.locator(".ln", has_text=text).first
+def result(rec, status: str):
+    """The Import screen's card for the first file with that status (recognised, skipped...)."""
+    return rec.page.locator(f"#import-results .res[data-status={status}]").first
 
 
-def scroll_window(rec, target) -> None:
-    """Bring a line to the middle of the terminal window by scrolling the window's own text: the window stays whole
-    inside the frame (a long output never pushes its edges off the screen)."""
-    target.evaluate("""l => { const out = l.closest('.out');
-        out.scrollTo({top: l.offsetTop - (out.clientHeight - l.offsetHeight) / 2, behavior: 'smooth'}); }""")
+def section(rec, title: str):
+    return rec.page.locator("#entry-sections .sec", has_text=title).first
+
+
+def hide_fab(rec) -> None:
+    """The chat button floats over the page's bottom-right corner: out of the way where the scene isn't about it."""
+    rec.page.evaluate("document.getElementById('fab').style.visibility = 'hidden'")
+
+
+def go(rec, view: str, *, quietly: bool = False) -> None:
+    """Open a screen: click its tab, or (before the clip begins) just go there."""
+    hide_fab(rec)
+    if quietly:
+        rec.page.evaluate("view => { location.hash = view === 'home' ? '' : view; }", view)
+        rec.page.wait_for_timeout(300)
+    else:
+        rec.click(f"#tab-{view}", after=0.9)
+
+
+# -- the Import screen ------------------------------------------------------------------------------------------------
+
+def choose_files(rec, d: Demo, *, quietly: bool = False) -> None:
+    """Pick the preparer's files in the file dialog (the dialog itself is the browser's; its answer is set here), and
+    wait until the page has said what it makes of each."""
+    files = [str(p) for p in d.run.incoming]
+    if quietly:
+        rec.page.set_input_files("#pick-files", files)
+    else:
+        with rec.page.expect_file_chooser() as chooser:
+            rec.click("#choose-files", after=0.4)
+        chooser.value.set_files(files)
+    rec.page.wait_for_function(
+        f"document.querySelectorAll('#import-results .res').length >= {PICKED}"
+        " && !document.querySelector('#import-results .spin')", timeout=20000)
+    rec.hold(0.5)
+
+
+def import_pick(rec, d: Demo) -> None:
+    """From the Overview to the Import tab, choose the files: the page reads their names."""
+    rec.hold(0.8)
+    go(rec, "import")
+    rec.point_at("#drop")
+    rec.hold(0.5)
+    choose_files(rec, d)
+    rec.scroll_to("#import-stats")
+    rec.point_at("#import-stats .stat.lead")
+    rec.hold(0.8)
+
+
+def import_recognised(rec, d: Demo) -> None:
+    """The files are chosen: what the page says of each, and what it skips."""
+    go(rec, "import", quietly=True)
+    choose_files(rec, d, quietly=True)
+    rec.scroll_to("#import-stats")
+    rec.begin()
+    rec.hold(0.6)
+    for status in ("recognised", "skipped"):
+        rec.point_at(result(rec, status).locator("dl, .note").first)
+        rec.hold(0.9)
+    rec.point_at(rec.page.locator("#import-results .res", has_text="Passport").first.locator(".note"))
     rec.hold(0.9)
+    rec.point_at(rec.page.locator("#import-results .res", has_text="Return").first.locator("dd").nth(2))
+    rec.hold(0.8)
 
 
-def light(rec, *texts: str, hold: float = 1.0, point: bool = True) -> None:
-    """Point at each line in turn and give it a glow, one at a time."""
-    for text in texts:
-        target = line(rec, text)
-        rec.page.evaluate("() => document.querySelectorAll('.ln.hl').forEach(l => l.classList.remove('hl'))")
-        target.evaluate("l => l.classList.add('hl')")
-        if point:
-            scroll_window(rec, target)
-            rec.point_at(target, where=(0.5, 0.5))
-        rec.hold(hold)
+def file_them(rec, d: Demo) -> None:
+    """Press the button, wait for Filed, then see the documents by folder on the Overview."""
+    go(rec, "import", quietly=True)
+    choose_files(rec, d, quietly=True)
+    rec.scroll_to("#import-stats")
+    rec.begin()
+    rec.hold(0.6)
+    rec.click("#import-go", after=0.5)
+    rec.page.wait_for_function("document.getElementById('import-go').textContent === 'Filed'", timeout=20000)
+    rec.hold(0.8)
+    rec.point_at("#import-stats .stat.s-ok")
+    rec.hold(0.8)
+    go(rec, "home")
+    folders(rec, d)
 
+
+def folders(rec, d: Demo) -> None:
+    """The documents by folder: the year's folder, its form badges, the filed returns."""
+    hide_fab(rec)
+    rec.scroll_to("#folders")
+    rec.hold(0.6)
+    rec.point_at(folder(rec, "2026"))
+    rec.hold(0.5)
+    rec.point_at(folder(rec, "2026").locator(".form").first)
+    rec.hold(0.6)
+    rec.point_at(folder(rec, "prior-returns"))
+    rec.hold(1.0)
+
+
+# -- the Entry sheet --------------------------------------------------------------------------------------------------
+
+def entry_open(rec, d: Demo) -> None:
+    """From the Overview to the Entry sheet: the counts at its top."""
+    rec.hold(0.8)
+    go(rec, "entry")
+    rec.page.wait_for_selector("#entry-sections .sec")
+    rec.hold(0.6)
+    for stat in ("lead", "s-est", "s-miss"):
+        rec.point_at(f"#entry-stats .stat.{stat}")
+        rec.hold(0.8)
+
+
+def entry_sources(rec, d: Demo) -> None:
+    """A section's rows: the value, its status, and the document and page it was read from."""
+    go(rec, "entry", quietly=True)
+    rec.page.wait_for_selector("#entry-sections .sec")
+    rec.begin()
+    rec.hold(0.6)
+    wages = section(rec, "W-2")
+    rec.scroll_to(wages)
+    rec.point_at(wages.locator("th", has_text="From"))
+    rec.hold(0.6)
+    rec.point_at(wages.locator("tbody tr").first.locator(".val"))
+    rec.hold(0.8)
+    rec.point_at(wages.locator("tbody tr").first.locator(".src"))
+    rec.hold(1.0)
+    rec.point_at(wages.locator("tbody tr").nth(1).locator(".src"))
+    rec.hold(0.8)
+
+
+def entry_attention(rec, d: Demo) -> None:
+    """Only the rows that need the person, and the link from a section to the to-do items about it."""
+    go(rec, "entry", quietly=True)
+    rec.page.wait_for_selector("#entry-sections .sec")
+    rec.begin()
+    rec.hold(0.6)
+    rec.click("#entry-filter button[data-f=attention]", after=0.8)
+    rec.point_at("#entry-sections .sec .cnt.missing")
+    rec.hold(0.8)
+    link = rec.page.locator("#entry-sections .sec-foot a.todolink[href^='#todo-']").first
+    rec.point_at(link)
+    rec.hold(0.8)
+    rec.click(link, after=1.4)
+    rec.hold(0.8)
+
+
+def entry_coming(rec, d: Demo) -> None:
+    """What is still to come, and what the sheet leaves for the person to type."""
+    go(rec, "entry", quietly=True)
+    rec.page.wait_for_selector("#entry-sections .sec")
+    rec.begin()
+    rec.hold(0.6)
+    rec.scroll_to("#entry-extra")
+    rec.point_at("#entry-extra .card h3")
+    rec.hold(0.8)
+    rec.point_at("#entry-coming li")
+    rec.hold(1.0)
+    rec.point_at("#entry-how")
+    rec.hold(1.0)
+
+
+# -- the Overview -----------------------------------------------------------------------------------------------------
+
+def overview(rec, d: Demo) -> None:
+    """The top of the page: what the workspace holds, the to-do list, the year's moves."""
+    hide_fab(rec)
+    rec.hold(0.6)
+    for tile in (1, 3):
+        rec.point_at(f"#hero .stat:nth-child({tile})")
+        rec.hold(0.7)
+    rec.scroll_to("#todo")
+    rec.point_at("#todo .tcard")
+    rec.hold(1.0)
+    rec.scroll_to("#plan")
+    rec.point_at("#plan .stat.lead")
+    rec.hold(0.6)
+    rec.point_at("#plan-moves .tcard .tag.save")
+    rec.hold(0.8)
+    rec.point_at("#plan-moves .tcard:nth-child(2) .tag.save")
+    rec.hold(0.8)
+
+
+def status(rec, d: Demo) -> None:
+    """The workspace's counts, tile by tile."""
+    hide_fab(rec)
+    rec.hold(0.8)
+    for tile in range(1, 5):
+        rec.point_at(f"#hero .stat:nth-child({tile})")
+        rec.hold(0.9)
+
+
+def todo_list(rec, d: Demo) -> None:
+    """The to-do list: its counts by due date, a card's details, and one ticked off."""
+    hide_fab(rec)
+    rec.scroll_to("#todo")
+    rec.hold(0.5)
+    rec.point_at("#todo-stats .stat >> nth=0")
+    rec.hold(0.7)
+    rec.point_at("#todo .tcard .tag.due")
+    rec.hold(0.8)
+    rec.click("#todo .g-today .tcard .chk", after=1.2)
+    rec.hold(0.8)
+
+
+def moves(rec, d: Demo) -> None:
+    """The year's moves: what could still come off the tax, then each move with its saving and its deadline."""
+    hide_fab(rec)
+    rec.scroll_to("#plan")
+    rec.hold(0.5)
+    rec.point_at("#plan-stats .stat.lead")
+    rec.hold(0.8)
+    rec.point_at("#plan-moves .tcard .tag.save")
+    rec.hold(0.8)
+    rec.point_at("#plan-moves .tcard .action")
+    rec.hold(1.0)
+    rec.point_at("#plan-moves .tcard:nth-child(2) .tag.save")
+    rec.hold(1.0)
+
+
+# -- the chat ---------------------------------------------------------------------------------------------------------
 
 def wait_for_answer(rec) -> None:
     """The chat has finished writing its reply (the button reads Send again)."""
@@ -70,62 +262,6 @@ def open_chat(rec) -> None:
 
 def show_sent(rec) -> None:
     rec.click("details.sent summary", after=1.4)
-
-
-# -- the page ---------------------------------------------------------------------------------------------------------
-
-def overview(rec, d: Demo) -> None:
-    """The top of the page: what the workspace holds, the to-do list, the year's moves."""
-    rec.hold(0.8)
-    rec.point_at(".stat.lead")
-    rec.hold(0.4)
-    rec.scroll_to("#todo")
-    rec.point_at("#todo .tcard")
-    rec.hold(1.0)
-    rec.scroll_to("#plan")
-    rec.point_at("#plan .stat.lead")
-    rec.hold(0.6)
-    rec.point_at("#plan-moves .tcard")
-    rec.hold(1.0)
-
-
-def todo_and_moves(rec, d: Demo) -> None:
-    rec.hold(0.6)
-    rec.scroll_to("#todo")
-    rec.point_at("#todo .tcard")
-    rec.hold(1.4)
-    rec.scroll_to("#plan")
-    rec.point_at("#plan-moves .tcard")
-    rec.hold(1.4)
-
-
-def folders(rec, d: Demo) -> None:
-    """The documents by folder: the year's folder, its form badges, the filed returns."""
-    rec.scroll_to("#folders")
-    rec.hold(0.6)
-    rec.point_at(folder(rec, "2026"))
-    rec.hold(0.5)
-    rec.point_at(folder(rec, "2026").locator(".form").first)
-    rec.hold(0.6)
-    rec.point_at(folder(rec, "prior-returns"))
-    rec.hold(1.0)
-
-
-def badges(rec, d: Demo) -> None:
-    rec.scroll_to("#folders")
-    rec.hold(0.5)
-    for form in ("W-2", "1098", "1099"):
-        rec.point_at(rec.page.locator(".form", has_text=form).first)
-        rec.hold(0.7)
-
-
-def workspace_stats(rec, d: Demo) -> None:
-    rec.hold(0.8)
-    rec.point_at(".stat.lead")
-    rec.hold(0.5)
-    rec.scroll_to("#folders")
-    rec.point_at(folder(rec, "2026"))
-    rec.hold(1.0)
 
 
 def chat_cloud(rec, d: Demo) -> None:
@@ -164,91 +300,6 @@ def chat_masked_offer(rec, d: Demo) -> None:
     show_sent(rec)
 
 
-# -- the terminal windows ---------------------------------------------------------------------------------------------
-
-def shown(d: Demo, text: str) -> str:
-    """Command output as it would read in the person's own folder: the temporary home is ~/TaxData."""
-    for home in {str(d.home), str(d.home.resolve()), "/private" + str(d.home.resolve())}:
-        text = text.replace(home, "~/TaxData")
-    return re.sub(r"\S*taxtrace-video-\S*?/export/", "", text)
-
-
-def import_card(d: Demo) -> str:
-    return cards.window("terminal", [("cmd", IMPORT_COMMAND), ("out", shown(d, d.run.said["import"]))])
-
-
-def import_again_card(d: Demo) -> str:
-    return cards.window("terminal", [("cmd", IMPORT_COMMAND), ("out", shown(d, d.run.said["import again"]))])
-
-
-def outline_card(d: Demo) -> str:
-    out = shown(d, d.run.said["outline"])
-    return cards.window("terminal", [("cmd", "taxtrace outline ~/TaxData/2026"), ("out", out)])
-
-
-def redacted_card(d: Demo) -> str:
-    """The W-2's masked layout, the page's own lines, blank ones left out."""
-    name = next(p for p in sorted((d.home / "redacted").glob("*W-2*.txt")))
-    rows = [ln.rstrip() for ln in name.read_text(encoding="utf-8").splitlines()[1:] if ln.strip()]
-    return cards.window("redacted/" + name.name, [("out", "\n".join(rows))])
-
-
-def saved_blocks(d: Demo) -> list[tuple[str, str]]:
-    """What the W-2's reading saved: each box's value with its page, its place on it and its quote, and the checks."""
-    saved = json.loads(next((d.home / "forms").glob("*W-2*.json")).read_text(encoding="utf-8"))[0]
-    rows = [f"box {box:<3} {v['amount']:>12}   page {v['page']}, at {v['top']}, {v['x0']}   read from \"{v['quote']}\""
-            for box, v in saved["amounts"].items()]
-    checks = [f"pass  {c['what']}" + (f"  ({c['quote']})" if c["quote"] else "") if c["ok"] else f"FAILED  {c['what']}"
-              for c in saved["checks"]]
-    return [("head", "forms/2026 W-2 Initech.json: each value, and where it was read"), ("out", "\n".join(rows)),
-            ("gap", ""), ("head", "and the form's own checks"), ("out", "\n".join(checks))]
-
-
-def w2_card(d: Demo) -> str:
-    return cards.window("terminal", [("cmd", "taxtrace w2"), ("out", shown(d, d.run.said["w2"])), ("gap", ""),
-                                     *saved_blocks(d)])
-
-
-def forms_card(d: Demo) -> str:
-    return cards.window("terminal", [("cmd", "taxtrace w2"), ("out", shown(d, d.run.said["w2"])), ("gap", ""),
-                                     ("cmd", "taxtrace 1098"), ("out", shown(d, d.run.said["1098"]))])
-
-
-def saved_card(d: Demo) -> str:
-    return cards.window("forms/2026 W-2 Initech.json", saved_blocks(d))
-
-
-def entry_card(d: Demo) -> str:
-    """The command's masked summary, then the sheet itself (up to where the state's section would start)."""
-    sheet = (d.home / "entry" / "2026.txt").read_text(encoding="utf-8")
-    sheet = sheet.split("## North Carolina")[0].rstrip()
-    said = shown(d, d.run.said["entry"])
-    return cards.window("entry/2026.txt", [("cmd", "taxtrace entry --year 2026"), ("out", said), ("gap", ""),
-                                           ("head", "entry/2026.txt"), ("out", sheet)])
-
-
-def mcp_card(d: Demo) -> str:
-    from taxtrace import mcp_server
-
-    with ThreadPoolExecutor(1) as pool:  # the recorder's own event loop is running on this thread
-        tools = pool.submit(asyncio.run, mcp_server.server.list_tools()).result()
-    rows = [f"{t.name:<22} {'read-only' if t.annotations and t.annotations.read_only_hint else 'changes things'}"
-            for t in tools]
-    return cards.window("terminal", [
-        ("cmd", "claude mcp add taxtrace -s user -e TAXTRACE_HOME=~/TaxData -- taxtrace-mcp"), ("gap", ""),
-        ("head", "What the assistant is offered"), ("out", "\n".join(rows))])
-
-
-def mcp_result_card(d: Demo) -> str:
-    from taxtrace import review
-
-    status = json.dumps(review.status(), indent=2)
-    todo = review.todo_list(None)
-    items = [f"{i['due'] or 'no date':<11} {i['group']:<8} {i['text']}" for i in todo["items"]]
-    return cards.window("what the assistant gets back", [
-        ("head", "get_status"), ("out", status), ("gap", ""), ("head", "get_todo"), ("out", "\n".join(items))])
-
-
 # -- the stories ------------------------------------------------------------------------------------------------------
 
 DEMO = Video(
@@ -259,19 +310,19 @@ DEMO = Video(
                  "from? Is a form missing? And do you really want to hand all of it to a chatbot?"),
     problem_cues=("folder of PDFs", "Which page", "Is a form", "hand all of it"),
     scenes=[
-        Scene("This is taxtrace, running in your browser, on your own Mac. At the top, your to-do list, and the "
-              "year's tax-saving moves, ranked by the dollars each one saves.", overview, name="overview"),
-        Scene("Further down are your documents, in a plain folder on your disk, sorted by tax year. Each one is "
-              "tagged with the form it holds, and none of them has left your computer.", folders, name="documents"),
-        Scene("Behind the page, taxtrace reads each form box by box. Here is the W-2 from Initech: eight values "
-              "read, and all five checks pass, including that box 4 is 6.2 percent of box 3. Every value keeps the "
-              "page, and the exact text, it came from.",
-              lambda rec, d: light(rec, "p1: 2026 Form W-2", "5 of 5 checks", hold=1.6), card=w2_card, name="w2"),
-        Scene("From those readings, taxtrace writes an entry sheet: everything your tax software will ask, in the "
-              "order it asks. Each row is ready, an estimate, or missing, and a missing row names the command that "
-              "fills it.",
-              lambda rec, d: light(rec, "Box 1,", "Box 4,", "Sales on 1099-Bs", "Give to charity", hold=1.2),
-              card=entry_card, name="entry"),
+        Scene("This is taxtrace, running in your browser, on your own Mac. At the top, what your workspace holds, "
+              "then your to-do list, and the year's tax-saving moves, ranked by the dollars each one saves.",
+              overview, name="overview"),
+        Scene("When your preparer sends more documents, open the Import tab and choose the files. taxtrace shows "
+              "what it makes of each one: its form, its tax year and its owner. A passport, or a copy you already "
+              "have, is skipped.", import_pick, name="import"),
+        Scene("One button files the rest. The page then lists your documents by folder, sorted by tax year, each "
+              "tagged with the form it holds, and none of them has left your computer.", file_them, name="filed"),
+        Scene("Then the entry sheet: everything your tax software will ask, in the order it asks. Each value shows "
+              "whether it is ready, an estimate or missing, and the document and page it was read from.",
+              entry_sources, name="entry"),
+        Scene("Switch to estimates and missing, and only the rows that need you are left. Each section links to the "
+              "to-do items that mention it, so nothing waits unnoticed.", entry_attention, name="attention"),
         Scene("Last, the chat, for questions about tax rules and forms. Before anything goes to a cloud model, "
               "digits become pound signs and names and towns become stars, and the page shows exactly what was "
               "sent.", chat_cloud, name="chat"),

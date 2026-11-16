@@ -4,8 +4,10 @@
 
 `build` draws the documents a tax preparer's export would hold (a W-2 and a 1098 with real print positions, so the
 real readers read them), imports them with the real `taxtrace import`, reads them with `taxtrace w2` and `1098`, saves
-the other forms as the readers would have, and writes `moves` and `entry` with the real commands. Nothing reads
-~/TaxData: TAXTRACE_HOME is set to the folder for as long as the build runs. Every name, town and amount is invented.
+the other forms as the readers would have, and writes `moves` and `entry` with the real commands. A second batch (a
+1099-INT, an older return, the W-2 again, a passport) waits in a folder for the Import screen's file picker. Nothing
+reads ~/TaxData: TAXTRACE_HOME is set to the folder for as long as the build runs. Every name, town and amount is
+invented.
 """
 
 from __future__ import annotations
@@ -14,6 +16,7 @@ import contextlib
 import io
 import json
 import os
+import shutil
 import sys
 import tempfile
 from collections.abc import Iterator
@@ -86,7 +89,12 @@ F1098_FACE = [
 # A broker's statement and a filed return, as plain pages: the importer files them, the videos list them by name.
 BROKER_PAGE = [f"Umbrella Brokerage    Consolidated Form 1099    {YEAR}",
                "Form 1099-DIV    Dividends and Distributions", "1a Total ordinary dividends   1,500.00"]
-RETURN_PAGE = [f"Form 1040    U.S. Individual Income Tax Return    {YEAR - 1}", "Pat Rivera    Boulder, CO"]
+
+def return_page(year: int) -> list[str]:
+    return [f"Form 1040    U.S. Individual Income Tax Return    {year}", "Pat Rivera    Boulder, CO"]
+
+
+RETURN_PAGE = return_page(YEAR - 1)
 # What `taxtrace 1099` and the pay-stub reader would have saved (the entry sheet reads these).
 PAYSTUB = {"form": "paystub", "file": "2026 Initech paystub.pdf", "year": YEAR, "paid": f"{YEAR}-10-30",
            "period_start": f"{YEAR}-10-16", "period_end": f"{YEAR}-10-31",
@@ -101,9 +109,10 @@ DIVIDENDS = {"form": "1099-DIV", "file": "2026 Umbrella Brokerage 1099.pdf", "pa
 
 TODO = """\
 ## Taxes
-- [ ] **{soon}** Pay the fourth estimated payment (Q4)
+- [ ] **{soon}** Send the fourth of the estimated tax payments (Q4)
 - [ ] **{later}** Ask Initech payroll to confirm box 12 on the W-2
-- [ ] **{week}** Gather the receipts for this year's charity gifts
+- [ ] **{week}** Gather this year's charity receipts for the deductions
+- [ ] Check the stock sales on the Umbrella year-end statement
 ## Money
 - [ ] **{today}** Move the year-end cash into the savings account
 - [ ] Check the 401(k) contribution against the limit
@@ -145,6 +154,22 @@ def export_folders(parent: Path) -> list[Path]:
     return [now, before]
 
 
+INCOMING = (f"{YEAR} Globex Bank 1099-INT.pdf", f"{YEAR - 2} Tax Return Rivera signed.pdf", f"{YEAR} W-2 Initech.pdf",
+            "Passport Rivera.pdf")
+
+
+def incoming_files(folder: Path, exports: list[Path]) -> list[Path]:
+    """What the preparer sends next, for the Import screen's file picker: a new 1099-INT, an older filed return, the
+    W-2 again (a copy of the one already imported) and a passport, which is skipped."""
+    folder.mkdir(parents=True, exist_ok=True)
+    interest = ["Globex Bank    Form 1099-INT    Interest Income", f"1 Interest income   42.00    {YEAR}"]
+    draw(folder / INCOMING[0], [["Cover letter"], interest])
+    draw(folder / INCOMING[1], [return_page(YEAR - 2)])
+    shutil.copyfile(exports[0] / INCOMING[2], folder / INCOMING[2])
+    draw(folder / INCOMING[3], [["Passport"]])
+    return [folder / name for name in INCOMING]
+
+
 def write_todo(home: Path, today: date) -> None:
     days = {k: today + timedelta(days=n) for k, n in (("today", 0), ("soon", 2), ("week", 5), ("later", 24))}
     fmt = {k: f"{d:%a} {d.month}/{d.day}" for k, d in days.items()}
@@ -162,6 +187,7 @@ class Run:
 
     home: Path
     exports: list[Path]
+    incoming: list[Path] = field(default_factory=list)
     said: dict[str, str] = field(default_factory=dict)
 
 
@@ -200,18 +226,18 @@ def build(home: Path, scratch: Path, today: date | None = None) -> Run:
     today = today or date.today()
     home.mkdir(parents=True, exist_ok=True)
     run = Run(home, export_folders(scratch))
+    run.incoming = incoming_files(scratch / "incoming", run.exports)
+    (home / "redact-terms.txt").write_text("Rivera\n", encoding="utf-8")  # the owner, named in a file's name
     sources = [str(p) for p in run.exports]
     command(run, "import", *sources)
     command(run, "import", *sources, key="import again")
-    command(run, "outline", str(home / str(YEAR)))
-    command(run, "redact", str(home / str(YEAR)))
     command(run, "w2")
     command(run, "1098")
     save(home, "forms", "paystub.json", PAYSTUB)
     save(home, "forms", "2026 Umbrella Brokerage 1099.json", [DIVIDENDS])
     write_todo(home, today)
     command(run, "moves", "--year", str(YEAR))
-    command(run, "entry", "--year", str(YEAR))
+    command(run, "entry", "--year", str(YEAR), "--expect", "K-1=Globex Partners")  # a form still to come
     return run
 
 

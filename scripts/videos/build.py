@@ -1,14 +1,14 @@
-"""Record and render taxtrace's videos: the two-minute tour and the six tutorials.
+"""Record and render taxtrace's videos: the two-minute tour and the four tutorials.
 
     python scripts/videos/build.py --dry                  # screenshots of every scene: check framing, cheaply
     python scripts/videos/build.py [NAME ...] [--out DIR] # record and render (default: every video)
     python scripts/videos/build.py --clips-only           # record the clips, render nothing
 
-Each scene is a screen recording of the real `taxtrace ui` (or a terminal window holding what a real command printed)
-on a made-up household: a cursor glides to each target, clicks ripple, and nothing may be cut off at the frame's
-edges (slidecast's framing check fails the scene). The story, in slidecast's shape: a silent title card, the
-problem, the tagline at the turn, the walkthrough, and the title card again. Writes OUT/NAME/ (clips, the video, its
-poster, its captions NAME.vtt and its narration NAME.txt). See scripts/videos/README.md.
+Each scene is a screen recording of the real `taxtrace ui` on a made-up household: a cursor glides to each target,
+clicks ripple, and nothing may be cut off at the frame's edges (slidecast's framing check fails the scene). The story,
+in slidecast's shape: a silent title card, the problem, the tagline at the turn, the walkthrough, and the title card
+again. Writes OUT/NAME/ (clips, the video, its poster, its captions NAME.vtt and its narration NAME.txt). See
+scripts/videos/README.md.
 """
 
 from __future__ import annotations
@@ -32,9 +32,9 @@ TITLE_SECONDS = 3.0
 PROBLEM_SECONDS = 7.0
 
 
-def record_scene(d: Demo, scene: Scene, index: int, clip: Path | None, shots: Path | None) -> None:
+def record_scene(d: Demo, scene: Scene, clip: Path | None, shots: Path | None) -> None:
     """Record one scene to `clip` (or, with `shots`, only screenshot it). The clip lasts as long as its narration."""
-    with Recorder.open(d.browser, scene.url(d, index), clip, shots=shots, pace=1.0) as rec:
+    with Recorder.open(d.browser, d.url, clip, shots=shots, pace=1.0) as rec:
         if scene.run:
             scene.run(rec, d)
         rec.hold_until(max(scene.min_seconds, seconds_to_say(scene.say)))
@@ -48,10 +48,10 @@ def record(video: Video, work: Path, dry: bool) -> list[Path | None]:
             name = f"{i:02d}-{scene.name or 'scene'}"
             print(f"  {video.name}: scene {name}", flush=True)
             if dry:
-                record_scene(d, scene, i, None, work / "dry" / video.name / name)
+                record_scene(d, scene, None, work / "dry" / video.name / name)
             else:
                 clips[i - 1] = work / video.name / "clips" / f"{name}.mp4"
-                record_scene(d, scene, i, clips[i - 1], None)
+                record_scene(d, scene, clips[i - 1], None)
     return clips
 
 

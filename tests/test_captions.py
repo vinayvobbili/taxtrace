@@ -110,7 +110,7 @@ def page_videos() -> list[tuple[str, str]]:
 def test_every_video_on_the_page_has_an_aria_label_captions_and_a_plain_text_narration():
     site = SCRIPT.parents[2] / "site"
     videos = page_videos()
-    assert len(videos) == 7
+    assert len(videos) == 5
     for src, video in videos:
         assert re.search(r'aria-label="Video: [^"]+"', video), src
         stem = src.removesuffix(".mp4")

@@ -868,7 +868,7 @@ function renderEntry(d) {
       d.coming.length ? h("ul", { id: "entry-coming" }, d.coming.map(x => h("li", {}, html("span", {}, inline(x.text)), ...x.todo.slice(0, 2).map(todoLink))))
         : h("div", { class: "ok", id: "entry-coming" }, "Nothing is waiting on a form.")),
     d.questions.length ? h("div", { class: "card" }, h("h3", {}, "Questions still open"),
-      h("ul", { id: "entry-questions" }, d.questions.map(q => html("li", {}, inline(q))))) : null);
+      h("ul", { id: "entry-questions" }, d.questions.map(q => html("li", {}, inline(q))))) : []);
   $("entry-how").textContent = d.yourself;
 }
 let entryData = null;
