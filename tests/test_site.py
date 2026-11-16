@@ -202,6 +202,32 @@ def test_the_problem_is_plain_old_way_lines_not_cards_and_the_overview_follows()
     assert "sends nothing home" not in PAGE + README
 
 
+def test_the_name_is_tax_in_the_text_color_and_trace_in_the_gradient_read_as_one_word():
+    hero = PAGE.split('<div class="hero">')[1].split('<div class="cta">')[0]
+    assert '<h1 aria-label="taxtrace">tax<span class="grad">trace</span></h1>' in hero
+    assert '<span aria-label="taxtrace" role="img">tax<b>trace</b></span>' in PAGE
+    assert '<h1 class="grad">' not in PAGE and "<b>taxtrace</b>" not in PAGE
+    # "tax" takes the page's text color (never a literal white); "trace" the --name-grad of each theme
+    assert "color: var(--text)" in re.search(r"\.brand \{.*?\}", PAGE, re.S).group(0)
+    assert re.search(r"\.brand b, \.grad \{ background: var\(--name-grad\)", PAGE)
+    assert not re.search(r"\.hero h1\s*\{[^}]*color:\s*#(?:fff|ffffff)", PAGE, re.I)
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("site_shots", ROOT / "scripts" / "site_shots.py")
+    shots = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(shots)
+
+    def rgb(h):
+        return tuple(int(h[i:i + 2], 16) for i in (1, 3, 5))
+
+    for theme, block in (("light", PAGE.split(":root {")[1].split("}")[0]),
+                         ("dark", PAGE.split(':root[data-theme="dark"] {')[1].split("}")[0])):
+        bg = rgb(re.search(r"--bg: (#\w{6})", block).group(1))
+        stops = re.findall(r"#[0-9a-f]{6}", re.search(r"--name-grad: ([^;]+);", block).group(1))
+        assert len(stops) == 2
+        for stop in stops:  # both ends of the gradient read against the page background (WCAG AA)
+            assert shots.contrast(rgb(stop), bg) >= 4.5, (theme, stop)
+
+
 def test_the_strip_checker_computes_wcag_contrast():
     import importlib.util
     spec = importlib.util.spec_from_file_location("site_shots", ROOT / "scripts" / "site_shots.py")

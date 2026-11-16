@@ -170,4 +170,5 @@ def test_every_video_has_a_designed_poster_that_fits_its_screenshot_inside_the_f
         page = posters.poster_page(posters.POSTERS[0], shot, w, h)
         width, height = map(int, re.search(r'style="width:(\d+)px;height:(\d+)px"', page).groups())
         assert width <= w and height <= h - 2 * 40 - 26
-        assert "See taxtrace work" in page and 'class="play"' in page
+        assert 'See tax<span class="g">trace</span> work' in page and 'class="play"' in page
+        assert "<h1>Import your documents</h1>" in posters.poster_page(posters.POSTERS[1], shot, w, h)

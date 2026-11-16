@@ -56,6 +56,8 @@ body { margin: 0; width: %(w)dpx; height: %(h)dpx; overflow: hidden; display: fl
 h1 { margin: 0; font-size: %(big)dpx; line-height: 1.04; letter-spacing: -.035em; font-weight: 850; text-wrap: balance;
   background: linear-gradient(90deg, #5eead4, #93c5fd); -webkit-background-clip: text; color: transparent;
   padding-bottom: .06em; }
+h1.name { background: none; color: #e6f4ef; }
+h1 .g { background: linear-gradient(90deg, #5eead4, #93c5fd); -webkit-background-clip: text; color: transparent; }
 .tag { margin: %(gap_s)dpx 0 %(gap)dpx; font-size: %(sub)dpx; color: #8fb0a6; }
 .play { display: flex; align-items: center; gap: 16px; font-size: %(sub)dpx; font-weight: 700; color: #ccfbf1; }
 .play i { width: %(btn)dpx; height: %(btn)dpx; border-radius: 50%%; display: grid; place-items: center;
@@ -89,8 +91,13 @@ def poster_page(p: Poster, shot: Path, w: int, h: int) -> str:
     scale = min(area_w / img_w, with_bar / img_h)
     css = CSS % dict(w=w, h=h, pad=pad, gap=gap, gap_s=14, left=left, chip=15, big=42 if og else 48,
                      sub=17 if og else 19, btn=60 if og else 68, tri=11 if og else 13, tri2=18 if og else 21, bar=bar)
+    title = escape(p.title)
+    # a title that names taxtrace shows the wordmark: "tax" in the text color, "trace" in the gradient
+    wordmark = 'tax<span class="g">trace</span>'
+    h1 = (f'<h1 class="name">{title.replace("taxtrace", wordmark)}</h1>'
+          if "taxtrace" in title else f"<h1>{title}</h1>")
     return (f'<!doctype html><meta charset="utf-8"><style>{css}</style>'
-            f'<div class="l"><span class="chip">{escape(p.label)}</span><h1>{escape(p.title)}</h1>'
+            f'<div class="l"><span class="chip">{escape(p.label)}</span>{h1}'
             f'<div class="tag">Every number, traced to its page.</div>'
             f'<div class="play"><i></i><span>Watch, {escape(p.length)}</span></div></div>'
             f'<div class="win"><div class="frame"><div class="bar"><b></b><b></b><b></b></div>'
