@@ -187,7 +187,7 @@ def test_join_in_has_giscus_comments_and_a_coffee_card_without_a_price():
 
 
 def test_the_page_and_its_pictures_use_only_invented_names():
-    text = PAGE + (ROOT / "scripts" / "site_assets.py").read_text(encoding="utf-8")
+    text = PAGE + (ROOT / "scripts" / "videos" / "posters.py").read_text(encoding="utf-8")
     assert not re.search(r"\b\d{3}-\d{2}-\d{4}\b", text)  # no Social Security number
     for invented in ("Initech", "Globex", "Umbrella"):
         assert invented in text

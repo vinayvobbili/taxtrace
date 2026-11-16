@@ -43,7 +43,8 @@ them the videos have the voice only.
 | `common.py` | `Scene` and `Video`, the narration timing, the served page, the pretend models |
 | `build.py` | Records the scenes, assembles the reel, renders it, writes its captions and narration |
 | `captions.py` | `NAME.vtt` from the narration and the rendered segments' lengths, and `NAME.txt`, the narration as paragraphs; run alone it captions videos already rendered, with no re-render |
-| `publish.py` | Copies the finished files into `site/`: H.264 with the moov atom first, a poster frame, the link preview |
+| `publish.py` | Copies the finished files into `site/`: H.264 with the moov atom first, the posters and the link preview (made by `posters.py`) |
+| `posters.py` | Designed thumbnails (`site/*.jpg`, `og.jpg`): the whole screen from the real UI, a title and a play button; `python scripts/videos/posters.py` regenerates them alone |
 
 The story follows slidecast's shape: a silent title card, a gentle problem, the tagline "Every number, traced to its
 page." at the turn, the walkthrough, and the title card again. Each clip is held as long as its narration. slidecast's

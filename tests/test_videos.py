@@ -12,7 +12,7 @@ pytest.importorskip("playwright")
 pytest.importorskip("slidecast")
 
 VIDEOS = Path(__file__).resolve().parents[1] / "scripts" / "videos"
-MODULES = ("demo", "common", "cards", "captions", "stories", "tutorials", "publish")
+MODULES = ("demo", "common", "cards", "captions", "stories", "tutorials", "posters", "publish")
 
 
 @pytest.fixture(scope="module")
@@ -157,3 +157,17 @@ def test_publish_puts_each_video_where_the_page_reads_it(stories, tmp_path):
         (tmp_path / name).mkdir()
         (tmp_path / name / f"{name}.mp4").write_bytes(b"")
     assert publish.names(tmp_path) == ["taxtrace-demo", "taxtrace-01-x", "taxtrace-02-x"]
+
+
+def test_every_video_has_a_designed_poster_that_fits_its_screenshot_inside_the_frame(stories, tmp_path):
+    posters = stories["posters"]
+    names = {p.name.removeprefix("tutorials/") for p in posters.POSTERS}
+    assert names == {stories["stories"].DEMO.name, *stories["tutorials"].TUTORIALS}
+    # a very tall page (2560x5000) must still be scaled to fit the window area, never cropped or overflowing
+    shot = tmp_path / "tall.png"
+    shot.write_bytes(b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR" + (2560).to_bytes(4, "big") + (5000).to_bytes(4, "big"))
+    for w, h in ((1280, 720), (1200, 630)):
+        page = posters.poster_page(posters.POSTERS[0], shot, w, h)
+        width, height = map(int, re.search(r'style="width:(\d+)px;height:(\d+)px"', page).groups())
+        assert width <= w and height <= h - 2 * 40 - 26
+        assert "See taxtrace work" in page and 'class="play"' in page
