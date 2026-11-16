@@ -1,0 +1,9 @@
+Tax dates live in your head, tasks live in three different places, and a saving you could still make is easy to miss.
+
+Every number, traced to its page.
+
+The Overview is where taxtrace opens. At the top: how many documents the workspace holds, which tax years, how many filed returns it can carry forward from, and how many chat models are ready.
+
+Below, your to-do list, grouped by when each item is due. It is a plain file in your workspace, and ticking an item here marks it done in that file.
+
+Then the year's moves, ranked by what each saves. Each one says what to do, how much, and by when. The first tile is what could still come off the tax.

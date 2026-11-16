@@ -1,0 +1,9 @@
+You have a question about a form, but your documents are full of details you'd rather keep private, and the chatbot is in the cloud.
+
+Every number, traced to its page.
+
+Click the chat button and ask about a rule or a form. Under the answer, open what Claude was sent: digits became pound signs, and names and towns became stars.
+
+The page also shows who answers, in order: Claude, then Antigravity, then a model on your Mac. Cloud models are marked masked, and the one on your Mac is not, because it never leaves the machine.
+
+Ask something with an amount in it, and the question stays on your Mac. The model here answers it, and the page says why. Or ask Claude as well, with the amount masked, and see exactly what it gets.

@@ -1,34 +1,40 @@
 WEBVTT
 
-00:00:03.000 --> 00:00:05.340
-A preparer's portal hands you a zip.
+00:00:03.000 --> 00:00:05.929
+A preparer's portal hands you a pile of files.
 
-00:00:05.340 --> 00:00:10.475
-There's a driver's license in it, forms named whatever, and some of them twice.
+00:00:05.929 --> 00:00:10.450
+There's a passport in it, forms named whatever, and some of them twice.
 
 00:00:10.880 --> 00:00:13.505
 Every number, traced to its page.
 
-00:00:13.920 --> 00:00:18.702
-Once your documents are imported, this page shows them sorted by tax year,
+00:00:13.920 --> 00:00:17.952
+Open the Import tab and choose the files your preparer sent.
 
-00:00:18.702 --> 00:00:21.545
-with filed returns in a folder of their own.
+00:00:17.952 --> 00:00:21.917
+They go to taxtrace on your own computer, and nowhere else.
 
-00:00:24.080 --> 00:00:27.586
-To import, point taxtrace at the folder or the zip.
+00:00:21.917 --> 00:00:26.420
+Nothing is filed yet: the page only reads what each file is called.
 
-00:00:27.586 --> 00:00:33.018
-Each file goes to its tax year, last year's filed return goes to prior-returns,
+00:00:28.200 --> 00:00:32.719
+For each file, taxtrace shows its form, its tax year and its owner,
 
-00:00:33.018 --> 00:00:36.799
-and the driver's license is skipped: it's no tax input,
+00:00:32.719 --> 00:00:34.135
+and where it will go.
 
-00:00:36.799 --> 00:00:38.930
-and a copy not made can't leak.
+00:00:34.135 --> 00:00:36.631
+A filed return goes to prior-returns.
 
-00:00:40.720 --> 00:00:44.080
-Import the same folder again, and nothing changes.
+00:00:36.631 --> 00:00:40.475
+A passport is skipped, and so is a copy you already have.
 
-00:00:44.080 --> 00:00:46.970
-Files already in the workspace are skipped.
+00:00:42.880 --> 00:00:45.379
+Press the button, and the rest are filed.
+
+00:00:45.379 --> 00:00:48.670
+Back on the Overview, they sit in their year's folder,
+
+00:00:48.670 --> 00:00:53.180
+each tagged with its form, and the older return is with the filed returns.

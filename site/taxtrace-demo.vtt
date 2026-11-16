@@ -15,65 +15,71 @@ And do you really want to hand all of it to a chatbot?
 00:00:15.960 --> 00:00:18.585
 Every number, traced to its page.
 
-00:00:19.000 --> 00:00:22.889
+00:00:19.000 --> 00:00:22.769
 This is taxtrace, running in your browser, on your own Mac.
 
-00:00:22.889 --> 00:00:26.911
-At the top, your to-do list, and the year's tax-saving moves,
+00:00:22.769 --> 00:00:26.603
+At the top, what your workspace holds, then your to-do list,
 
-00:00:26.911 --> 00:00:29.350
-ranked by the dollars each one saves.
+00:00:26.603 --> 00:00:31.075
+and the year's tax-saving moves, ranked by the dollars each one saves.
 
-00:00:31.880 --> 00:00:35.904
-Further down are your documents, in a plain folder on your disk,
+00:00:33.080 --> 00:00:35.701
+When your preparer sends more documents,
 
-00:00:35.904 --> 00:00:37.099
-sorted by tax year.
+00:00:35.701 --> 00:00:38.387
+open the Import tab and choose the files.
 
-00:00:37.099 --> 00:00:39.740
-Each one is tagged with the form it holds,
+00:00:38.387 --> 00:00:43.563
+taxtrace shows what it makes of each one: its form, its tax year and its owner.
 
-00:00:39.740 --> 00:00:42.255
-and none of them has left your computer.
+00:00:43.563 --> 00:00:46.905
+A passport, or a copy you already have, is skipped.
 
-00:00:46.320 --> 00:00:50.397
-Behind the page, taxtrace reads each form box by box.
+00:00:49.280 --> 00:00:51.004
+One button files the rest.
 
-00:00:50.397 --> 00:00:56.090
-Here is the W-2 from Initech: eight values read, and all five checks pass,
+00:00:51.004 --> 00:00:55.315
+The page then lists your documents by folder, sorted by tax year,
 
-00:00:56.090 --> 00:00:59.552
-including that box 4 is 6.2 percent of box 3.
+00:00:55.315 --> 00:01:00.355
+each tagged with the form it holds, and none of them has left your computer.
 
-00:00:59.552 --> 00:01:04.245
-Every value keeps the page, and the exact text, it came from.
+00:01:04.800 --> 00:01:08.789
+Then the entry sheet: everything your tax software will ask,
 
-00:01:06.440 --> 00:01:09.744
-From those readings, taxtrace writes an entry sheet:
+00:01:08.789 --> 00:01:10.185
+in the order it asks.
 
-00:01:09.744 --> 00:01:13.556
-everything your tax software will ask, in the order it asks.
+00:01:10.185 --> 00:01:14.241
+Each value shows whether it is ready, an estimate or missing,
 
-00:01:13.556 --> 00:01:16.288
-Each row is ready, an estimate, or missing,
+00:01:14.241 --> 00:01:17.100
+and the document and page it was read from.
 
-00:01:16.288 --> 00:01:19.465
-and a missing row names the command that fills it.
+00:01:19.040 --> 00:01:23.647
+Switch to estimates and missing, and only the rows that need you are left.
 
-00:01:21.520 --> 00:01:25.359
+00:01:23.647 --> 00:01:27.009
+Each section links to the to-do items that mention it,
+
+00:01:27.009 --> 00:01:28.690
+so nothing waits unnoticed.
+
+00:01:31.520 --> 00:01:35.359
 Last, the chat, for questions about tax rules and forms.
 
-00:01:25.359 --> 00:01:27.964
+00:01:35.359 --> 00:01:37.964
 Before anything goes to a cloud model,
 
-00:01:27.964 --> 00:01:32.009
+00:01:37.964 --> 00:01:42.009
 digits become pound signs and names and towns become stars,
 
-00:01:32.009 --> 00:01:34.820
+00:01:42.009 --> 00:01:44.820
 and the page shows exactly what was sent.
 
-00:01:35.840 --> 00:01:39.621
+00:01:45.800 --> 00:01:49.581
 And a question with an amount in it never leaves your Mac.
 
-00:01:39.621 --> 00:01:42.815
+00:01:49.581 --> 00:01:52.775
 The model here answers it, and the page says why.

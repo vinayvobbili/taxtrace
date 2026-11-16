@@ -1,9 +1,9 @@
-A preparer's portal hands you a zip. There's a driver's license in it, forms named whatever, and some of them twice.
+A preparer's portal hands you a pile of files. There's a passport in it, forms named whatever, and some of them twice.
 
 Every number, traced to its page.
 
-Once your documents are imported, this page shows them sorted by tax year, with filed returns in a folder of their own.
+Open the Import tab and choose the files your preparer sent. They go to taxtrace on your own computer, and nowhere else. Nothing is filed yet: the page only reads what each file is called.
 
-To import, point taxtrace at the folder or the zip. Each file goes to its tax year, last year's filed return goes to prior-returns, and the driver's license is skipped: it's no tax input, and a copy not made can't leak.
+For each file, taxtrace shows its form, its tax year and its owner, and where it will go. A filed return goes to prior-returns. A passport is skipped, and so is a copy you already have.
 
-Import the same folder again, and nothing changes. Files already in the workspace are skipped.
+Press the button, and the rest are filed. Back on the Overview, they sit in their year's folder, each tagged with its form, and the older return is with the filed returns.

@@ -2,13 +2,15 @@ Tax season often starts with a folder of PDFs and a quiet worry. Which page did 
 
 Every number, traced to its page.
 
-This is taxtrace, running in your browser, on your own Mac. At the top, your to-do list, and the year's tax-saving moves, ranked by the dollars each one saves.
+This is taxtrace, running in your browser, on your own Mac. At the top, what your workspace holds, then your to-do list, and the year's tax-saving moves, ranked by the dollars each one saves.
 
-Further down are your documents, in a plain folder on your disk, sorted by tax year. Each one is tagged with the form it holds, and none of them has left your computer.
+When your preparer sends more documents, open the Import tab and choose the files. taxtrace shows what it makes of each one: its form, its tax year and its owner. A passport, or a copy you already have, is skipped.
 
-Behind the page, taxtrace reads each form box by box. Here is the W-2 from Initech: eight values read, and all five checks pass, including that box 4 is 6.2 percent of box 3. Every value keeps the page, and the exact text, it came from.
+One button files the rest. The page then lists your documents by folder, sorted by tax year, each tagged with the form it holds, and none of them has left your computer.
 
-From those readings, taxtrace writes an entry sheet: everything your tax software will ask, in the order it asks. Each row is ready, an estimate, or missing, and a missing row names the command that fills it.
+Then the entry sheet: everything your tax software will ask, in the order it asks. Each value shows whether it is ready, an estimate or missing, and the document and page it was read from.
+
+Switch to estimates and missing, and only the rows that need you are left. Each section links to the to-do items that mention it, so nothing waits unnoticed.
 
 Last, the chat, for questions about tax rules and forms. Before anything goes to a cloud model, digits become pound signs and names and towns become stars, and the page shows exactly what was sent.
 

@@ -1,0 +1,11 @@
+Typing a return into tax software means answering question after question, in an order you don't choose, and wondering where each figure was.
+
+Every number, traced to its page.
+
+Open the Entry sheet tab. At the top: how many values are ready to type, how many are estimates that can still change, and how many are missing because nothing has been read for them yet.
+
+Each section is a form. Every value comes from a document that was read box by box, and sits beside the document and page it was read from, so you can check it against the page before you type it.
+
+To see only what needs you, choose estimates and missing. A section's link takes you to the to-do items that mention it, so each gap has a next step.
+
+Below the sections are the forms still to come, and the questions still open. Names, Social Security numbers and bank numbers are left for you to type.
