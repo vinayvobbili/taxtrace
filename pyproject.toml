@@ -31,7 +31,7 @@ Funding = "https://ko-fi.com/vinayvobbili"
 chat = ["anthropic>=0.40"]
 mcp = ["mcp>=2.2"]
 # Only to make the videos on the home page (scripts/videos/README.md): Kokoro narration on Apple Silicon, a browser.
-video = ["slidecast[mlx,playwright]>=0.4", "playwright>=1.49"]
+video = ["slidecast[mlx,playwright]>=0.5.1", "playwright>=1.49"]
 dev = ["pytest>=8", "ruff>=0.14", "reportlab>=4"]
 
 [project.scripts]
