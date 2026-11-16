@@ -1,69 +1,69 @@
 WEBVTT
 
-00:00:03.000 --> 00:00:07.634
+00:00:03.000 --> 00:00:07.504
 Tax season often starts with a folder of PDFs and a quiet worry.
 
-00:00:07.634 --> 00:00:10.312
+00:00:07.504 --> 00:00:10.108
 Which page did that number come from?
 
-00:00:10.312 --> 00:00:11.615
+00:00:10.108 --> 00:00:11.375
 Is a form missing?
 
-00:00:11.615 --> 00:00:15.525
+00:00:11.375 --> 00:00:15.175
 And do you really want to hand all of it to a chatbot?
 
-00:00:15.960 --> 00:00:18.585
+00:00:15.600 --> 00:00:18.225
 Every number, traced to its page.
 
-00:00:19.000 --> 00:00:22.769
+00:00:18.640 --> 00:00:22.409
 This is taxtrace, running in your browser, on your own Mac.
 
-00:00:22.769 --> 00:00:26.603
+00:00:22.409 --> 00:00:26.243
 At the top, what your workspace holds, then your to-do list,
 
-00:00:26.603 --> 00:00:31.075
+00:00:26.243 --> 00:00:30.715
 and the year's tax-saving moves, ranked by the dollars each one saves.
 
-00:00:33.080 --> 00:00:35.701
+00:00:32.800 --> 00:00:35.421
 When your preparer sends more documents,
 
-00:00:35.701 --> 00:00:38.387
+00:00:35.421 --> 00:00:38.107
 open the Import tab and choose the files.
 
-00:00:38.387 --> 00:00:43.563
+00:00:38.107 --> 00:00:43.283
 taxtrace shows what it makes of each one: its form, its tax year and its owner.
 
-00:00:43.563 --> 00:00:46.905
+00:00:43.283 --> 00:00:46.625
 A passport, or a copy you already have, is skipped.
 
-00:00:49.280 --> 00:00:51.004
+00:00:49.000 --> 00:00:50.724
 One button files the rest.
 
-00:00:51.004 --> 00:00:55.315
+00:00:50.724 --> 00:00:55.035
 The page then lists your documents by folder, sorted by tax year,
 
-00:00:55.315 --> 00:01:00.355
+00:00:55.035 --> 00:01:00.075
 each tagged with the form it holds, and none of them has left your computer.
 
-00:01:04.800 --> 00:01:08.789
+00:01:04.720 --> 00:01:08.709
 Then the entry sheet: everything your tax software will ask,
 
-00:01:08.789 --> 00:01:10.185
+00:01:08.709 --> 00:01:10.105
 in the order it asks.
 
-00:01:10.185 --> 00:01:14.241
+00:01:10.105 --> 00:01:14.161
 Each value shows whether it is ready, an estimate or missing,
 
-00:01:14.241 --> 00:01:17.100
+00:01:14.161 --> 00:01:17.020
 and the document and page it was read from.
 
-00:01:19.040 --> 00:01:23.647
+00:01:19.000 --> 00:01:23.607
 Switch to estimates and missing, and only the rows that need you are left.
 
-00:01:23.647 --> 00:01:27.009
+00:01:23.607 --> 00:01:26.969
 Each section links to the to-do items that mention it,
 
-00:01:27.009 --> 00:01:28.690
+00:01:26.969 --> 00:01:28.650
 so nothing waits unnoticed.
 
 00:01:31.520 --> 00:01:35.359
@@ -78,8 +78,8 @@ digits become pound signs and names and towns become stars,
 00:01:42.009 --> 00:01:44.820
 and the page shows exactly what was sent.
 
-00:01:45.800 --> 00:01:49.581
+00:01:45.880 --> 00:01:49.661
 And a question with an amount in it never leaves your Mac.
 
-00:01:49.581 --> 00:01:52.775
+00:01:49.661 --> 00:01:52.855
 The model here answers it, and the page says why.
