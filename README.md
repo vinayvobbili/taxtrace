@@ -84,7 +84,7 @@ Also: [PyPI](https://pypi.org/project/taxtrace/), [issues](https://github.com/vi
 
 ## Support and listings
 
-If taxtrace helps with your return, a ⭐ on GitHub is how I know: taxtrace sends nothing home, so stars are the only count of who uses it. If it saved you a preparer's fee, a [$1 coffee](https://ko-fi.com/vinayvobbili) says so too.
+If taxtrace helps with your return, a ⭐ on GitHub is how I know: taxtrace has no usage tracking, so stars are the only count of who uses it. If it saved you a preparer's fee, a [$1 coffee](https://ko-fi.com/vinayvobbili) says so too.
 
 [![vinayvobbili/taxtrace MCP server](https://glama.ai/mcp/servers/vinayvobbili/taxtrace/badges/score.svg)](https://glama.ai/mcp/servers/vinayvobbili/taxtrace)
 [![Indexed on TensorBlock MCP Index](https://mcp-index.tensorblock.co/v1/servers/github-vinayvobbili-taxtrace-4cc4bf8b/badge.svg)](https://tensorblock.co/mcp/servers/github-vinayvobbili-taxtrace-4cc4bf8b)

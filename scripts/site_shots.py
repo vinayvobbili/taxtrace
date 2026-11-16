@@ -1,6 +1,7 @@
 """Screenshot a static site (a folder with index.html) at 1440px and 375px, with the settings popover open.
 
     python scripts/site_shots.py SITE_DIR OUT_DIR [PREFIX]
+    python scripts/site_shots.py --strip SITE_DIR      # the problem strip at 390/800/900/1000, light and dark
 
 Writes PREFIX-{1440,375}-hero.png, -full.png and -full-dark.png (the whole page, light and dark), -popover.png and
 -tile.png (when a .tile exists),
@@ -85,6 +86,66 @@ def shoot(site: Path, out: Path, prefix: str = "site") -> dict[str, dict]:
     return report
 
 
+def luminance(rgb: tuple[float, ...]) -> float:
+    lin = [(c / 255 / 12.92) if c / 255 <= 0.04045 else ((c / 255 + 0.055) / 1.055) ** 2.4 for c in rgb[:3]]
+    return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]
+
+
+def contrast(a: tuple[float, ...], b: tuple[float, ...]) -> float:
+    hi, lo = sorted((luminance(a), luminance(b)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+# the problem strip: rows of lines, widows, overflow, and each line's and the ✕ marker's color and the page background
+STRIP = """() => {
+  const rgb = s => s.match(/[\\d.]+/g).slice(0, 3).map(Number);
+  const lines = [...document.querySelectorAll(".pain p")];
+  const mark = getComputedStyle(lines[0], "::before").color;
+  return {rows: new Set(lines.map(p => Math.round(p.getBoundingClientRect().top))).size,
+          overflow: document.documentElement.scrollWidth - innerWidth,
+          bg: rgb(getComputedStyle(document.body).backgroundColor),
+          text: rgb(getComputedStyle(lines[0]).color),
+          label: rgb(getComputedStyle(document.querySelector(".pain-label")).color), mark: rgb(mark)};
+}"""
+
+
+def strip_report(site: Path, widths=(390, 800, 900, 1000)) -> dict[str, dict]:
+    """The problem strip at each width, in light and dark, each in an iframe of that width (a window resize doesn't
+    change the viewport): rows (1 at 900px and up, 3 below), overflow, widows and the contrast ratios (4.5 or more)."""
+    from playwright.sync_api import sync_playwright
+
+    class Quiet(http.server.SimpleHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(Quiet, directory=str(site)))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{server.server_address[1]}/index.html"
+    report = {}
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            for width in widths:
+                for scheme in ("light", "dark"):
+                    page = browser.new_page(viewport={"width": width, "height": 900}, color_scheme=scheme)
+                    page.goto(url)
+                    page.wait_for_timeout(1000)
+                    got = page.evaluate(STRIP)
+                    ratios = {k: round(contrast(got[k], got["bg"]), 2) for k in ("text", "label", "mark")}
+                    report[f"{width} {scheme}"] = {"rows": got["rows"], "overflow": got["overflow"],
+                                                   "widows": page.evaluate(WIDOWS), "contrast": ratios}
+                    page.close()
+            browser.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+    return report
+
+
 if __name__ == "__main__":
+    if sys.argv[1] == "--strip":
+        for key, row in strip_report(Path(sys.argv[2])).items():
+            print(key, row)
+        sys.exit()
     site, out = Path(sys.argv[1]), Path(sys.argv[2])
     print(shoot(site, out, sys.argv[3] if len(sys.argv) > 3 else "site"))

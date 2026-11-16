@@ -186,6 +186,31 @@ def test_join_in_has_giscus_comments_and_a_coffee_card_without_a_price():
     assert "setConfig" in script  # follows the System / Light / Dark switch
 
 
+def test_the_problem_is_plain_old_way_lines_not_cards_and_the_overview_follows():
+    pain = re.findall(r"<p>(.*?)</p>", PAGE.split('<div class="pain">')[1].split("</div>")[0])
+    assert pain == ["Forty PDFs from six places.", "Numbers retyped, never checked.", "Carryovers buried on page 71."]
+    assert sum(map(len, pain)) < 95  # fits one row at 900px
+    label = re.search(r'<p class="pain-label">(.*?)The old way</p>', PAGE, re.S)
+    assert label and '<svg class="ic"' in label.group(1) and 'aria-hidden="true"' in label.group(1)
+    assert PAGE.index("The old way</p>") < PAGE.index('<div class="pain">')
+    css = re.search(r"\.pain p \{.*?\}", PAGE, re.S).group(0)
+    assert not any(word in css for word in ("var(--panel)", "border", "box-shadow"))  # lines, not cards
+    assert "@media (min-width: 900px) { .pain { flex-direction: row;" in PAGE and "white-space: nowrap" in PAGE
+    assert "--pain-x: #be123c" in PAGE and "--pain-x: #fb7185" in PAGE
+    assert PAGE.index('<div class="pain">') < PAGE.index("<h2>What taxtrace does for you</h2>")
+    assert "<h2>What it does</h2>" not in PAGE
+    assert "sends nothing home" not in PAGE + README
+
+
+def test_the_strip_checker_computes_wcag_contrast():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("site_shots", ROOT / "scripts" / "site_shots.py")
+    shots = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(shots)
+    assert round(shots.contrast((0, 0, 0), (255, 255, 255)), 1) == 21.0
+    assert shots.contrast((119, 119, 119), (119, 119, 119)) == 1.0
+
+
 def test_the_page_and_its_pictures_use_only_invented_names():
     text = PAGE + (ROOT / "scripts" / "videos" / "posters.py").read_text(encoding="utf-8")
     assert not re.search(r"\b\d{3}-\d{2}-\d{4}\b", text)  # no Social Security number

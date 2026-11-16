@@ -19,7 +19,7 @@
 :root {
   --bg: #f1f8f5; --glow-1: rgba(94, 214, 190, .34); --glow-2: rgba(251, 191, 36, .2);
   --panel: rgba(255, 255, 255, .88); --panel-solid: #fff; --text: #0f1f1a; --muted: #4d6a61; --line: #d9e9e2;
-  --accent: #0f766e; --accent-2: #d97706; --chip: #e6f2ed;
+  --accent: #0f766e; --accent-2: #d97706; --chip: #e6f2ed; --pain-x: #be123c;
   --shadow: 0 1px 2px rgba(15, 31, 26, .04), 0 10px 28px -16px rgba(15, 31, 26, .18);
   --shadow-hover: 0 2px 4px rgba(15, 31, 26, .05), 0 24px 46px -20px rgba(15, 118, 110, .4);
   --name-grad: linear-gradient(90deg, #0f766e, #1d4ed8);
@@ -29,7 +29,7 @@
 :root[data-theme="dark"] {
   --bg: #07110e; --glow-1: rgba(20, 184, 166, .22); --glow-2: rgba(245, 158, 11, .13);
   --panel: rgba(14, 28, 24, .86); --panel-solid: #0e1c18; --text: #e6f4ef; --muted: #8fb0a6; --line: #1d352e;
-  --accent: #5eead4; --accent-2: #fbbf24; --chip: #132722;
+  --accent: #5eead4; --accent-2: #fbbf24; --chip: #132722; --pain-x: #fb7185;
   --shadow: 0 1px 0 rgba(255, 255, 255, .03) inset, 0 12px 32px -20px rgba(0, 0, 0, .9);
   --shadow-hover: 0 1px 0 rgba(255, 255, 255, .05) inset, 0 24px 48px -20px rgba(45, 212, 191, .4);
   --name-grad: linear-gradient(90deg, #5eead4, #93c5fd);
@@ -113,10 +113,13 @@ header { position: sticky; top: 0; z-index: 5; border-bottom: 1px solid var(--li
 .uvrow button { border: 0; border-radius: 7px; padding: 4px 0; text-align: center; cursor: pointer; font: inherit; font-size: 12.5px;
   font-weight: 650; background: var(--chip); color: var(--text); transition: background .15s; }
 .uvrow button:hover { background: var(--line); }
-.pain { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; padding: 14px 0 6px; }
-.pain p { margin: 0; padding: 14px 18px; border-radius: 16px; background: var(--panel); border: 1px solid var(--line);
-  border-left: 4px solid var(--accent-2); box-shadow: var(--shadow); font-weight: 650; letter-spacing: -.01em;
-  animation: rise .6s both; }
+.pain-label { margin: 64px 0 0; text-align: center; font-size: 11.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--muted); display: flex; align-items: center; justify-content: center; gap: 7px; }
+.pain-label .ic { width: 15px; height: 15px; flex: none; stroke-width: 2; }
+.pain { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 0 6px; }
+@media (min-width: 900px) { .pain { flex-direction: row; justify-content: center; gap: 36px; } .pain p { white-space: nowrap; } }
+.pain p { margin: 0; color: var(--muted); font-size: 16px; text-align: center; text-wrap: balance; animation: rise .6s both; }
+.pain p::before { content: "\2715"; margin-right: 9px; font-size: .8em; font-weight: 700; color: var(--pain-x); }
 .pain p:nth-child(2) { animation-delay: .08s; } .pain p:nth-child(3) { animation-delay: .16s; }
 .demo-note { margin: 8px 0 0; text-align: center; font-size: 13px; color: var(--muted); }
 
@@ -275,14 +278,15 @@ footer p { margin: 6px auto 0; max-width: 620px; }
     </div>
   </div>
 
+  <p class="pain-label"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>The old way</p>
   <div class="pain">
-    <p>Forty PDFs from six different places.</p>
-    <p>Numbers retyped into tax software with no way to check them.</p>
-    <p>Last year's carryovers, buried on page 71.</p>
+    <p>Forty PDFs from six places.</p>
+    <p>Numbers retyped, never checked.</p>
+    <p>Carryovers buried on page 71.</p>
   </div>
 
   <section id="what">
-    <h2>What it does</h2>
+    <h2>What taxtrace does for you</h2>
     <div class="grid">
       <div class="card"><span class="badge">Read</span><h3>Reads what you already have</h3><p>W-2s, 1098s, brokers' 1099s, partnership K-1s and K-3s, a rental's statements, foreign bank statements and last year's filed return. Scanned pages are read on your computer too.</p></div>
       <div class="card"><span class="badge">Trace</span><h3>Every number has a source</h3><p>Each value keeps the file, the page and the exact text it was read from. A check throws out any value whose quote isn't on that page.</p></div>
