@@ -90,7 +90,8 @@ header { position: sticky; top: 0; z-index: 5; border-bottom: 1px solid var(--li
 .sub a { color: var(--muted); } .sub a::after { content: "\2197"; margin-left: 3px; }
 .sub a[href^="#"]::after { content: none; }
 /* the uv commands: a Mac / Linux | Windows switch (without script both systems show, each under its name) */
-.uv { margin: 30px auto 0; max-width: 700px; display: grid; gap: 8px; justify-items: center; }
+.uv { margin: 30px auto 0; max-width: 700px; display: grid; gap: 8px; justify-items: center; scroll-margin-top: 90px; }
+.uv:focus { outline: none; }
 .uv .seg { padding: 2px; border-radius: 10px; } .uv .seg[hidden], .uvpanel[hidden] { display: none; }
 .uv .seg button { padding: 3px 11px; font-size: 12.5px; }
 .uv .seg button:focus-visible, .uvrow button:focus-visible { outline: 3px solid var(--accent-2); outline-offset: 2px; }
@@ -121,6 +122,14 @@ header { position: sticky; top: 0; z-index: 5; border-bottom: 1px solid var(--li
 .pain p { margin: 0; color: var(--muted); font-size: 16px; text-align: center; text-wrap: balance; animation: rise .6s both; }
 .pain p::before { content: "\2715"; margin-right: 9px; font-size: .8em; font-weight: 700; color: var(--pain-x); }
 .pain p:nth-child(2) { animation-delay: .08s; } .pain p:nth-child(3) { animation-delay: .16s; }
+.again { text-align: center; }
+.again h2 { margin-bottom: 4px; }
+.cta { display: flex; gap: 12px; justify-content: center; align-items: stretch; flex-wrap: wrap; margin-top: 22px; }
+.btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 20px; border-radius: 13px; font: inherit;
+  font-weight: 650; text-decoration: none; cursor: pointer; border: 1px solid var(--line); color: var(--text);
+  background: var(--panel-solid); transition: transform .18s, box-shadow .18s; }
+.btn:hover { transform: translateY(-2px); box-shadow: var(--shadow-hover); }
+.btn.primary { background: var(--grad); color: #fff; border-color: transparent; }
 .demo-note { margin: 8px 0 0; text-align: center; font-size: 13px; color: var(--muted); }
 
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 30px 0 10px; text-align: left; }
@@ -251,7 +260,7 @@ footer p { margin: 6px auto 0; max-width: 620px; }
     <h1 aria-label="taxtrace">tax<span class="grad">trace</span></h1>
     <p class="tag grad">Every number on your return, traced to its page.</p>
     <p class="what">For anyone who does their own US taxes from a pile of PDFs: W-2s, 1099s, K-1s (partnership income statements), a rental, a foreign bank account. taxtrace reads them on your own computer and builds the sheet you type into your tax software, with the file, page and exact text behind every value. It never files anything and never guesses: what it can't settle becomes a question for you. Free and open source.</p>
-    <div class="uv" id="uv">
+    <div class="uv" id="install" tabindex="-1">
       <div class="seg" role="group" aria-label="Your system" hidden>
         <button type="button" data-os="unix" aria-pressed="true">Mac / Linux</button><button type="button" data-os="win" aria-pressed="false">Windows</button>
       </div>
@@ -297,7 +306,7 @@ footer p { margin: 6px auto 0; max-width: 620px; }
     </div>
   </section>
 
-  <section>
+  <section id="demo">
     <h2>See it work</h2>
     <div class="video vid"><video controls preload="none" playsinline poster="taxtrace-demo.jpg" src="taxtrace-demo.mp4" aria-label="Video: taxtrace from a folder of documents to an entry sheet (2 min)"><track kind="captions" srclang="en" label="English" src="taxtrace-demo.vtt"></video></div>
     <p class="lead center">From a folder of documents to an entry sheet, in about two minutes.</p>
@@ -355,6 +364,15 @@ footer p { margin: 6px auto 0; max-width: 620px; }
         <li><b>The MCP server is read-only and masked.</b> A locked document is never opened and the Keychain is never asked.</li>
         <li><b>No accounts, no usage data.</b> Apart from the optional chat, the only outside lookup is public exchange rates for foreign amounts, from the Federal Reserve, the IRS and the Treasury. Each request names only a currency and a date, nothing about you.</li>
       </ul>
+    </div>
+  </section>
+
+  <section class="again" id="get-started">
+    <h2>Ready to trace your return?</h2>
+    <p class="sub">Install takes about a minute, and your documents stay on your computer.</p>
+    <div class="cta">
+      <a class="btn primary" href="#install">Install taxtrace</a>
+      <a class="btn" href="#demo">Watch the demo</a>
     </div>
   </section>
 
@@ -454,7 +472,7 @@ new IntersectionObserver((entries, io) => {
 }, { rootMargin: "300px" }).observe(document.getElementById("comments"));
 
 // the uv commands show the visitor's system first (nothing is remembered); without script both systems show
-const uv = document.getElementById("uv"), osSwitch = uv.querySelector(".seg");
+const uv = document.getElementById("install"), osSwitch = uv.querySelector(".seg");
 const pickOs = os => {
   uv.querySelectorAll(".uvpanel[data-os]").forEach(p => { p.hidden = p.dataset.os !== os; });
   osSwitch.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.os === os)));

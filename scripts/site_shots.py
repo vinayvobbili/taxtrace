@@ -2,6 +2,7 @@
 
     python scripts/site_shots.py SITE_DIR OUT_DIR [PREFIX]
     python scripts/site_shots.py --strip SITE_DIR      # the problem strip at 390/800/900/1000, light and dark
+    python scripts/site_shots.py --anchors SITE_DIR    # install card, closing buttons, tabs, Copy at 390/900/1440
 
 Writes PREFIX-{1440,375}-hero.png, -full.png and -full-dark.png (the whole page, light and dark), -popover.png and
 -tile.png (when a .tile exists),
@@ -142,7 +143,62 @@ def strip_report(site: Path, widths=(390, 800, 900, 1000)) -> dict[str, dict]:
     return report
 
 
+def anchors_report(site: Path, widths=(390, 900, 1440)) -> dict[str, dict]:
+    """At each width, in light and dark: the install cards on the page (1), where each closing button lands (its
+    target's top must sit at or below the sticky header, and be on screen), the OS tab switch and a Copy click."""
+    from playwright.sync_api import sync_playwright
+
+    class Quiet(http.server.SimpleHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(Quiet, directory=str(site)))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{server.server_address[1]}/index.html"
+    report = {}
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            for width in widths:
+                for scheme in ("light", "dark"):
+                    ctx = browser.new_context(viewport={"width": width, "height": 900}, color_scheme=scheme,
+                                              permissions=["clipboard-read", "clipboard-write"])
+                    page = ctx.new_page()
+                    page.goto(url)
+                    page.wait_for_timeout(800)
+                    row = {"cards": page.locator(".uv").count(), "lands": {}}
+                    header = page.evaluate('document.querySelector("header").getBoundingClientRect().bottom')
+                    for hrefs in ("#install", "#demo"):
+                        page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                        page.wait_for_timeout(300)
+                        page.click(f'#get-started a[href="{hrefs}"]')
+                        page.wait_for_timeout(3000)  # the smooth scroll from the page's end
+                        top = page.evaluate(f'document.querySelector("{hrefs}").getBoundingClientRect().top')
+                        row["lands"][hrefs] = {"top": round(top), "below_header": top >= header - 1,
+                                               "on_screen": top < 900}
+                    page.click('.uv .seg button[data-os="win"]')
+                    row["win_tab"] = page.locator('.uvpanel[data-os="win"]').is_visible() and \
+                        not page.locator('.uvpanel[data-os="unix"]').is_visible()
+                    page.click('.uv .seg button[data-os="unix"]')
+                    button = page.locator('.uvpanel[data-os="unix"] .uvrow button').nth(1)
+                    button.click()
+                    row["copied"] = page.evaluate("navigator.clipboard.readText()")
+                    row["aligned"] = len({round(b.bounding_box()["x"]) for b in
+                                          page.locator('.uvpanel[data-os="unix"] .uvrow button').all()}) == 1
+                    report[f"{width} {scheme}"] = row
+                    ctx.close()
+            browser.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+    return report
+
+
 if __name__ == "__main__":
+    if sys.argv[1] == "--anchors":
+        for key, row in anchors_report(Path(sys.argv[2])).items():
+            print(key, row)
+        sys.exit()
     if sys.argv[1] == "--strip":
         for key, row in strip_report(Path(sys.argv[2])).items():
             print(key, row)

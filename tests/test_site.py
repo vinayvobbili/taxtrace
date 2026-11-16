@@ -56,8 +56,13 @@ def test_title_description_and_link_preview():
 
 
 def test_install_box_is_uv_first_with_one_row_per_step_on_each_system():
-    uv = PAGE.split('<div class="uv" id="uv">')[1].split('<p class="sub">')[0]
-    assert PAGE.count('class="uv"') == 1  # one install box
+    uv = PAGE.split('<div class="uv" id="install" tabindex="-1">')[1].split('<p class="sub">')[0]
+    assert PAGE.count('class="uv"') == 1 and PAGE.count('id="install"') == 1  # one install box, in the hero
+    assert PAGE.index('class="uv"') < PAGE.index('<div class="tiles">')
+    assert PAGE.count("<code>uv tool install taxtrace</code>") == 2  # its two systems, nowhere else
+    assert PAGE.count("pipx install taxtrace") == 1
+    assert "scroll-margin-top: 90px" in re.search(r"\.uv \{.*?\}", PAGE, re.S).group(0)  # lands under the sticky bar
+    assert 'document.getElementById("install")' in PAGE
     assert uv.count('<div class="uvpanel"') == 2
     assert "<code>curl -LsSf https://astral.sh/uv/install.sh | sh</code>" in uv
     assert '<code>powershell -c "irm https://astral.sh/uv/install.ps1 | iex"</code>' in uv
@@ -72,6 +77,41 @@ def test_install_box_is_uv_first_with_one_row_per_step_on_each_system():
         ("unix", "true", "Mac / Linux"), ("win", "false", "Windows")]
     assert '<p class="sub pipx">Already have Python? <code id="cmd">pipx install taxtrace</code>' in PAGE
     assert "taxtrace ui" in README and '"ui"' in CLI
+
+
+def test_the_closing_section_is_a_call_to_action_that_links_back_up_not_a_second_install_card():
+    closing = PAGE.split('<section class="again" id="get-started">')[1].split("</section>")[0]
+    assert "<h2>Ready to trace your return?</h2>" in closing
+    assert re.findall(r'<a class="(btn(?: primary)?)" href="([^"]+)">([^<]+)</a>', closing) == [
+        ("btn primary", "#install", "Install taxtrace"), ("btn", "#demo", "Watch the demo")]
+    assert "uvrow" not in closing and "<code>" not in closing and "$" not in closing
+    assert PAGE.index('class="uv"') < PAGE.index('id="get-started"') < PAGE.index("<h2>Read more</h2>")
+    # every in-page link lands on one element, and no id is used twice
+    ids = re.findall(r'\sid="([^"]+)"', PAGE)
+    assert len(ids) == len(set(ids)), sorted(i for i in set(ids) if ids.count(i) > 1)
+    for anchor in re.findall(r'href="#([\w-]+)"', PAGE):
+        assert anchor in ids, anchor
+    assert re.search(r"section\[id\][^{]*\{[^}]*scroll-margin-top: 70px", PAGE)  # #demo lands under the sticky bar
+    # the copy buttons and the tabs are wired once, to the one card
+    assert PAGE.count('querySelectorAll(".uvrow button, .pipx button")') == 1
+
+
+def test_in_a_browser_the_closing_buttons_land_under_the_sticky_header_and_the_one_card_works():
+    import importlib.util
+    pytest = __import__("pytest")
+    pytest.importorskip("playwright.sync_api")
+    spec = importlib.util.spec_from_file_location("site_shots", ROOT / "scripts" / "site_shots.py")
+    shots = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(shots)
+    try:
+        report = shots.anchors_report(SITE, widths=(390,))
+    except Exception as e:  # no browser installed here
+        pytest.skip(str(e))
+    for key, row in report.items():
+        assert row["cards"] == 1 and row["win_tab"] and row["aligned"], key
+        assert row["copied"] == "uv tool install taxtrace", key
+        for target, got in row["lands"].items():
+            assert got["below_header"] and got["on_screen"], (key, target)
 
 
 def test_no_claude_desktop_one_click_line_until_a_release_ships_an_mcpb():
