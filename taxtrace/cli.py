@@ -735,6 +735,41 @@ def cmd_fees(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_costs(args: argparse.Namespace) -> int:
+    """Total a brokerage's "Summary of Your Costs Paid to <firm>" annual reports (cost-summary-2023.pdf,
+    cost-summary-trailing-12-months.pdf).
+
+    With no paths, the workspace's EJ-history folder. Per year, a row per account (its last four digits, a CLOSED flag
+    and the five amounts), then a lifetime total across the calendar-year reports; the trailing-12-months report
+    overlaps them and is shown apart. Each report's Total row is checked against its account rows, and years missing
+    from 2020-2025 are named. Names and full account numbers are never printed.
+    """
+    from . import costs
+
+    if not args.paths:
+        folder = costs.default_folder(workspace.home())
+        if folder is None:
+            print(f"no {costs.HOME_FOLDER} folder in the workspace; name the reports' folder")
+            return 1
+        args.paths = [str(folder)]
+    found = []
+    for doc in _documents(args):
+        if costs.NAME.search(doc.name) is None or doc.suffix.lower() not in text.PDF_SUFFIXES:
+            continue
+        try:
+            pages = _unlocked(doc)[0]
+        except text.UnsupportedDocument as err:
+            print(f"a report skipped, {err}")
+            continue
+        if report := costs.read(doc.name, pages):
+            found.append(report)
+    if not found:
+        print("no cost summaries found")
+        return 1
+    print("\n".join(costs.lines(costs.total(found))))
+    return 0
+
+
 def cmd_1099(args: argparse.Namespace) -> int:
     """Read the 1099-DIVs, 1099-INTs and 1099-Bs on brokers' consolidated 1099 statements into <workspace>/forms: each
     box, each sale, the payer and the year.
@@ -2383,6 +2418,10 @@ def build_parser() -> argparse.ArgumentParser:
                        description=cmd_fees.__doc__)
     p.add_argument("paths", nargs="*", help="statements or folders (default: the workspace's EJ-history folder)")
     p.set_defaults(func=cmd_fees)
+    p = sub.add_parser("costs", help="total a brokerage's annual 'Summary of Your Costs' reports",
+                       description=cmd_costs.__doc__)
+    p.add_argument("paths", nargs="*", help="reports or folders (default: the workspace's EJ-history folder)")
+    p.set_defaults(func=cmd_costs)
     p = sub.add_parser("1099", description=cmd_1099.__doc__,
                        help="read the 1099-DIVs, 1099-INTs and 1099-Bs on brokers' consolidated 1099 statements")
     p.add_argument("paths", nargs="*", help=PATHS_HELP)

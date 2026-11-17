@@ -37,6 +37,11 @@ Early. What works today:
 - `taxtrace fees`: what a brokerage charged, from Edward Jones monthly statements: per account (last four digits) and
   year, "Fees and Charges" from the December statement and, apart from it, the reinvestment fees on the statements
   given. A year without a December statement is named. With no paths it reads the workspace's `EJ-history` folder.
+- `taxtrace costs`: totals a brokerage's annual "Summary of Your Costs Paid to ..." reports (`cost-summary-2023.pdf`,
+  `cost-summary-trailing-12-months.pdf`): per year, a row per account (last four digits, CLOSED flag) with fees and
+  charges, commissions, margin loan interest, insurance and total, then a lifetime total over the calendar years. The
+  trailing-12-months report is shown apart. Each Total row is checked against its account rows, and missing years of
+  2020-2025 are named. With no paths it reads the workspace's `EJ-history` folder.
 - `taxtrace entry`: the year's entry sheet, to type into a filing site (see [Entry sheet](https://github.com/vinayvobbili/taxtrace/blob/main/docs/return.md#entry-sheet)).
 - `taxtrace ui`: the workspace in the browser, with an Import screen (drop files in, filed as `import` files them), the entry sheet as a table and a chat (see [Chat](https://github.com/vinayvobbili/taxtrace/blob/main/docs/chat.md#chat)).
 
