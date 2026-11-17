@@ -34,6 +34,9 @@ Early. What works today:
   [India's return](https://github.com/vinayvobbili/taxtrace/blob/main/docs/foreign.md#indias-return)).
 - `taxtrace bank`: reads a foreign bank's statement of account: interest, a tax refund, balances (see
   [Bank statements](https://github.com/vinayvobbili/taxtrace/blob/main/docs/foreign.md#bank-statements)).
+- `taxtrace fees`: what a brokerage charged, from Edward Jones monthly statements: per account (last four digits) and
+  year, "Fees and Charges" from the December statement and, apart from it, the reinvestment fees on the statements
+  given. A year without a December statement is named. With no paths it reads the workspace's `EJ-history` folder.
 - `taxtrace entry`: the year's entry sheet, to type into a filing site (see [Entry sheet](https://github.com/vinayvobbili/taxtrace/blob/main/docs/return.md#entry-sheet)).
 - `taxtrace ui`: the workspace in the browser, with an Import screen (drop files in, filed as `import` files them), the entry sheet as a table and a chat (see [Chat](https://github.com/vinayvobbili/taxtrace/blob/main/docs/chat.md#chat)).
 

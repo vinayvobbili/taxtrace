@@ -702,6 +702,39 @@ def cmd_1098(args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+def cmd_fees(args: argparse.Namespace) -> int:
+    """Total what a brokerage charged, from Edward Jones monthly statements (XXXX9183-12_2025-edj-statement.pdf).
+
+    With no paths, the workspace's EJ-history folder. Per account (its last four digits) and year: "Fees and Charges"
+    from the December statement's This Year column, and, apart from it, every "Reinvestment Fee" on the statements
+    given. A year without a December statement is named. Only amounts, years and last four digits are printed.
+    """
+    from . import fees
+
+    if not args.paths:
+        folder = fees.default_folder(workspace.home())
+        if folder is None:
+            print(f"no {fees.HOME_FOLDER} folder in the workspace; name the statements' folder")
+            return 1
+        args.paths = [str(folder)]
+    found = []
+    for doc in _documents(args):
+        if fees.identify(doc.name) is None or doc.suffix.lower() not in text.PDF_SUFFIXES:
+            continue
+        try:
+            pages = _unlocked(doc)[0]
+        except text.UnsupportedDocument as err:
+            print(f"a statement skipped, {err}")
+            continue
+        if statement := fees.read(doc.name, pages):
+            found.append(statement)
+    if not found:
+        print("no Edward Jones statements found")
+        return 1
+    print("\n".join(fees.lines(fees.total(found))))
+    return 0
+
+
 def cmd_1099(args: argparse.Namespace) -> int:
     """Read the 1099-DIVs, 1099-INTs and 1099-Bs on brokers' consolidated 1099 statements into <workspace>/forms: each
     box, each sale, the payer and the year.
@@ -2346,6 +2379,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("paths", nargs="*", help=PATHS_HELP)
     p.add_argument("--layout", action="store_true", help="also print each value's text and place, masked")
     p.set_defaults(func=cmd_1098)
+    p = sub.add_parser("fees", help="total the fees a brokerage charged, from Edward Jones monthly statements",
+                       description=cmd_fees.__doc__)
+    p.add_argument("paths", nargs="*", help="statements or folders (default: the workspace's EJ-history folder)")
+    p.set_defaults(func=cmd_fees)
     p = sub.add_parser("1099", description=cmd_1099.__doc__,
                        help="read the 1099-DIVs, 1099-INTs and 1099-Bs on brokers' consolidated 1099 statements")
     p.add_argument("paths", nargs="*", help=PATHS_HELP)
