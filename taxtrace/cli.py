@@ -703,7 +703,7 @@ def cmd_1098(args: argparse.Namespace) -> int:
 
 
 def cmd_fees(args: argparse.Namespace) -> int:
-    """Total what a brokerage charged, from Edward Jones monthly statements (XXXX9183-12_2025-edj-statement.pdf).
+    """Total what a brokerage charged, from Edward Jones monthly statements (XXXX4321-12_2025-edj-statement.pdf).
 
     With no paths, the workspace's EJ-history folder. Per account (its last four digits) and year: "Fees and Charges"
     from the December statement's This Year column, and, apart from it, every "Reinvestment Fee" on the statements

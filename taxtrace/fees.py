@@ -6,7 +6,7 @@ $1.25" line on a statement's activity is charged on its own, month by month: eve
 summed, so that column covers only the months handed in.
 
 A statement's file name carries what the text leaves out: the last four digits of the account, the month and the
-year, as in XXXX9183-12_2025-edj-statement.pdf. Nothing but those digits, the year and amounts is ever kept.
+year, as in XXXX4321-12_2025-edj-statement.pdf. Nothing but those digits, the year and amounts is ever kept.
 """
 
 from __future__ import annotations
