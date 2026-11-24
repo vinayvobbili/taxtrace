@@ -109,7 +109,7 @@ def test_nothing_is_written_by_looking(server, saved):
 LIST = """\
 ## Taxes
 - [ ] **Fri 12/4/2026** Ask Initech payroll when the W-2 will arrive
-- [ ] **Mon 1/4/2027** Chase the Umbrella K-1
+- [ ] **Mon 1/4/2027** Follow up on the Umbrella K-1
 - [ ] Clean the garage
 """
 
