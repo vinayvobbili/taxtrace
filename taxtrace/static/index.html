@@ -483,6 +483,39 @@ form.input button { border: 0; border-radius: 13px; background: var(--grad); col
 .bgyear { color: var(--muted); font-size: 12.5px; text-align: right; white-space: nowrap; }
 .bgyear b { color: var(--text); font-variant-numeric: tabular-nums; }
 .bcard.unsplit .bname b { font-style: italic; }
+.sheet-bar #budget-layout { margin-left: 2px; }
+.charts { display: grid; gap: 22px; }
+.cbar { padding: 16px 18px 14px; animation: rise .5s .05s cubic-bezier(.2, .7, .2, 1) both; overflow: hidden; }
+.cbar-scroll { overflow-x: auto; padding-bottom: 4px; } .cbar-inner svg { display: block; overflow: visible; }
+.cbar .grid { stroke: var(--line); stroke-dasharray: 3 4; } .cbar .ax, .cbar .lab { fill: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.cbar .lab { font-size: 12px; fill: var(--text); }
+.cbar .bar { cursor: pointer; transform-box: fill-box; transform-origin: bottom; animation: grow .8s cubic-bezier(.2, .8, .2, 1) both; transition: filter .15s; }
+.cbar .bar:hover, .cbar .bar:focus-visible { filter: brightness(1.12) drop-shadow(0 4px 8px rgba(15, 23, 42, .25)); outline: none; }
+@keyframes grow { from { transform: scaleY(0); } }
+@keyframes pieIn { from { opacity: 0; transform: rotate(-150deg) scale(.82); } }
+.ckey { margin-top: 6px; } .ckey i { box-shadow: none; }
+.ckey .k-bud { background: linear-gradient(135deg, #6366f1, #3b82f6); } .ckey .k-spent { background: linear-gradient(135deg, #f59e0b, #f97316); }
+.ckey .k-over { background: linear-gradient(135deg, #ef4444, #f97316); } .ckey .k-ok { background: var(--b-ok); }
+.cpies { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 14px; }
+:root[data-width="wide"] .cpies, :root[data-width="full"] .cpies { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.cpie { display: grid; gap: 8px; justify-items: center; padding: 14px 12px 12px; text-align: center; font: inherit; color: var(--text); cursor: pointer; position: relative; overflow: hidden;
+  animation: rise .45s cubic-bezier(.2, .7, .2, 1) both; transition: transform .2s, box-shadow .2s, border-color .2s; }
+.cpie::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 4px; background: var(--gg, var(--grad)); }
+.cpie:hover, .cpie:focus-visible { transform: translateY(-3px); box-shadow: var(--shadow-hover); border-color: color-mix(in srgb, var(--gc, var(--accent)) 40%, var(--line)); }
+.cpie.static { cursor: default; } .cpie.over { border-color: color-mix(in srgb, var(--b-over) 45%, var(--line)); }
+.cpie-t { display: flex; align-items: center; gap: 8px; max-width: 100%; } .cpie-t b { font-size: 14.5px; overflow-wrap: anywhere; }
+.cico { flex: none; width: 28px; height: 28px; border-radius: 9px; display: grid; place-items: center; font-size: 15px; background: var(--gg, var(--grad)); }
+.cpie-d { position: relative; width: min(150px, 70%); aspect-ratio: 1; }
+.cpie-d .pie { width: 100%; height: 100%; transform: rotate(-90deg); animation: pieIn .7s cubic-bezier(.2, .8, .2, 1) both; filter: drop-shadow(0 8px 12px color-mix(in srgb, var(--gc, #6366f1) 28%, transparent)); }
+.cpie-d > span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.cpie-d > span.neg, .cpie-n b.neg { color: var(--b-over); }
+.cpie-n { font-size: 12.5px; color: var(--muted); } .cpie-n b { color: var(--text); font-variant-numeric: tabular-nums; }
+.cgroup { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 8px 4px 0; border-top: 1px dashed var(--line); margin-top: 6px; }
+.cgroup .cico { width: 26px; height: 26px; } .cgroup b { font-size: 15px; } .cg-n { margin-left: auto; color: var(--muted); font-size: 12.5px; }
+.cempty { padding: 28px 24px; display: grid; gap: 6px; } .cempty h3 { margin: 0; } .cempty p { margin: 0; color: var(--muted); }
+.btip { position: fixed; z-index: 2000; pointer-events: none; max-width: 320px; padding: 7px 11px; border-radius: 10px; font-size: 12.5px; line-height: 1.35; color: #fff;
+  background: rgba(15, 23, 42, .92); box-shadow: 0 10px 24px -8px rgba(0, 0, 0, .5); } .btip[hidden] { display: none; }
+@media (max-width: 640px) { .cpies, :root[data-width="wide"] .cpies, :root[data-width="full"] .cpies { grid-template-columns: repeat(2, minmax(0, 1fr)); } .cpie-t b { font-size: 13px; } }
 .meter.inc i { background: linear-gradient(90deg, #10b981, #84cc16); }
 .bgfig dd.pos, .bgnote b.pos { color: var(--b-ok); }
 .bghead.prop { background: linear-gradient(90deg, color-mix(in srgb, #0ea5e9 14%, var(--panel)), color-mix(in srgb, var(--b-ok) 10%, var(--panel)) 80%); }
@@ -653,6 +686,9 @@ form.input button { border: 0; border-radius: 13px; background: var(--grad); col
         <button type="button" data-v="ytd" class="on">Year to date</button><button type="button" data-v="month">Month</button>
       </div>
       <label for="budget-month">Month <select id="budget-month"></select></label>
+      <div class="seg" id="budget-layout" role="group" aria-label="Layout">
+        <button type="button" data-l="cards" class="on" aria-pressed="true">Cards</button><button type="button" data-l="charts" aria-pressed="false">Charts</button>
+      </div>
       <div class="spacer"></div>
       <button class="switch" id="budget-demo" type="button" role="switch" aria-checked="false" title="Show a made-up household's budget instead of yours"><span class="knob"></span>Demo data</button>
     </div>
@@ -1298,8 +1334,134 @@ function budgetEmpty(d) {
       h("li", {}, h("b", {}, "Then: "), h("code", {}, "taxtrace budget rules --unmatched"), " lists payees to write rules for.")),
     h("button", { class: "btn go", type: "button", onclick: () => setDemo(true) }, "Show demo data")));
 }
+// -- the Charts layout: a wide bar chart of budget against spent per line, the colour key, then a pie per line (a group's
+// sub-lines under its name, the properties' lines too) and one of spending by group. Inline SVG, drawn from the same data.
+let budgetLayout = "cards";
+try { budgetLayout = localStorage.getItem("taxtrace-budget-layout") === "charts" ? "charts" : "cards"; } catch { /* fine */ }
+// -- chart maths (pure: tested on their own)
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const niceMax = v => { v = finite(v) ? Math.max(Number(v), 1) : 1; const p = 10 ** Math.floor(Math.log10(v)), f = v / p; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p; };
+const shorten = (s, n = 16) => s.length > n ? s.slice(0, n - 1) + "…" : s;
+const tipOf = (x, verb = "spent") => `${x.name}: budget ${money(x.budget)}, ${verb} ${money(x.spent)}` +
+  (finite(x.pct) ? ` (${pctText(x.pct)} ${verb === "received" ? "received" : "used"})` : "") + (finite(x.remaining) && verb !== "received" ? `, ${x.remaining < 0 ? "over by" : "left"} ${money(Math.abs(x.remaining))}` : "");
+function barChart(lines) {  // budget (blue) and spent (amber, red when over) side by side per line
+  const items = lines.filter(x => finite(x.budget) || finite(x.spent)), n = items.length;
+  const W = Math.max(760, n * 74), H = 330, L = 56, R = 12, T = 14, B = 92, plot = H - T - B;
+  const top = niceMax(Math.max(1, ...items.flatMap(x => [Number(x.budget) || 0, Number(x.spent) || 0])));
+  const yOf = v => T + plot * (1 - Math.min(Math.max(Number(v) || 0, 0), top) / top), slot = (W - L - R) / Math.max(n, 1), bw = Math.min(slot * .34, 30);
+  let svg = `<defs><linearGradient id="gBud" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6366f1"/><stop offset="1" stop-color="#3b82f6"/></linearGradient>` +
+    `<linearGradient id="gSpent" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f59e0b"/><stop offset="1" stop-color="#f97316"/></linearGradient>` +
+    `<linearGradient id="gOver" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ef4444"/><stop offset="1" stop-color="#f97316"/></linearGradient></defs>`;
+  for (let k = 0; k <= 4; k++) {
+    const v = top * k / 4, y = yOf(v).toFixed(1);
+    svg += `<line class="grid" x1="${L}" x2="${W - R}" y1="${y}" y2="${y}"/><text class="ax" x="${L - 8}" y="${(+y + 4).toFixed(1)}" text-anchor="end">${esc(money(v))}</text>`;
+  }
+  items.forEach((x, i) => {
+    const x0 = L + slot * i + (slot - 2 * bw - 3) / 2, delay = Math.min(i * 40, 480), pay = `data-pay="${esc(x.name)}" data-group="${esc(x.group)}" tabindex="0" role="button"`;
+    const tip = `data-tip="${esc(tipOf(x))}"`, hB = Math.max(0, yOf(0) - yOf(x.budget)), hS = Math.max(0, yOf(0) - yOf(x.spent));
+    svg += `<rect class="bar" ${pay} ${tip} fill="url(#gBud)" x="${x0.toFixed(1)}" y="${yOf(x.budget).toFixed(1)}" width="${bw.toFixed(1)}" height="${hB.toFixed(1)}" rx="4" style="animation-delay:${delay}ms"/>` +
+      `<rect class="bar" ${pay} ${tip} fill="url(${x.over ? "#gOver" : "#gSpent"})" x="${(x0 + bw + 3).toFixed(1)}" y="${yOf(x.spent).toFixed(1)}" width="${bw.toFixed(1)}" height="${hS.toFixed(1)}" rx="4" style="animation-delay:${delay + 60}ms"/>`;
+    const cx = x0 + bw + 1.5, ly = H - B + 16;
+    svg += `<text class="lab" transform="rotate(-38 ${cx.toFixed(1)} ${ly})" x="${cx.toFixed(1)}" y="${ly}" text-anchor="end">${esc(`${x.icon || ""} ${shorten(x.name)}`.trim())}</text>`;
+  });
+  return h("div", { class: "cbar-scroll" }, Object.assign(h("div", { class: "cbar-inner", style: `min-width:${W}px` }), {
+    innerHTML: `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Budget against spent for each line">${svg}</svg>` }));
+}
+function pieSvg(slices, label) {  // a ring of slices: [{ value, color }]
+  const total = slices.reduce((s, x) => s + (finite(x.value) && x.value > 0 ? Number(x.value) : 0), 0);
+  let off = 0, rings = "";
+  for (const s of slices) {
+    if (!(finite(s.value) && s.value > 0) || !total) continue;
+    const len = Number(s.value) / total * 100;
+    rings += `<circle cx="21" cy="21" r="15.915" fill="none" stroke="${s.color}" stroke-width="6.2" stroke-dasharray="${len.toFixed(2)} ${(100 - len).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}"/>`;
+    off += len;
+  }
+  return `<svg class="pie" viewBox="0 0 42 42" role="img" aria-label="${esc(label)}"><circle cx="21" cy="21" r="15.915" fill="none" stroke="var(--b-track)" stroke-width="6.2"/>${rings}</svg>`;
+}
+// a line's ring: spent amber over remaining green (an unspent line is a calm green ring), one red ring when over; rent fills green
+function lineSlices(x, kind = "") {
+  const income = kind === "income", over = !income && !!x.over, known = finite(x.budget) && Number(x.budget) > 0;
+  const spent = finite(x.spent) ? Math.max(Number(x.spent), 0) : 0, left = known ? Math.max(Number(x.budget) - spent, 0) : 0;
+  return over ? [{ value: 1, color: "var(--b-over)" }]
+    : income ? [{ value: spent, color: "var(--b-ok)" }, { value: left, color: "var(--chip)" }]
+      : known ? [{ value: spent, color: "var(--b-spent)" }, { value: left, color: "var(--b-ok)" }] : [{ value: spent, color: "var(--b-spent)" }];
+}
+// -- end of the chart maths
+function pieCard(x, i, kind, onclick) {
+  const income = kind === "income", over = !income && !!x.over, known = finite(x.budget) && Number(x.budget) > 0;
+  const slices = lineSlices(x, kind), tip = tipOf(x, income ? "received" : "spent");
+  const card = h("button", { class: `card cpie grp-${x.group}${income ? " income" : ""}${over ? " over" : ""}`, type: "button", "data-tip": tip, "aria-label": tip,
+    style: `animation-delay:${Math.min(i * 35, 420)}ms`, onclick },
+    h("div", { class: "cpie-t" }, h("span", { class: "cico", "aria-hidden": "true" }, x.icon || "•"), h("b", {}, x.name)),
+    Object.assign(h("div", { class: "cpie-d" }), { innerHTML: pieSvg(slices, tip) }),
+    h("div", { class: "cpie-n" }, "budget ", h("b", {}, money(x.budget)), income ? ", received " : ", spent ", h("b", { class: over ? "neg" : "" }, money(x.spent))));
+  card.querySelector(".cpie-d").append(h("span", { class: over ? "neg" : "" }, known ? pctText(Number(x.spent) / Number(x.budget) * 100) : "—"));
+  return card;
+}
+function chartsView(d, ytd) {
+  const t = d.totals, lines = [...d.lines].sort((a, b) => (urgency(a) * 10 + GROUP_ORDER.indexOf(a.group)) - (urgency(b) * 10 + GROUP_ORDER.indexOf(b.group)));
+  const anything = d.lines.some(x => (Number(x.budget) || 0) > 0 || (Number(x.spent) || 0) > 0);
+  if (!anything) return h("div", { class: "card cempty" }, h("h3", {}, "Nothing to chart yet"),
+    h("p", {}, "No lines have a budget or any spending in this period. Pick another month, or import a month's transactions."));
+  const groupSlices = GROUP_ORDER.map(g => ({ value: Math.max(Number((d.groups[g] || {}).spent) || 0, 0), color: `var(--b-${g})` }));
+  const groupTip = GROUP_ORDER.map(g => `${d.groups[g].label} ${money(d.groups[g].spent)}`).join(", ");
+  const groupPie = h("div", { class: "card cpie static" }, h("div", { class: "cpie-t" }, h("span", { class: "cico", "aria-hidden": "true" }, "🥧"), h("b", {}, "Spending by group type")),
+    Object.assign(h("div", { class: "cpie-d", "data-tip": groupTip }), { innerHTML: pieSvg(groupSlices, `Spending by group type: ${groupTip}`) }),
+    h("div", { class: "cpie-n" }, "budget ", h("b", {}, money(t.budget)), ", spent ", h("b", {}, money(t.spent))));
+  groupPie.querySelector(".cpie-d").append(h("span", {}, money(t.spent)));
+  let n = 0;
+  const pies = [groupPie];
+  for (const x of lines) {
+    if (!x.subs) { pies.push(pieCard(x, n++, "", () => paymentsModal(x.name, x.name, false, `grp-${x.group}`))); continue; }
+    pies.push(h("div", { class: "cgroup", style: "grid-column: 1 / -1" }, h("span", { class: "cico", "aria-hidden": "true" }, x.icon || "•"), h("b", {}, x.name),
+      h("span", { class: "badge" }, (d.groups[x.group] || { label: x.group }).label), h("span", { class: "cg-n" }, `budget ${money(x.budget)}, spent ${money(x.spent)}`)));
+    for (const s of [...x.subs].sort((a, b) => urgency(a) - urgency(b))) {
+      if (s.unsplit) continue;
+      pies.push(pieCard(s, n++, "", () => paymentsModal(s.name, s.name, false, `grp-${s.group}`)));
+    }
+  }
+  const props = (d.properties || []).map(p => {
+    const pt = p.totals, cards = [...p.income, ...p.costs].map((x, i) => pieCard(x, i, x.kind, () => paymentsModal(x.name, x.name, false,
+      `grp-${x.group}${x.kind === "income" ? " income" : ""}`, x.kind === "income" ? "received" : "spent")));
+    const netPie = h("div", { class: "card cpie static grp-property income" }, h("div", { class: "cpie-t" }, h("span", { class: "cico", "aria-hidden": "true" }, p.icon || "🏘️"), h("b", {}, `${p.name}: net`)),
+      Object.assign(h("div", { class: "cpie-d", "data-tip": `${p.name}: rent ${money(pt.income_received)}, costs ${money(pt.cost_spent)}, net ${money(pt.net)}` }),
+        { innerHTML: pieSvg([{ value: Math.max(Number(pt.cost_spent) || 0, 0), color: "var(--b-spent)" }, { value: Math.max(Number(pt.net) || 0, 0), color: "var(--b-ok)" }], `${p.name}: net ${money(pt.net)}`) }),
+      h("div", { class: "cpie-n" }, "rent ", h("b", {}, money(pt.income_received)), ", costs ", h("b", {}, money(pt.cost_spent)), ", net ", h("b", { class: Number(pt.net) < 0 ? "neg" : "" }, money(pt.net))));
+    netPie.querySelector(".cpie-d").append(h("span", {}, money(pt.net)));
+    return h("section", { class: "bsec" }, h("h2", {}, `${p.name} · rental`), h("div", { class: "cpies" }, netPie, ...cards));
+  });
+  return h("div", { class: "charts" },
+    h("div", { class: "card cbar" }, h("div", { class: "mix-top" }, h("b", {}, "Budget against spent, per line"),
+      h("span", {}, `${d.label}`)), barChart(lines),
+      h("div", { class: "key ckey" }, h("span", {}, h("i", { class: "k-bud" }), ytd ? "Budget so far" : "Budget"), h("span", {}, h("i", { class: "k-spent" }), "Spent"),
+        h("span", {}, h("i", { class: "k-over" }), "Over the budget"), h("span", {}, h("i", { class: "k-ok" }), "Remaining"),
+        GROUP_ORDER.map(g => h("span", { class: `grp-${g}` }, h("i"), d.groups[g].label)))),
+    h("section", { class: "bsec" }, h("h2", {}, `Spending lines${t.over ? ` · ${t.over} over` : ""}`), h("div", { class: "cpies" }, pies)),
+    props);
+}
+const btip = Object.assign(document.createElement("div"), { className: "btip", hidden: true });  // the charts' hover tooltip
+document.body.append(btip);
+$("budget-body").addEventListener("mouseover", e => { const el = e.target.closest("[data-tip]"); if (el) { btip.textContent = el.dataset.tip; btip.hidden = false; } });
+$("budget-body").addEventListener("mousemove", e => { if (!btip.hidden) { btip.style.left = `${Math.max(8, Math.min(e.clientX + 14, innerWidth - btip.offsetWidth - 8))}px`; btip.style.top = `${e.clientY + 16}px`; } });
+$("budget-body").addEventListener("mouseout", e => { if (e.target.closest("[data-tip]")) btip.hidden = true; });
+$("budget-body").addEventListener("click", e => {
+  const bar = e.target.closest("[data-pay]");
+  if (bar) paymentsModal(bar.dataset.pay, bar.dataset.pay, false, `grp-${bar.dataset.group}`);
+});
+$("budget-body").addEventListener("keydown", e => {
+  const bar = e.target.closest("[data-pay]");
+  if (bar && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); paymentsModal(bar.dataset.pay, bar.dataset.pay, false, `grp-${bar.dataset.group}`); }
+});
+function setLayout(l) {
+  budgetLayout = l;
+  try { localStorage.setItem("taxtrace-budget-layout", l); } catch { /* fine */ }
+  for (const b of $("budget-layout").children) { b.classList.toggle("on", b.dataset.l === l); b.setAttribute("aria-pressed", String(b.dataset.l === l)); }
+  if (budgetData) renderBudget(budgetData);
+}
+$("budget-layout").addEventListener("click", e => { const b = e.target.closest("button"); if (b) setLayout(b.dataset.l); });
 function renderBudget(d) {
   budgetData = d;
+  for (const b of $("budget-layout").children) { b.classList.toggle("on", b.dataset.l === budgetLayout); b.setAttribute("aria-pressed", String(b.dataset.l === budgetLayout)); }
   $("budget-demo").setAttribute("aria-checked", String(budgetDemo));
   $("budget-demo-note").hidden = !budgetDemo;
   if (d.source === "none") { budgetEmpty(d); return; }
@@ -1323,6 +1485,7 @@ function renderBudget(d) {
       t.pace == null ? "pace vs plan" : t.pace > 100 ? "pace vs plan: ahead of it" : "pace vs plan: within it")),
     h("div", { class: "stat t-over" + (t.over ? " bad" : "") }, h("div", { class: "num" }, t.over, h("small", {}, `/ ${d.lines.length}`)),
       h("div", { class: "lbl" }, `lines over budget${t.near ? ` · ${t.near} near` : ""}`)));
+  if (budgetLayout === "charts") { $("budget-body").replaceChildren(chartsView(d, ytd)); return; }
   const spentIn = g => Math.max(Number((d.groups[g] || {}).spent) || 0, 0);
   const total = GROUP_ORDER.reduce((s, g) => s + spentIn(g), 0);
   const mix = h("div", { class: "mixbar", role: "img", "aria-label": "Spending by group" }, GROUP_ORDER.filter(g => spentIn(g) > 0).map(g => {

@@ -285,6 +285,74 @@ def test_the_pages_number_formatters_print_a_dash_for_what_isnt_a_number():
                                       "99%", 1, 0, None, None, 0.25, 1, None]
 
 
+CHARTS = ("// -- chart maths", "// -- end of the chart maths")
+
+
+def _node(probe: str) -> list:
+    """Run the page's number formatters and chart maths in node, then `probe` (an expression for a list)."""
+    html = web.page("t0ken").decode()
+    fmt = html.split(FORMATTERS[0])[1].split("\n", 1)[1].split(FORMATTERS[1])[0]
+    charts = html.split(CHARTS[0])[1].split("\n", 1)[1].split(CHARTS[1])[0]
+    run = subprocess.run(["node", "-e", fmt + charts + f"console.log(JSON.stringify({probe}));"],
+                         capture_output=True, text=True, check=True)
+    return json.loads(run.stdout)
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node isn't installed")
+def test_a_pie_is_a_calm_green_ring_until_something_is_spent_and_red_only_when_over():
+    unspent, part, over, no_budget, rent = _node(
+        """[lineSlices({ budget: 400, spent: 0, over: false }), lineSlices({ budget: 400, spent: 100, over: false }),
+        lineSlices({ budget: 400, spent: 520, over: true }), lineSlices({ budget: 0, spent: 0, over: false }),
+        lineSlices({ budget: 1500, spent: 1500 }, "income")]""")
+    assert unspent == [{"value": 0, "color": "var(--b-spent)"}, {"value": 400, "color": "var(--b-ok)"}]
+    assert part == [{"value": 100, "color": "var(--b-spent)"}, {"value": 300, "color": "var(--b-ok)"}]
+    assert over == [{"value": 1, "color": "var(--b-over)"}]
+    assert no_budget == [{"value": 0, "color": "var(--b-spent)"}]
+    assert [s["color"] for s in rent] == ["var(--b-ok)", "var(--chip)"] and rent[0]["value"] == 1500
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node isn't installed")
+def test_the_chart_maths_never_prints_nan_and_scales_to_the_data():
+    out = _node("""[pieSvg(lineSlices({ budget: 400, spent: 100 }), 'x'), pieSvg(lineSlices({}), 'x'),
+        pieSvg([{ value: NaN, color: 'red' }, { value: Infinity, color: 'red' }, { value: -4, color: 'red' }], 'x'),
+        tipOf({ name: 'Initech', budget: 400, spent: 100, pct: 25, remaining: 300 }), tipOf({ name: 'Initech' }),
+        niceMax(3040), niceMax(0), niceMax(NaN), niceMax(76), shorten('Initech lunchroom supplies'),
+        esc('<a "b">')]""")
+    assert 'stroke-dasharray="25.00 75.00"' in out[0] and 'stroke-dasharray="75.00 25.00"' in out[0]
+    assert "<circle" in out[0] and out[1].count("<circle") == 1 and out[2].count("<circle") == 1  # just the track
+    assert out[3] == "Initech: budget $400, spent $100 (25% used), left $300"
+    assert out[4] == "Initech: budget —, spent —"
+    assert out[5:9] == [5000, 1, 1, 100] and out[9] == "Initech lunchro…" and out[10] == "&lt;a &quot;b&quot;&gt;"
+    assert "NaN" not in "".join(map(str, out)) and "Infinity" not in "".join(map(str, out))
+
+
+def test_the_page_has_a_cards_and_charts_toggle_remembered_in_the_browser():
+    html = web.page("t0ken").decode()
+    bar = html.split('id="budget-span"')[1].split('id="budget-demo"')[0]
+    assert 'id="budget-layout"' in bar and 'data-l="cards"' in bar and 'data-l="charts"' in bar
+    assert "taxtrace-budget-layout" in html and "function setLayout" in html
+    assert 'budgetLayout === "charts"' in html.split("function renderBudget")[1]
+
+
+def test_the_charts_view_is_a_bar_chart_the_key_then_a_pie_per_line_group_and_property_line():
+    html = web.page("t0ken").decode()
+    js = html.split("function barChart")[1].split("const btip")[0]
+    assert "function pieCard" in js and js.count("pieCard(") >= 4  # the lines, a group's sub-lines, property lines
+    assert "Spending by group type" in js and "Budget against spent, per line" in js
+    assert "Nothing to chart yet" in js and "paymentsModal(" in js and "<svg" in js and "https://" not in js
+    order = [js.rindex('class: "card cbar"'), js.rindex('"key ckey"'), js.rindex("Spending lines"),
+             js.rindex("    props);")]
+    assert order == sorted(order)  # the wide bar chart, then the key, then the pies, then the properties
+    assert "$1" not in js and "$2" not in js  # figures come from the data, none written into the page
+
+
+def test_the_charts_grid_is_four_to_a_row_on_wide_and_full_and_two_on_a_phone_and_themes_follow():
+    css = web.page("t0ken").decode().split("<style>")[1].split("</style>")[0]
+    assert 'data-width="wide"] .cpies' in css and "repeat(4, minmax(0, 1fr))" in css
+    assert "repeat(2, minmax(0, 1fr))" in css.split("@media (max-width: 640px) { .cpies")[1]
+    assert ".btip" in css and ".cpie:hover" in css and "@keyframes grow" in css and "var(--b-over)" in css
+
+
 def test_the_page_says_when_nothing_is_imported_for_the_period():
     html = web.page("t0ken").decode()
     assert "No actuals imported for this period yet" in html.split("function renderBudget")[1]

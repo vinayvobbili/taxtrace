@@ -206,6 +206,13 @@ latest month), or any imported month.
   a month, the net a month and a year (and a net tile), what was received and spent in the period in view, then a
   card per income or cost line in the same design: rent cards are green and say "received" and "still to come"
   (never "over"), costs say what fund pays for them. The info icons work as on any card.
+- **Cards | Charts** beside the period toggle (remembered in the browser). Charts shows, for the month or year to
+  date in view: a wide bar chart of budget against spent per line (spent turns red when over), the colour key, then
+  a pie for spending by group type and a ring per line, a group's sub-lines under its name, then each property's
+  net and one ring per rent or cost line. A ring is amber for spent and green for what remains, so a line with
+  nothing spent is a calm green ring, and one red ring when the line is over; rent fills green. Each says "budget
+  $X, spent $Y" from the data, hovering shows the amounts, and clicking a ring or a bar opens the payments behind it.
+  A period with no budget and no spending says there is nothing to chart.
 - **Demo data** shows a made-up household (with a rental property) instead of yours, to try the screen or take a
   picture of it.
 
