@@ -32,7 +32,7 @@ chat = ["anthropic>=0.40"]
 mcp = ["mcp>=2.2"]
 # Only to make the videos on the home page (scripts/videos/README.md): Kokoro narration on Apple Silicon, a browser.
 video = ["slidecast[mlx,playwright]>=0.5.1", "playwright>=1.49"]
-dev = ["pytest>=8", "ruff>=0.14", "reportlab>=4"]
+dev = ["pytest>=8", "ruff>=0.14", "reportlab>=4", "hatchling"]
 
 [project.scripts]
 taxtrace = "taxtrace.cli:main"
@@ -40,6 +40,11 @@ taxtrace-mcp = "taxtrace.mcp_server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["taxtrace"]
+# Never a person's budget, rules or bank exports (tests/test_budget_guards.py builds both and checks the files).
+exclude = ["budget/", "statements/", "actuals/", "ledger.jsonl", "rules.toml", "budget-*.toml", "*.csv"]
+
+[tool.hatch.build.targets.sdist]
+exclude = ["budget/", "statements/", "actuals/", "ledger.jsonl", "rules.toml", "budget-*.toml", "*.csv"]
 
 [tool.ruff]
 line-length = 120

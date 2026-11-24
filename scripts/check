@@ -12,7 +12,14 @@ cd "$(dirname "$0")/.."
 # Keep these in step with the matrix in .github/workflows/ci.yml.
 VERSIONS=(3.10 3.13)
 
-# Tests make their own workspace; never let them find the real one.
+# No budget file or CSV tracked, and a workspace outside the repo. Before TAXTRACE_HOME is unset, so the shell's
+# own setting is the one checked.
+echo "== Budget guards"
+python3 scripts/check_budget_guards.py
+
+# Tests make their own workspace; never let them find the real one. The audit gets it back: it reads the budget
+# files there to look for their merchants and amounts in this repository.
+WORKSPACE="${TAXTRACE_HOME:-}"
 unset TAXTRACE_HOME
 
 for v in "${VERSIONS[@]}"; do
@@ -28,7 +35,7 @@ if [[ -n "${PRE_PUSH_AUDIT:-}" ]]; then
   echo "== Privacy audit"
   # Word-split on purpose: the variable holds a command and its options.
   # shellcheck disable=SC2086
-  $PRE_PUSH_AUDIT "$PWD"
+  TAXTRACE_HOME="$WORKSPACE" $PRE_PUSH_AUDIT "$PWD"
 else
   echo "== Privacy audit: SKIPPED, PRE_PUSH_AUDIT isn't set in this shell" >&2
 fi

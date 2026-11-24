@@ -20,6 +20,16 @@ build/
 *.heic
 TaxData/
 redacted/
+# The household budget (its plan, rules, bank and card exports, ledger) lives in the workspace, never here.
+# tests/ only ever holds made-up files, so a CSV is allowed in tests/data/ alone.
+budget/
+statements/
+actuals/
+ledger.jsonl
+rules.toml
+budget-*.toml
+*.csv
+!tests/data/*.csv
 # Rendered videos and their clips (scripts/videos/make-videos); the published ones are copied to site/
 scripts/videos/out/
 # except the app's own icons, rendered from the SVGs beside them by scripts/make_icons.py
