@@ -53,6 +53,7 @@ taxtrace w2 "2026 W-2 Initech.pdf"              # a W-2, every box
 taxtrace entry --year 2026                      # the entry sheet, plus what is still to come
 taxtrace agi --year 2026                        # adjusted gross income, against the filed return if any
 taxtrace ui                                     # the workspace and a chat in the browser
+taxtrace budget status                          # the household budget against what was spent (Budget tab too)
 taxtrace --help                                 # every command
 ```
 
@@ -64,6 +65,7 @@ Start by putting your documents in a workspace folder, one subfolder per tax yea
 - Federal tax tables are built in for 2025 and 2026, for single and joint returns. The alternative minimum tax and Form 8995-A (the long form of the business-income deduction) are not worked out, and the output says so.
 - The only state return is North Carolina's Form D-400 (full-year residents).
 - Readers are written for the layouts seen so far: printouts from Drake (a tax preparer's software), common broker and lender forms, and some Indian bank statements. An unfamiliar layout becomes a question, not a guess.
+- The budget reads CSV exports and pipe-separated lists you download yourself: no bank login, no aggregator.
 - macOS is the best-supported system: the Keychain password handling (for locked PDFs), the always-on service and local MLX models are macOS only.
 - Local-only: nothing is sent anywhere unless you turn on the chat's cloud models, and those see masked text. The only other outside lookup is public exchange rates for foreign amounts (a currency and a date, nothing about you). The MCP server (the way an AI assistant such as Claude calls taxtrace's tools) returns masked text only and is read-only.
 
@@ -77,6 +79,7 @@ Everything else is in [docs](https://github.com/vinayvobbili/taxtrace/blob/main/
 - [Planning](https://github.com/vinayvobbili/taxtrace/blob/main/docs/planning.md): estimated tax, IRAs, a job change, stock sales
 - [The return](https://github.com/vinayvobbili/taxtrace/blob/main/docs/return.md): entry sheet, AGI, total tax, North Carolina
 - [Foreign side](https://github.com/vinayvobbili/taxtrace/blob/main/docs/foreign.md): India's return, bank statements, FBAR, Form 1116
+- [Budget](https://github.com/vinayvobbili/taxtrace/blob/main/docs/budget.md): a household budget against your bank and card exports, and the Budget tab
 - [Chat](https://github.com/vinayvobbili/taxtrace/blob/main/docs/chat.md) and the [MCP server and agent skill](https://github.com/vinayvobbili/taxtrace/blob/main/docs/mcp.md): masked, read-only views of your workspace for Claude or another AI assistant (MCP is the protocol they use to call tools)
 - [Development](https://github.com/vinayvobbili/taxtrace/blob/main/docs/development.md)
 
