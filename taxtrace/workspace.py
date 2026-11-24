@@ -37,9 +37,13 @@ TAX = "tax"  # the year's Form 1040 lines 12e to 24 and Form 1116's credit
 YOY = "yoy"  # the year against the one before: what's missing, what moved
 TODO = "todo.md"  # the money and tax to-do list, written by hand
 BUDGET = "budget"  # the household budget: its plan, rules, bank and card exports and ledger
+# Raw bank and card exports and pasted transactions: kept in a folder on this computer only (budget_import), and
+# never read as documents should one be made in the workspace by hand.
+STATEMENTS = "statements"
+PASTED = "pasted"
 # taxtrace's own files and folders in the workspace, never read back as documents: its output and its settings
 DERIVED = {OCR_CACHE, REDACTED, MANIFEST, TERMS_FILE, CARRYFORWARDS, K1, PASSIVE, FORMS, SCHEDULE_E, FOREIGN, FX, QBI,
-           ESTIMATES, IRA, JOBCHANGE, SALES, MOVES, ENTRY, AGI, D400, TAX, YOY, TODO, BUDGET}
+           ESTIMATES, IRA, JOBCHANGE, SALES, MOVES, ENTRY, AGI, D400, TAX, YOY, TODO, BUDGET, STATEMENTS, PASTED}
 KEYCHAIN_SERVICE = "taxtrace"
 KEYCHAIN_DEFAULT = "default"  # tried after the file's own entry: one password for every return a preparer sends
 

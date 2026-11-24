@@ -1,0 +1,26 @@
+Made-up transactions for an invented household, March 2031 (every payee and amount is invented)
+Format: date | account type | payee | category | amount (positive = spending, negative = refund or money in) | flags
+Rows: 3 PENDING + 11 posted = 14.
+
+PENDING
+2031-03-21 | Initech Rewards card | GLOBEX GROCERY #0042 | Groceries | 88.20 | PENDING
+2031-03-20 | unknown | Soylent Diner | Food & dining | 37.25 | PENDING
+2031-03-19 | unknown | Umbrella Streaming | Entertainment | 12.75 | PENDING
+
+POSTED
+2031-03-18 | unknown | Initech Card Payment | Transfer | 1180.00 | CARD PAYMENT, TRANSFER
+2031-03-17 | Checking 4417 | Vandelay Pharmacy | Health & fitness | 54.30 |
+2031-03-15 | unknown | Initech Payroll | Income | -2350.00 | INCOME
+2031-03-14 | unknown | Globex Outlet | Shopping | 129.99 |
+2031-03-12 | unknown | Globex Outlet | Shopping | -24.99 |
+2031-03-11 | unknown | Initech Fuel 0042 | Auto & transport | 64.10 |
+2031-03-09 | unknown | Wonka Treats | Food & dining | 18.40 |
+2031-03-09 | unknown | Wonka Treats | Food & dining | 18.40 |
+2031-03-06 | unknown | Umbrella County Tax | Taxes | 245.00 | ONE-OFF TAX
+2031-03-04 | unknown | Kramerica Gizmos | Shopping | 57.80 |
+2031-03-02 | unknown | Savings Sweep | Transfer | -0.35 | TRANSFER
+
+TOTALS PER CATEGORY
+Groceries | 88.20
+Shopping | 162.80
+Sum of the above = 251.00

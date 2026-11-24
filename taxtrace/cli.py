@@ -1741,6 +1741,115 @@ def cmd_todo(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_budget(args: argparse.Namespace) -> int:
+    """The household budget against what was spent, in <workspace>/budget/ (never read as documents): `init` writes
+    a made-up sample to try, `import` reads a month's bank or card export (CSV) or pipe-separated transactions,
+    `rules` lists payee rules, adds one or lists the payees no rule matches, and `status` shows each line's budget,
+    spent, remaining, % used and pace, for a month or the year to date. Raw exports are copied to a folder on this
+    computer only (TAXTRACE_BUDGET_PRIVATE), never the workspace. The page's Budget tab shows the same.
+    """
+    from . import budget, budget_demo, budget_import
+
+    home = workspace.outside_git(workspace.home())
+    folder = workspace.outside_git(Path(args.dir).expanduser() if args.dir else home / workspace.BUDGET)
+    try:
+        if args.action == "init":
+            sample = folder / "sample" if not args.dir else folder
+            written = budget_demo.write_sample(sample, args.year or date.today().year, force=args.force)
+            for path in written:
+                print(f"wrote {path}")
+            print(f"A made-up household to try: taxtrace budget status --dir '{sample}'. Copy its budget-*.toml "
+                  f"and rules.toml to {home / workspace.BUDGET} and make them yours.")
+            return 0
+        plan = budget.load_plan(folder)
+        if plan is None:
+            print(f"no budget-<year>.toml in {folder}: `taxtrace budget init` writes a made-up one to copy",
+                  file=sys.stderr)
+            return 1
+        rules = budget.load_rules(folder, plan)
+        if args.action == "import":
+            private = budget_import.check_private(budget_import.private_home(), home)
+            report = budget_import.import_file(Path(args.file).expanduser(), args.month, folder, plan, rules,
+                                               source=args.source, trial=args.trial, sign=args.sign,
+                                               keep_to=None if args.no_keep else private)
+            print("\n".join(report.lines()))
+            print(f"wrote {report.path}" + (f"; the file is kept in {report.kept.parent}" if report.kept else ""))
+            return 0
+        if args.action == "rules":
+            return _budget_rules(args, folder, plan, rules)
+        return _budget_status(args, plan, rules, budget.load_actuals(folder))
+    except budget.BudgetError as err:
+        print(f"taxtrace budget: {err}", file=sys.stderr)
+        return 2
+
+
+def _budget_rules(args: argparse.Namespace, folder: Path, plan, rules) -> int:
+    from . import budget, budget_import
+
+    if args.add:
+        rule = budget.parse_rule_text(args.add)
+        if rule.line is not None:
+            found = plan.find(rule.line)
+            if found is None:
+                raise budget.BudgetError(f"{rule.line!r} isn't a line or fund in the budget")
+            rule = budget.Rule(rule.words, found.name, rule.exclude, rule.one_off)
+        with (folder / budget.RULES_FILE).open("a", encoding="utf-8") as f:
+            f.write(budget.rule_toml(rule))
+        months = budget_import.refresh(folder, plan, budget.load_rules(folder, plan))
+        print(f"added: {rule.describe()}\n{months} months re-sorted with it")
+        return 0
+    if args.unmatched:
+        found = budget_import.unmatched_payees(folder, plan, rules, args.month)
+        for payee, n in found:
+            print(f"  {payee} ({n} row{'s' if n > 1 else ''})")
+        print(f"{len(found)} payees match no rule" if found else "every payee matches a rule")
+        return 0
+    for n, rule in enumerate(rules, 1):
+        print(f"  {n}. {rule.describe()}")
+    print(f"{len(rules)} rules in {folder / budget.RULES_FILE}" if rules else
+          "no rules yet: add one with taxtrace budget rules --add \"payee words -> line\"")
+    return 0
+
+
+def _budget_status(args: argparse.Namespace, plan, rules, actuals) -> int:
+    from . import budget
+
+    if args.month and args.month != "ytd":
+        budget.month_key(args.month)
+    s = budget.status(plan, rules, actuals, args.month or None)
+    ytd = s["view"] == "ytd"
+
+    def num(v) -> str:
+        return "—" if v is None else f"{v:,.2f}"
+
+    def pct(v) -> str:
+        return "—" if v is None else f"{v:.0f}%"
+    print(f"Budget {s['label']}" + (f" ({s['elapsed']:g} months)" if ytd else ""))
+    if not s["rows"]:
+        print("  nothing imported for it yet: taxtrace budget import <file> --month YYYY-MM")
+    print(f"  {'line':<34}{'budget':>12}{'spent':>12}{'remaining':>12}{'used':>7}{'pace':>7}"
+          + (f"{'avg/month':>12}" if ytd else ""))
+    for x in sorted(s["lines"], key=lambda x: not x["over"]):
+        print(f"  {x['name'][:33]:<34}{num(x['budget']):>12}{num(x['spent']):>12}{num(x['remaining']):>12}"
+              f"{pct(x['pct']):>7}{pct(x['pace']):>7}" + (f"{num(x['avg']):>12}" if ytd else "")
+              + (" CAP" if x["cap"] else "") + (" OVER" if x["over"] else " near" if x["near"] else ""))
+    t = s["totals"]
+    print(f"  {'Total':<34}{num(t['budget']):>12}{num(t['spent']):>12}{num(t['remaining']):>12}{pct(t['pct']):>7}"
+          f"{pct(t['pace']):>7}" + (f"{num(t['avg']):>12}" if ytd else ""))
+    if s["funds"]:
+        print(f"  {'sinking fund':<34}{'transfers':>12}{'spent':>12}{'balance':>12}{'target':>12}")
+        for f in s["funds"]:
+            print(f"  {f['name'][:33]:<34}{num(f['transfers']):>12}{num(f['spent']):>12}{num(f['balance']):>12}"
+                  f"{num(f['target']):>12}")
+    o = s["other"]
+    print(f"{t['over']} lines over budget, {t['near']} near ({s['near']}% used or more)")
+    print(f"{o['pending']['count']} pending rows counted, {o['refunds']['count']} refunds "
+          f"({'netted' if s['refunds'] == 'net' else 'left out'}), {o['one_off']['count']} one-off, "
+          f"{o['excluded']['count']} left out as transfers or income, {o['unmatched']['count']} rows from "
+          f"{o['unmatched']['payees']} payees match no rule")
+    return 0
+
+
 def cmd_fbar(args: argparse.Namespace) -> int:
     """Each spouse's FBAR (FinCEN Form 114) for a year, item by item, into <workspace>/foreign/fbar-<year>.txt (a
     checklist to type into the BSA e-filing form) and fbar-<year>.json, from what `foreign` saved for the year.
@@ -2511,6 +2620,37 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--due", type=int, nargs="?", const=7, default=None, metavar="DAYS",
                    help="only the overdue items and those due in the next DAYS days (default: 7)")
     p.set_defaults(func=cmd_todo)
+    p = sub.add_parser("budget", help="the household budget against what was spent, from bank and card exports",
+                       description=cmd_budget.__doc__)
+    where = argparse.ArgumentParser(add_help=False)
+    where.add_argument("--dir", help="the budget folder (default: <workspace>/budget)")
+    acts = p.add_subparsers(dest="action", required=True)
+    a = acts.add_parser("init", parents=[where], help="write a made-up sample budget, rules and month to try")
+    a.add_argument("--year", type=int, help="the sample's year (default: this one)")
+    a.add_argument("--force", action="store_true", help="write over a sample already there")
+    a = acts.add_parser("import", parents=[where],
+                        help="read a month's CSV export or pipe-separated transactions into the budget")
+    a.add_argument("file", help="the export (CSV) or a pipe-separated list: date | account | payee | category | "
+                                "amount | flags")
+    a.add_argument("--month", required=True,
+                   help="the month the rows belong to, YYYY-MM (rows outside it are left out)")
+    a.add_argument("--source", help="a name for this export (default: the file's name); importing it again "
+                                    "replaces what it gave before")
+    a.add_argument("--trial", action="store_true", help="a try-out month before the plan's year: shown on its own, "
+                                                        "never in the year's totals")
+    a.add_argument("--sign", choices=["spend-negative", "spend-positive"],
+                   help="how the CSV's amount column writes spending (default: read off the rows)")
+    a.add_argument("--no-keep", action="store_true", help="don't copy the file to the private statements folder")
+    a = acts.add_parser("rules", parents=[where], help="list the payee rules, add one, or list unmatched payees")
+    a.add_argument("--add", metavar="RULE", help='a rule: "payee words -> line", "words -> EXCLUDE", '
+                                                '"words -> EXCLUDE ONE-OFF"')
+    a.add_argument("--unmatched", action="store_true", help="the payees no rule matches, with their row counts")
+    a.add_argument("--month", help="--unmatched: only this month, YYYY-MM")
+    a = acts.add_parser("status", parents=[where],
+                        help="each line's budget, spent, remaining, share used and pace, for a month or the year")
+    a.add_argument("--month", help="YYYY-MM, or ytd for the year to date (default: the year to date once it has a "
+                                   "month imported, else the latest month)")
+    p.set_defaults(func=cmd_budget)
     p = sub.add_parser("foreign", help="a year's foreign side in dollars: a property sold abroad, the tax kept there, "
                                        "the accounts' interest and balances", description=cmd_foreign.__doc__)
     p.add_argument("--year", type=int, required=True, help="the tax year")
