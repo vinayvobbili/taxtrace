@@ -142,6 +142,44 @@ def test_a_sub_lines_payments_are_its_own(server, grouped):
     assert len(get(server, "/api/budget/payments?view=2031-03&line=Initech+Utilities")[1]["payments"]) == 4
 
 
+def test_the_payments_add_up_to_the_spent_figure_of_every_card(server, grouped):
+    d = get(server, "/api/budget?view=2031-03")[1]
+    cards = [x for x in d["lines"]] + [s for x in d["lines"] for s in x.get("subs", []) if not s.get("unsplit")]
+    for card in cards:
+        got = get(server, "/api/budget/payments?view=2031-03&line=" + card["name"].replace(" ", "+"))[1]
+        assert got["total"] == card["spent"], card["name"]
+        assert got["count"] == len(got["payments"]) == card["count"]
+
+
+def test_the_payments_total_follows_the_card_when_refunds_are_left_out(server, grouped):
+    (grouped / "budget-2031.toml").write_text(GROUPED_PLAN.replace("year = 2031", 'year = 2031\nrefunds = "exclude"'))
+    (grouped / "rules.toml").write_text(GROUPED_RULES + '\n[[rules]]\nmatch = "Initech Refund"\nline = "Water"\n')
+    (grouped / "actuals" / "2031-04.json").write_text(json.dumps({"month": "2031-04", "transactions": [
+        {"date": "2031-04-02", "payee": "Initech Water Works", "amount": "30.00"},
+        {"date": "2031-04-03", "payee": "Initech Refund", "amount": "-10.00"}]}))
+    water = next(s for x in get(server, "/api/budget?view=2031-04")[1]["lines"] for s in x.get("subs", [])
+                 if s["name"] == "Water")
+    got = get(server, "/api/budget/payments?view=2031-04&line=Water")[1]
+    assert (water["spent"], got["total"], got["count"]) == (30, 30, 2)
+    assert [(p["amount"], p["excluded"]) for p in got["payments"]] == [(-10, "refund"), (30, None)]
+
+
+def test_the_payments_total_matches_the_demo_households_spent_on_every_line(server, workspace_home):
+    d = get(server, "/api/budget?demo=1")[1]
+    for card in [*d["lines"], *(s for x in d["lines"] for s in x.get("subs", []) if not s.get("unsplit")), *d["funds"]]:
+        got = get(server, "/api/budget/payments?demo=1&line=" + card["name"].replace(" ", "+"))[1]
+        assert got["total"] == pytest.approx(card["spent"], abs=.01), card["name"]
+
+
+def test_the_page_opens_the_payments_in_the_shared_dialog_and_has_no_show_payments_links():
+    html = web.page("t0ken").decode()
+    assert "Show payments" not in html and "paymentsBox" not in html and "<details" not in html.split("<script>")[1]
+    js = html.split("function paymentsModal")[1].split("function lineCard")[0]
+    assert "openModal({" in js and "No payments in this period." in js and "Payments behind this number" in js
+    assert "How this budget was set" in html and html.count("spentBtn(") >= 3
+    assert "p.line !== name" in js  # a group's rows name their sub-line
+
+
 def test_the_totals_come_from_the_parent_so_nothing_counts_twice(server, grouped):
     d = get(server, "/api/budget?view=2031-03")[1]
     t = d["totals"]

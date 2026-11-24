@@ -148,12 +148,14 @@ def budget_screen(view: str | None = None, demo: bool = False, today: date | Non
 
 
 def budget_payments(view: str | None, name: str, demo: bool = False, today: date | None = None) -> dict:
-    """The transactions behind one line or fund (or the unmatched or left-out rows), for "show payments"."""
+    """The transactions behind one line, sub-line or fund (or the unmatched or left-out rows), for the page's
+    "Payments behind this number", with their count and the total that the card's Spent figure shows."""
     found = _budget(demo, today)
     if found is None:
-        return {"payments": []}
+        return {"payments": [], "count": 0, "total": 0}
     view = view or budget.default_view(found[0], found[2], today or date.today())
-    return {"payments": budget.payments(*found, view, name, today)}
+    rows = budget.payments(*found, view, name, today)
+    return {"payments": rows, "count": len(rows), "total": budget.payments_total(rows, name)}
 
 
 def upload_name(name: str) -> PurePosixPath:

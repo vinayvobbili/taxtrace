@@ -514,11 +514,9 @@ form.input button { border: 0; border-radius: 13px; background: var(--grad); col
 .btotal { padding: 8px 12px; border-radius: 10px; background: var(--chip); font-size: 14px; } .btotal b { font-weight: 800; }
 .btotal.res { background: var(--gg, var(--grad)); color: #fff; }
 .pays-modal .pays { margin-top: 0; }
-.bcard details { margin-top: 10px; }
-.bcard summary { cursor: pointer; font-size: 12.5px; font-weight: 700; color: var(--gc, var(--accent)); list-style: none; user-select: none; }
-.bcard summary::-webkit-details-marker { display: none; }
-.bcard summary::before { content: "\25B8"; display: inline-block; margin-right: 6px; transition: transform .15s; }
-.bcard details[open] summary::before { transform: rotate(90deg); }
+.bfig dt, .bgfig dt { display: flex; align-items: center; gap: 5px; }
+.bfig dt .ibtn, .bgfig dt .ibtn { width: 17px; height: 16px; margin: 0; font-size: 11px; }
+.bother b .ibtn { margin-left: 8px; vertical-align: 3px; }
 .pays { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12.5px; }
 .pays td { padding: 5px 4px; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); vertical-align: top; }
 .pays tr:last-child td { border-bottom: 0; }
@@ -1158,25 +1156,34 @@ function basisBtn(x) {
   return iBtn("basis", `How the ${x.name} budget was set`, "How this budget was set", () =>
     openModal({ title: x.name, sub: "How this budget was set", body: basisBody(x), group: x.group ? `grp-${x.group}` : "" }));
 }
-function paymentsBox(name, count, ownOnly = false) {  // "show payments": the rows behind a line, loaded from this computer when opened
-  const box = h("details", {}, h("summary", {}, `Show payments (${count})`));
-  box.addEventListener("toggle", async () => {
-    if (!box.open || box.dataset.loaded) return;
-    box.dataset.loaded = "1";
-    const holder = h("div", { class: "how", style: "margin-top:8px" }, "Loading…");
-    box.append(holder);
-    try {
-      const d = await api("/api/budget/payments?" + budgetQuery({ line: name }));
-      const rows = ownOnly ? d.payments.filter(p => p.line === name) : d.payments;  // a parent's own, not its sub-lines'
-      holder.replaceWith(rows.length ? h("table", { class: "pays" }, h("tbody", {}, rows.map(p => h("tr", {},
-        h("td", { class: "d" }, shortDay(p.date)),
-        h("td", { class: "p" }, p.payee, p.pending ? h("span", { class: "tagp" }, "pending") : null,
-          p.refund ? h("span", { class: "tagp" }, "refund") : null, p.one_off ? h("span", { class: "tagp" }, "one-off") : null,
-          p.line && p.line !== name ? h("span", { class: "tagp" }, p.line) : null, p.account ? h("span", { class: "acct" }, p.account) : null),
-        h("td", { class: "a" }, cents(p.amount)))))) : h("div", { class: "how", style: "margin-top:8px" }, "No payments in this period."));
-    } catch (e) { holder.textContent = `Couldn't load them: ${e.message}`; box.dataset.loaded = ""; }
-  });
-  return box;
+// the Spent figure's info icon: the payments behind it for the selected view, in the same dialog as the basis. `ownOnly`
+// is a parent's own payments (its "Not split" card), without its sub-lines'.
+function paymentsModal(title, name, ownOnly = false, group = "") {
+  const body = h("div", { class: "pays-modal" }, h("p", { class: "how" }, "Loading…"));
+  const dlg = openModal({ title: `${title} spent`, sub: budgetData.label, body, group });
+  api("/api/budget/payments?" + budgetQuery({ line: name })).then(d => {
+    const rows = ownOnly ? d.payments.filter(p => p.line === name) : d.payments;  // a parent's own, not its sub-lines'
+    const bucket = name === "unmatched" || name === "excluded";
+    const counted = bucket ? rows : rows.filter(p => !p.excluded);
+    const total = ownOnly ? counted.reduce((s, p) => s + Number(p.amount), 0) : d.total;
+    dlg.querySelector(".bmodal-head p").textContent = `${budgetData.label} · ${rows.length} payment${rows.length === 1 ? "" : "s"}`;
+    body.replaceChildren(rows.length ? h("table", { class: "pays" }, h("tbody", {}, rows.map(p => h("tr", {},
+      h("td", { class: "d" }, shortDay(p.date)),
+      h("td", { class: "p" }, p.payee, p.pending ? h("span", { class: "tagp" }, "pending") : null,
+        p.refund ? h("span", { class: "tagp" }, "refund") : null, p.one_off ? h("span", { class: "tagp" }, "one-off") : null,
+        p.excluded && !bucket ? h("span", { class: "tagp" }, "left out") : null,
+        p.line && p.line !== name ? h("span", { class: "tagp" }, p.line) : null, p.account ? h("span", { class: "acct" }, p.account) : null),
+      h("td", { class: "a" }, cents(p.amount))))))
+      : h("p", { class: "how" }, "No payments in this period."),
+      rows.length ? h("div", { class: "btotal", "data-total": finite(total) ? Number(total).toFixed(2) : "" }, h("span", {}, "Total"), h("b", {}, cents(total))) : null);
+  }).catch(e => { body.replaceChildren(h("p", { class: "how" }, `Couldn't load them: ${e.message}`)); });
+  return dlg;
+}
+function spentBtn(title, name, ownOnly = false, group = "") {
+  return iBtn("pay", `Payments behind ${title}`, "Payments behind this number", () => paymentsModal(title, name, ownOnly, group));
+}
+function spentFig(x, name, ownOnly = false) {  // the Spent figure with its payments icon
+  return h("div", {}, h("dt", {}, "Spent", spentBtn(x.name, name, ownOnly, x.group ? `grp-${x.group}` : "")), h("dd", {}, money(x.spent)));
 }
 function lineCard(x, i, ytd) {  // a line, or one sub-line of a group: the same card, in the group's colour
   const group = budgetData.groups[x.group] || { label: x.group };
@@ -1188,14 +1195,14 @@ function lineCard(x, i, ytd) {  // a line, or one sub-line of a group: the same 
         x.cap ? h("span", { class: "badge cap" }, "CAP") : null, x.over ? h("span", { class: "badge over" }, "OVER") : null,
         x.near ? h("span", { class: "badge near" }, "NEAR") : null)),
       unsplit ? donut(0, 0) : donut(x.spent, x.budget)),
-    h("dl", { class: "bfig" }, fig(ytd ? "Budget so far" : "Budget", unsplit ? "none" : money(x.budget)), fig("Spent", money(x.spent)),
+    h("dl", { class: "bfig" }, fig(ytd ? "Budget so far" : "Budget", unsplit ? "none" : money(x.budget)),
+      spentFig(x, unsplit ? x.parent : x.name, unsplit),
       unsplit ? fig("Left", "—") : fig(left < 0 ? "Over by" : "Left", money(Math.abs(left)), left < 0 ? "neg" : "")),
     unsplit ? h("div", { class: "meter" }, h("i", { style: "width:0" })) : meter(x.spent, x.budget),
     h("div", { class: "bnote" }, h("span", {}, h("b", {}, pctText(x.pct)), " used · pace ", h("b", {}, pctText(x.pace))),
       unsplit ? h("span", {}, "avg ", h("b", {}, money(x.avg)), " / month")
         : ytd ? h("span", {}, "avg ", h("b", {}, money(x.avg)), " / month of ", h("b", {}, money(x.monthly)))
-          : h("span", {}, h("b", {}, money(x.yearly)), " a year")),
-    x.count ? paymentsBox(unsplit ? x.parent : x.name, x.count, unsplit) : null);
+          : h("span", {}, h("b", {}, money(x.yearly)), " a year")));
 }
 function groupHead(x, i, ytd) {  // a parent line is a heading over its sub-lines' cards: its totals, no card of its own
   const group = budgetData.groups[x.group] || { label: x.group }, left = x.remaining;
@@ -1204,7 +1211,7 @@ function groupHead(x, i, ytd) {  // a parent line is a heading over its sub-line
     h("div", { class: "bname" }, nameRow(x.name, basisBtn(x)), h("div", { class: "badges" }, h("span", { class: "badge" }, group.label),
       x.cap ? h("span", { class: "badge cap" }, "CAP") : null, x.over ? h("span", { class: "badge over" }, "OVER") : null,
       x.near ? h("span", { class: "badge near" }, "NEAR") : null)),
-    h("dl", { class: "bgfig" }, fig(ytd ? "Budget so far" : "Budget", money(x.budget)), fig("Spent", money(x.spent)),
+    h("dl", { class: "bgfig" }, fig(ytd ? "Budget so far" : "Budget", money(x.budget)), spentFig(x, x.name),
       fig(left < 0 ? "Over by" : "Left", money(Math.abs(left)), left < 0 ? "neg" : "")),
     h("div", { class: "bgyear" }, h("b", {}, pctText(x.pct)), " used · ", h("b", {}, money(x.yearly)), " a year"),
     meter(x.spent, x.budget));
@@ -1231,21 +1238,20 @@ function fundCard(f, i) {
         f.cap ? h("span", { class: "badge cap" }, "CAP") : null, f.over ? h("span", { class: "badge over" }, "OVERDRAWN") : null)),
       donut(started ? f.balance : 0, f.target, "fund")),
     h("dl", { class: "bfig" }, fig("Balance", started ? money(f.balance) : "—", started && f.balance < 0 ? "neg" : ""),
-      fig("Target", money(f.target)), fig("Spent", money(f.spent))),
+      fig("Target", money(f.target)), f.count ? spentFig({ name: f.name, spent: f.spent }, f.name) : fig("Spent", money(f.spent))),
     started ? meter(Math.max(f.balance, 0), f.target) : null,
     h("div", { class: "bnote" }, started ? h("span", {}, "in ", h("b", {}, money(f.transfers)), " · planned to pay ", h("b", {}, money(f.planned)))
-      : h("span", {}, `Starts with the ${budgetData.year} plan`), h("span", {}, h("b", {}, money(f.monthly)), " / month")),
-    f.count ? paymentsBox(f.name, f.count) : null);
+      : h("span", {}, `Starts with the ${budgetData.year} plan`), h("span", {}, h("b", {}, money(f.monthly)), " / month")));
 }
 function otherCards(o) {
-  const tile = (n, label, extra = null) => h("div", { class: "card" }, h("b", {}, n), h("div", { class: "lbl" }, label), extra);
+  const tile = (n, label, extra = null) => h("div", { class: "card" }, h("b", {}, n, extra), h("div", { class: "lbl" }, label));
   return h("div", { class: "bother" },
     tile(o.pending.count, `pending, counted in their lines (${money(o.pending.total)})`),
     tile(o.refunds.count, `refunds, ${budgetData.refunds === "net" ? "netted in their lines" : "left out"} (${money(-o.refunds.total)})`),
     tile(o.one_off.count, `one-off (${money(o.one_off.total)})`),
-    tile(o.excluded.count, "left out: transfers, card payments, income", o.excluded.count ? paymentsBox("excluded", o.excluded.count) : null),
+    tile(o.excluded.count, "left out: transfers, card payments, income", o.excluded.count ? spentBtn("Left out", "excluded") : null),
     tile(o.unmatched.count, `match no rule, from ${o.unmatched.payees} payee${o.unmatched.payees === 1 ? "" : "s"} (${money(o.unmatched.total)})`,
-      o.unmatched.count ? paymentsBox("unmatched", o.unmatched.count) : null));
+      o.unmatched.count ? spentBtn("Unmatched", "unmatched") : null));
 }
 function budgetEmpty(d) {
   $("budget-stats").replaceChildren();

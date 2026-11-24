@@ -154,8 +154,11 @@ latest month), or any imported month.
 - "Where our money goes": spending by group as one bar, with the groups' colours: blue fixed bills, teal daily
   essentials, violet family, orange discretionary.
 - A card per line, over-budget lines first: its icon, budget, spent, left, share used, a bar and a ring (green
-  left, amber spent, red when over), and "Show payments", which loads that line's rows from this computer. Account
-  numbers are never shown: an account's digits become ••••.
+  left, amber spent, red when over). A small **≡** icon beside "Spent" opens a dialog titled "<line> spent" with the
+  payments behind that number for the selected month or the year to date: date, payee (flags for pending, refund
+  and one-off), amount, newest first, and a total that equals the card's Spent figure; no payments says so. A group
+  header's lists all its sub-lines' payments with the sub-line's name on each row. The rows load from this computer
+  when opened. Account numbers are never shown: an account's digits become ••••.
 - A line with sub-lines is a heading, not a card: a full-width header with its icon, group, total budget, spent and
   left, a thin bar and the year's figure, and under it one card per sub-line, the same card as any other line in
   the group's colour, over-budget ones first, each with its own payments. Payments that match the parent but no

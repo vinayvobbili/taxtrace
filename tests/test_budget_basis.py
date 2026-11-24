@@ -180,7 +180,7 @@ def test_the_made_up_household_has_a_basis_on_some_of_its_lines():
 
 def test_the_page_has_one_modal_for_the_info_icons_with_the_empty_state():
     html = web.page("t0ken").decode()
-    js = html.split("function openModal")[1].split("function paymentsBox")[0]
+    js = html.split("function openModal")[1].split("function paymentsModal")[0]
     assert "showModal()" in js and 'e.target === dlg' in js and "opener.focus()" in js
     assert "How this budget was set" in js and "No basis recorded yet." in js and "taxtrace budget basis" in js
     css = html.split("<style>")[1].split("</style>")[0]

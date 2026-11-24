@@ -676,6 +676,13 @@ def view_label(plan: Plan, view: str, months: list[str], today: date, trial: boo
             f"{'' if first == last else ' to ' + calendar.month_abbr[int(last[5:])]}")
 
 
+def payments_total(rows: list[dict], name: str) -> float | None:
+    """What `payments` rows add up to, which is the card's Spent figure: the rows that count toward a line (not a
+    refund that refunds = "exclude" leaves out), or every row of the "unmatched" and "excluded" buckets."""
+    counted = rows if name in ("unmatched", "excluded") else [r for r in rows if not r["excluded"]]
+    return _num(sum((Decimal(str(r["amount"])) for r in counted), ZERO))
+
+
 def payments(plan: Plan, rules: list[Rule], actuals: dict[str, Month], view: str, name: str,
              today: date | None = None) -> list[dict]:
     """The transactions behind one line (its sub-lines too), fund, or the "unmatched" or "excluded" rows, newest
