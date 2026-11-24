@@ -119,6 +119,8 @@ class Line:
     subs: list[Line] = field(default_factory=list)
     parent: str | None = None
     basis: Basis | None = None
+    kind: str = ""  # "income" or "cost" on a rental property's line; blank on the household's own
+    funded_by: str | None = None  # a property cost that a sinking fund pays for (its name), for the page to say so
 
     def budget(self, month: str) -> Decimal:
         if month in self.overrides:
@@ -145,6 +147,24 @@ class Fund:
 
 
 @dataclass
+class Property:
+    """A rental property: what comes in (rent) and what goes out (repairs, cleaning, tax, insurance, HOA), each a
+    line like the household's, kept apart from the household's own lines, groups and totals."""
+    name: str
+    icon: str = ""
+    income: list[Line] = field(default_factory=list)
+    costs: list[Line] = field(default_factory=list)
+    basis: Basis | None = None
+
+    def lines(self) -> list[Line]:
+        return [*self.income, *self.costs]
+
+    def net(self, month: str) -> Decimal:
+        """What it is meant to bring in net in `month`: the income budgeted less the costs budgeted."""
+        return (sum((x.budget(month) for x in self.income), ZERO) - sum((x.budget(month) for x in self.costs), ZERO))
+
+
+@dataclass
 class Plan:
     year: int
     lines: list[Line]
@@ -152,6 +172,7 @@ class Plan:
     refunds: str = "net"
     near: int = NEAR
     cash: dict[str, Decimal] = field(default_factory=dict)  # reachable cash planned at each month's end (optional)
+    properties: list[Property] = field(default_factory=list)
 
     def months(self) -> list[str]:
         return [f"{self.year}-{m:02d}" for m in range(1, 13)]
@@ -163,13 +184,27 @@ class Plan:
         return sum((line.budget(m) for m in self.months()), ZERO)
 
     def find(self, name: str) -> Line | Fund | None:
-        """The line, sub-line or fund named `name`, in any case."""
+        """The line, sub-line, property line or fund named `name`, in any case."""
         want = name.strip().casefold()
         for line in self.lines:
             for item in (line, *line.subs):
                 if item.name.casefold() == want:
                     return item
+        for prop in self.properties:
+            for item in prop.lines():
+                if item.name.casefold() == want:
+                    return item
         return next((f for f in self.funds if f.name.casefold() == want), None)
+
+    def property(self, name: str) -> Property | None:
+        want = name.strip().casefold()
+        return next((p for p in self.properties if p.name.casefold() == want), None)
+
+    def basis_targets(self) -> list[Line | Fund | Property]:
+        """Everything that can carry a basis, in the file's order: lines and their sub-lines, properties and their
+        lines, then funds."""
+        return [*(i for line in self.lines for i in (line, *line.subs)),
+                *(i for p in self.properties for i in (p, *p.lines())), *self.funds]
 
     def top(self, name: str) -> Line | None:
         """The top-level line that `name` (a line or a sub-line) counts toward."""
@@ -233,6 +268,40 @@ def _line(raw: dict, where: str, parent: Line | None = None) -> Line:
     return line
 
 
+def _property_line(raw: dict, where: str, prop: str, kind: str) -> Line:
+    if not isinstance(raw, dict) or not str(raw.get("name", "")).strip():
+        raise BudgetError(f"{where}: every {kind} line needs a name")
+    name = str(raw["name"]).strip()
+    if "monthly" not in raw:
+        raise BudgetError(f"{name}: give it a monthly amount (monthly = 1500)")
+    funded = str(raw.get("funded_by", "")).strip() or None
+    if funded and kind == "income":
+        raise BudgetError(f"{name}: funded_by is for costs, not income")
+    return Line(name=name, group="property", icon=str(raw.get("icon", "")), cap=bool(raw.get("cap", False)),
+                monthly=amount(raw["monthly"], f"{name} monthly"),
+                overrides=_month_amounts(raw.get("overrides"), f"{name} overrides"), parent=prop,
+                basis=_basis(raw.get("basis"), name), kind=kind, funded_by=funded)
+
+
+def _property(raw: dict, where: str) -> Property:
+    """A `[[properties]]` table: a name, an `income` list (rent) and a `costs` list, each a line with a monthly
+    amount, an optional `funded_by` (a sinking fund's name) and an optional basis."""
+    if not isinstance(raw, dict) or not str(raw.get("name", "")).strip():
+        raise BudgetError(f"{where}: every property needs a name")
+    name = str(raw["name"]).strip()
+    lists = {}
+    for key, kind in (("income", "income"), ("costs", "cost")):
+        items = raw.get(key) or []
+        if not isinstance(items, list):
+            raise BudgetError(f"{name}: {key} is a list of [[properties.{key}]] tables")
+        lists[key] = [_property_line(r, f"{name} {key} {i + 1}", name, kind) for i, r in enumerate(items)]
+    if not lists["income"] and not lists["costs"]:
+        raise BudgetError(f"{name}: give the property income (rent) or costs: [[properties.income]] or "
+                          f"[[properties.costs]]")
+    return Property(name=name, icon=str(raw.get("icon", "")), income=lists["income"], costs=lists["costs"],
+                    basis=_basis(raw.get("basis"), name))
+
+
 def _fund(raw: dict, where: str) -> Fund:
     if not isinstance(raw, dict) or not str(raw.get("name", "")).strip():
         raise BudgetError(f"{where}: every fund needs a name")
@@ -265,15 +334,22 @@ def parse_plan(text: str) -> Plan:
                 lines=[_line(raw, f"line {i + 1}") for i, raw in enumerate(data.get("lines") or [])],
                 funds=[_fund(raw, f"fund {i + 1}") for i, raw in enumerate(data.get("funds") or [])],
                 cash={month_key(str(r.get("month"))): amount(r.get("plan"), f"cash {r.get('month')}")
-                      for r in data.get("cash") or []})
+                      for r in data.get("cash") or []},
+                properties=[_property(raw, f"property {i + 1}") for i, raw in enumerate(data.get("properties") or [])])
     if not plan.lines:
         raise BudgetError("the budget file has no lines: add [[lines]] tables")
     seen: set[str] = set()
     for name in [n for line in plan.lines for n in (line.name, *(s.name for s in line.subs))] + \
-            [f.name for f in plan.funds]:
+            [f.name for f in plan.funds] + [n for p in plan.properties for n in (p.name, *(x.name for x in p.lines()))]:
         if name.casefold() in seen:
-            raise BudgetError(f"{name!r} is named twice: lines, sub-lines and funds each need their own name")
+            raise BudgetError(f"{name!r} is named twice: lines, sub-lines, properties and funds each need their own "
+                              f"name")
         seen.add(name.casefold())
+    funds = {f.name.casefold() for f in plan.funds}
+    for prop in plan.properties:
+        for x in prop.costs:
+            if x.funded_by and x.funded_by.casefold() not in funds:
+                raise BudgetError(f"{x.name}: funded_by {x.funded_by!r} isn't a sinking fund in the budget")
     return plan
 
 
@@ -408,10 +484,16 @@ class Sorted:
     excluded: str | None = None  # why it isn't spending: "rule", "transfer", "credit", "refund"
     one_off: bool = False
     refund: bool = False
+    income: bool = False  # money in, on a rental property's income line (rent): received, never spending
 
     @property
     def counted(self) -> bool:
         return self.line is not None and self.excluded is None
+
+    @property
+    def value(self) -> Decimal:
+        """What it adds to its line: the amount, or for rent received its size whichever sign the export gave it."""
+        return abs(self.txn.amount) if self.income else self.txn.amount
 
     @property
     def unmatched(self) -> bool:
@@ -428,6 +510,8 @@ def sort_txn(t: Txn, rules: list[Rule], plan: Plan) -> Sorted:
     if rule:
         found = plan.find(rule.line or "")
         if found is not None:
+            if getattr(found, "kind", "") == "income":
+                return Sorted(t, line=found.name, one_off=one_off, income=True)
             refund = t.amount < 0
             return Sorted(t, line=found.name, fund=isinstance(found, Fund), one_off=one_off, refund=refund,
                           excluded="refund" if refund and plan.refunds == "exclude" else None)
@@ -467,7 +551,7 @@ def line_totals(m: Month, plan: Plan, rules: list[Rule]) -> dict[str, str]:
     totals: dict[str, Decimal] = {}
     for s in (sort_txn(t, rules, plan) for t in m.txns):
         if s.counted:
-            totals[s.line] = totals.get(s.line, ZERO) + s.txn.amount
+            totals[s.line] = totals.get(s.line, ZERO) + s.value
     return {k: str(cents(v)) for k, v in sorted(totals.items())}
 
 
@@ -589,10 +673,12 @@ def status(plan: Plan, rules: list[Rule], actuals: dict[str, Month], view: str |
     counts: dict[str, int] = {}
     for s in rows:
         if s.counted:
-            spent[s.line] = spent.get(s.line, ZERO) + s.txn.amount
+            spent[s.line] = spent.get(s.line, ZERO) + s.value
             counts[s.line] = counts.get(s.line, 0) + 1
     lines = [_line_json(line, v, spent, counts, span, months) for line in plan.lines]
     funds = [_fund_json(f, v, spent, counts, months) for f in plan.funds]
+    properties = [_property_json(p, v, spent, counts, span, months) for p in plan.properties]
+    rental = {x.name for p in plan.properties for x in p.lines()}  # kept out of the household's own counts below
 
     def bucket(pick) -> dict:
         chosen = [s for s in rows if pick(s)]
@@ -619,16 +705,46 @@ def status(plan: Plan, rules: list[Rule], actuals: dict[str, Month], view: str |
                    "monthly": _num(sum((line.budget(months[-1]) for line in plan.lines), ZERO)),
                    "over": sum(1 for x in lines if x["over"]), "near": sum(1 for x in lines if x["near"]),
                    "funds_spent": _num(sum((Decimal(str(f["spent"])) for f in funds), ZERO))},
-        "groups": groups, "lines": lines, "funds": funds,
+        "groups": groups, "lines": lines, "funds": funds, "properties": properties,
         "cash": _num(plan.cash.get(months[-1])) if plan.cash.get(months[-1]) is not None else None,
-        "other": {"pending": bucket(lambda s: s.txn.pending and s.counted),
-                  "refunds": bucket(lambda s: s.refund),
-                  "one_off": bucket(lambda s: s.one_off),
+        "other": {"pending": bucket(lambda s: s.txn.pending and s.counted and s.line not in rental),
+                  "refunds": bucket(lambda s: s.refund and s.line not in rental),
+                  "one_off": bucket(lambda s: s.one_off and s.line not in rental),
                   "excluded": bucket(lambda s: s.excluded in ("rule", "transfer", "credit")),
                   "unmatched": {**bucket(lambda s: s.unmatched),
                                 "payees": len({norm(s.txn.payee) for s in rows if s.unmatched})}},
         "rows": len(rows),
     }
+
+
+def _property_json(prop: Property, v: View, spent: dict[str, Decimal], counts: dict[str, int], span: Decimal,
+                   months: list[str]) -> dict:
+    """A rental property: its income and cost lines (each as a line's numbers, `spent` being what was received on
+    an income line) and what it nets, for the months in view and for a month and a year of the plan. Kept apart
+    from the household's totals."""
+    def one(line: Line) -> dict:
+        x = _line_json(line, v, spent, counts, span, months)
+        x.update(kind=line.kind, funded_by=line.funded_by, property=prop.name)
+        if line.kind == "income":  # a rent short of the plan isn't "over"; nothing about it is an alarm
+            x.update(over=False, near=False)
+        return x
+    income, costs = [one(x) for x in prop.income], [one(x) for x in prop.costs]
+
+    def total(items: list[dict], key: str) -> Decimal:
+        return sum((Decimal(str(x[key])) for x in items), ZERO)
+    plan_months = v.plan.months()
+    return {"name": prop.name, "icon": prop.icon, "basis": prop.basis.to_json() if prop.basis else None,
+            "income": income, "costs": costs,
+            "totals": {"income_budget": _num(total(income, "budget")), "income_received": _num(total(income, "spent")),
+                       "cost_budget": _num(total(costs, "budget")), "cost_spent": _num(total(costs, "spent")),
+                       "net_budget": _num(total(income, "budget") - total(costs, "budget")),
+                       "net": _num(total(income, "spent") - total(costs, "spent")),
+                       "monthly_income": _num(sum((x.budget(months[-1]) for x in prop.income), ZERO)),
+                       "monthly_costs": _num(sum((x.budget(months[-1]) for x in prop.costs), ZERO)),
+                       "monthly_net": _num(prop.net(months[-1])),
+                       "yearly_income": _num(sum((x.budget(m) for x in prop.income for m in plan_months), ZERO)),
+                       "yearly_costs": _num(sum((x.budget(m) for x in prop.costs for m in plan_months), ZERO)),
+                       "yearly_net": _num(sum((prop.net(m) for m in plan_months), ZERO))}}
 
 
 def _fund_json(fund: Fund, v: View, spent: dict[str, Decimal], counts: dict[str, int], months: list[str]) -> dict:
@@ -699,6 +815,6 @@ def payments(plan: Plan, rules: list[Rule], actuals: dict[str, Month], view: str
         return s.line in names
     rows = [s for s in v.sorted_rows() if wanted(s)]
     rows.sort(key=lambda s: (s.txn.day, s.txn.payee.lower()), reverse=True)
-    return [{"date": s.txn.day.isoformat(), "payee": s.txn.payee, "amount": _num(s.txn.amount),
+    return [{"date": s.txn.day.isoformat(), "payee": s.txn.payee, "amount": _num(s.value),
              "line": s.line, "pending": s.txn.pending, "refund": s.refund, "one_off": s.one_off,
              "excluded": s.excluded, "account": mask_account(s.txn.account)} for s in rows]

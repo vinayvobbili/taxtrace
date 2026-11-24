@@ -144,6 +144,36 @@ monthly = 400
 
 A sub-line's table is `[lines.sub.basis]`, a fund's `[funds.basis]`. The Budget tab's info icon on a card opens it.
 
+## A rental property
+
+A budget file can also hold `[[properties]]`: a property you rent out, with what comes in and what goes out. It is
+kept apart from the household's lines, so it never changes the tiles, the group bar or the over count.
+
+```toml
+[[properties]]
+name = "Initech Row 12"
+  [[properties.income]]
+  name = "Rent"
+  monthly = 1500
+  [[properties.costs]]
+  name = "HOA"
+  monthly = 90
+  [[properties.costs]]
+  name = "Property tax"
+  monthly = 180
+  funded_by = "Rental reserve"      # a sinking fund that pays for it: the card says so
+```
+
+Each income or cost is a line like any other: a `monthly` amount, optional `overrides`, `icon`, `cap` and `basis`
+(`[properties.costs.basis]`; the property itself takes one too), and payee rules route payments to it by its name.
+A rent deposit is money in: the importer leaves a deposit that no rule claims out of the spending (as any income),
+and a rule such as `match = "Initech Tenant"`, `line = "Rent"` counts it as **received** on the Rent line, whichever
+sign the export gives it. `funded_by` must name a sinking fund; it is a label (the cost still counts in the net).
+
+The property's net is the income budgeted less the costs budgeted, a month and a year, and what was actually
+received less what was spent in the period in view. `taxtrace budget status` prints each property's lines and its
+net.
+
 ## The Budget tab
 
 `taxtrace ui`, then **Budget**. Year to date by default (once the plan's year has a month imported; until then, the
@@ -172,7 +202,12 @@ latest month), or any imported month.
   closes it, and focus goes back to the icon.
 - Numbers the page has no value for read as a dash, never NaN; a period with nothing imported says so.
 - Not in the lines: pending, refunds, one-offs, what was left out and what matched no rule.
-- **Demo data** shows a made-up household instead of yours, to try the screen or take a picture of it.
+- Properties, after the spending lines and sinking funds: per property a header with its icon, rent in and costs
+  a month, the net a month and a year (and a net tile), what was received and spent in the period in view, then a
+  card per income or cost line in the same design: rent cards are green and say "received" and "still to come"
+  (never "over"), costs say what fund pays for them. The info icons work as on any card.
+- **Demo data** shows a made-up household (with a rental property) instead of yours, to try the screen or take a
+  picture of it.
 
 ## Not yet
 

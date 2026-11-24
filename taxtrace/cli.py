@@ -1792,22 +1792,23 @@ def _budget_basis(args: argparse.Namespace, folder: Path, plan) -> int:
     from . import budget, budget_basis
 
     if not args.line:
-        names = [(i.name, i) for line in plan.lines for i in (line, *line.subs)] + [(f.name, f) for f in plan.funds]
-        for name, item in names:
+        for item in plan.basis_targets():
+            name = item.name
             print(f"  {name[:40]:<42}" + (f"{len(item.basis.items)} past payments, {item.basis.method or 'no method'}"
                                           if item.basis else "no basis recorded yet"))
         return 0
-    found = plan.find(args.line)
+    found = plan.find(args.line) or plan.property(args.line)
     if found is None:
-        raise budget.BudgetError(f"{args.line!r} isn't a line, sub-line or fund in the budget")
+        raise budget.BudgetError(f"{args.line!r} isn't a line, sub-line, property or fund in the budget")
     given = [args.method, args.period, args.note, args.amount_per_month, args.items_from]
     if args.clear or any(v is not None for v in given):
         items = budget_basis.items_from(Path(args.items_from).expanduser()) if args.items_from else None
         budget_basis.set_basis(folder, found.name, method=args.method, period=args.period, note=args.note,
                                amount_per_month=args.amount_per_month, items=items, clear=args.clear)
-        found = budget.load_plan(folder).find(found.name)
+        plan = budget.load_plan(folder)
+        found = plan.find(found.name) or plan.property(found.name)
         print(f"wrote {budget.plan_path(folder)}")
-    print("\n".join(budget_basis.describe(found.name, found.basis, found.monthly)))
+    print("\n".join(budget_basis.describe(found.name, found.basis, getattr(found, "monthly", None))))
     return 0
 
 
@@ -1869,6 +1870,14 @@ def _budget_status(args: argparse.Namespace, plan, rules, actuals) -> int:
         for f in s["funds"]:
             print(f"  {f['name'][:33]:<34}{num(f['transfers']):>12}{num(f['spent']):>12}{num(f['balance']):>12}"
                   f"{num(f['target']):>12}")
+    for p in s["properties"]:  # a rental property: apart from the household's lines and totals above
+        pt = p["totals"]
+        print(f"  {p['name'][:33] + ' (rental)':<34}{'budget':>12}{'actual':>12}")
+        for x in (*p["income"], *p["costs"]):
+            print(f"    {('in: ' if x['kind'] == 'income' else 'cost: ') + x['name'][:27]:<32}{num(x['budget']):>12}"
+                  f"{num(x['spent']):>12}" + (f"  funded by {x['funded_by']}" if x["funded_by"] else ""))
+        print(f"    {'net':<32}{num(pt['net_budget']):>12}{num(pt['net']):>12}"
+              f"   {num(pt['monthly_net'])} a month, {num(pt['yearly_net'])} a year")
     o = s["other"]
     print(f"{t['over']} lines over budget, {t['near']} near ({s['near']}% used or more)")
     print(f"{o['pending']['count']} pending rows counted, {o['refunds']['count']} refunds "

@@ -157,6 +157,60 @@ cap = true
     {{ month = "{last}-07", payee = "Monarch Air", amount = 1290.00 }},
   ]
 
+# A rental property: its rent and costs sit apart from the household's lines, groups and totals. A cost that a sinking
+# fund pays for says so with funded_by. Rent deposits are routed to the income line by a payee rule.
+[[properties]]
+name = "Initech Row 12"
+icon = "🏘️"
+  [[properties.income]]
+  name = "Rent"
+  icon = "💵"
+  monthly = 1500
+    [properties.income.basis]
+    method = "the lease: rent in the signed lease, due on the first"
+    period = "{last}-09 to {last}-12"
+    items = [
+      {{ month = "{last}-12", payee = "Initech Tenant", amount = 1500.00 }},
+      {{ month = "{last}-11", payee = "Initech Tenant", amount = 1500.00 }},
+    ]
+  [[properties.costs]]
+  name = "HOA"
+  icon = "🏢"
+  monthly = 90
+    [properties.costs.basis]
+    method = "the association's notice"
+    note = "Dues are billed monthly."
+  [[properties.costs]]
+  name = "Property tax"
+  icon = "🏛️"
+  monthly = 180
+  funded_by = "Rental reserve"
+  [[properties.costs]]
+  name = "Building policy"
+  icon = "🛡️"
+  monthly = 55
+  funded_by = "Rental reserve"
+  [[properties.costs]]
+  name = "Repairs"
+  icon = "🔧"
+  monthly = 100
+    [properties.costs.basis]
+    method = "proposed: about one plumber visit every second month"
+    period = "{last}"
+    items = [
+      {{ month = "{last}-10", payee = "Acme Plumbing", amount = 210.00 }},
+      {{ month = "{last}-04", payee = "Acme Plumbing", amount = 165.00 }},
+    ]
+  [[properties.costs]]
+  name = "Cleaning"
+  icon = "🧹"
+  monthly = 50
+
+[[funds]]
+name = "Rental reserve"
+icon = "🏘️"
+monthly = 235
+
 [[funds]]
 name = "Gifts"
 icon = "🎁"
@@ -252,6 +306,30 @@ match = "Acme Auto Repair"
 line = "Car repairs"
 
 [[rules]]
+match = "Initech Tenant"
+line = "Rent"
+
+[[rules]]
+match = "Initech HOA"
+line = "HOA"
+
+[[rules]]
+match = "Initech Property Tax"
+line = "Property tax"
+
+[[rules]]
+match = "Globex Landlord Cover"
+line = "Building policy"
+
+[[rules]]
+match = "Acme Plumbing"
+line = "Repairs"
+
+[[rules]]
+match = "Wonka Cleaners"
+line = "Cleaning"
+
+[[rules]]
 match = ["Card Payment", "Transfer To Savings", "Initech Payroll"]
 exclude = true
 
@@ -271,8 +349,14 @@ MONTH_SHAPE = [
     ("Monarch Pet Care", "48.60", 1), ("Soylent Diner", "42.80", 3), ("Wonka Treats", "18.40", 3),
     ("Bluth Banana Stand", "9.50", 2), ("Globex Outlet", "129.99", 1), ("Kramerica Books", "24.60", 2),
     ("Umbrella Streaming", "17.99", 1), ("Globex Music", "10.99", 1), ("Initech Arcade", "31.50", 1),
+    ("Initech HOA", "90.00", 1), ("Initech Property Tax", "180.00", 1), ("Globex Landlord Cover", "55.00", 1),
+    ("Wonka Cleaners", "50.00", 1),
 ]
-LEFT_OUT = [("Card Payment Thank You", "-1180.00", ("TRANSFER",)), ("Initech Payroll", "-4350.00", ("INCOME",))]
+# Money in or moved: the rent deposit is routed to the property's Rent line by a rule; the rest isn't spending.
+LEFT_OUT = [("Card Payment Thank You", "-1180.00", ("TRANSFER",)), ("Initech Payroll", "-4350.00", ("INCOME",)),
+            ("Initech Tenant", "-1500.00", ("INCOME",))]
+FIXED_BILLS = ("Initech Mortgage", "Vandelay Motors", "Initech HOA", "Initech Property", "Globex Landlord",
+               "Wonka Cleaners")  # the same amount every month
 ODD = [("Initech Kiosk", "57.80")]  # a payee no rule knows, for the unmatched count
 ACCOUNTS = ["Checking ••••", "Initech Rewards card", "Globex Cash card"]
 
@@ -287,7 +371,7 @@ def sample_month(month: str, seed: int = 0, upto: int | None = None) -> list[Txn
     rows = []
     for payee, typical, times in MONTH_SHAPE:
         for n in range(times):
-            fixed = times == 1 and payee.startswith(("Initech Mortgage", "Vandelay Motors"))
+            fixed = times == 1 and payee.startswith(FIXED_BILLS)
             value = Decimal(typical) if fixed else (Decimal(typical) * Decimal(rng.uniform(.72, 1.3))).quantize(
                 budget.CENT)
             day = 1 + (n * days // max(times, 1) + rng.randrange(0, max(days // max(times, 1), 1))) % days
@@ -300,6 +384,7 @@ def sample_month(month: str, seed: int = 0, upto: int | None = None) -> list[Txn
     if mon == 3:
         rows.append(Txn(day=date(year, mon, 14), payee="Acme Auto Repair", amount=Decimal("186.40"),
                         account=ACCOUNTS[0]))
+        rows.append(Txn(day=date(year, mon, 6), payee="Acme Plumbing", amount=Decimal("140.00"), account=ACCOUNTS[0]))
     for payee, value, flags in LEFT_OUT:
         rows.append(Txn(day=date(year, mon, 15), payee=payee, amount=Decimal(value), account=ACCOUNTS[0],
                         flags=flags))

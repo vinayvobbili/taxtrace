@@ -34,7 +34,9 @@ except ModuleNotFoundError:  # Python 3.10
 
 HEADER = re.compile(r"^\s*\[\[?[^\[\]]+\]\]?\s*(#.*)?$")
 NAME = re.compile(r"^\s*name\s*=\s*(\"[^\"]*\"|'[^']*')\s*(#.*)?$")
-BASIS_TABLE = {"lines": "lines.basis", "lines.sub": "lines.sub.basis", "funds": "funds.basis"}
+BASIS_TABLE = {"lines": "lines.basis", "lines.sub": "lines.sub.basis", "funds": "funds.basis",
+               "properties": "properties.basis", "properties.income": "properties.income.basis",
+               "properties.costs": "properties.costs.basis"}
 
 
 def _table(line: str) -> str:
@@ -107,7 +109,8 @@ def set_basis(folder: Path, name: str, *, method: str | None = None, period: str
         raise BudgetError(f"no budget-<year>.toml in {folder}")
     lines = path.read_text(encoding="utf-8").split("\n")
     start, end, table = _locate(lines, name)
-    target = budget.parse_plan("\n".join(lines)).find(name)
+    plan = budget.parse_plan("\n".join(lines))
+    target = plan.find(name) or plan.property(name)
     old = target.basis or Basis()
     new = None if clear else Basis(
         method=old.method if method is None else method.strip(),

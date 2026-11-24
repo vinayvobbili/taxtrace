@@ -391,6 +391,8 @@ form.input button { border: 0; border-radius: 13px; background: var(--grad); col
 .grp-essentials { --gc: var(--b-essentials); --gg: linear-gradient(135deg, #14b8a6, #0ea5e9); }
 .grp-family { --gc: var(--b-family); --gg: linear-gradient(135deg, #8b5cf6, #d946ef); }
 .grp-discretionary { --gc: var(--b-discretionary); --gg: linear-gradient(135deg, #f97316, #f59e0b); }
+.grp-property { --gc: #0ea5e9; --gg: linear-gradient(135deg, #0ea5e9, #6366f1); }  /* a rental property's costs */
+.grp-property.income { --gc: var(--b-ok); --gg: linear-gradient(135deg, #10b981, #84cc16); }  /* ...and its rent: green */
 .switch { display: inline-flex; align-items: center; gap: 9px; border: 1px solid var(--line); background: var(--panel-solid); color: var(--text);
   font: inherit; font-size: 13px; font-weight: 650; padding: 6px 12px 6px 7px; border-radius: 999px; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
 .switch:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); box-shadow: var(--shadow); }
@@ -449,7 +451,7 @@ form.input button { border: 0; border-radius: 13px; background: var(--grad); col
 .donut .track { stroke: var(--b-ok); opacity: .9; }
 .donut .arc { stroke: var(--b-spent); stroke-linecap: round; transition: stroke-dasharray 1s cubic-bezier(.2, .8, .2, 1); }
 .donut.over .track { stroke: var(--b-over); opacity: .35; } .donut.over .arc { stroke: var(--b-over); }
-.donut.fund .track { stroke: var(--chip); opacity: 1; } .donut.fund .arc { stroke: var(--b-ok); }
+.donut.fund .track, .donut.income .track { stroke: var(--chip); opacity: 1; } .donut.fund .arc, .donut.income .arc { stroke: var(--b-ok); }
 .donut span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 12.5px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .bfig { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 13px 0 10px; }
 .bfig div { background: var(--chip); border-radius: 10px; padding: 6px 9px; min-width: 0; }
@@ -481,6 +483,15 @@ form.input button { border: 0; border-radius: 13px; background: var(--grad); col
 .bgyear { color: var(--muted); font-size: 12.5px; text-align: right; white-space: nowrap; }
 .bgyear b { color: var(--text); font-variant-numeric: tabular-nums; }
 .bcard.unsplit .bname b { font-style: italic; }
+.meter.inc i { background: linear-gradient(90deg, #10b981, #84cc16); }
+.bgfig dd.pos, .bgnote b.pos { color: var(--b-ok); }
+.bghead.prop { background: linear-gradient(90deg, color-mix(in srgb, #0ea5e9 14%, var(--panel)), color-mix(in srgb, var(--b-ok) 10%, var(--panel)) 80%); }
+.bghead.prop .bgfig { gap: 4px 28px; }
+.nettile { justify-self: end; display: grid; text-align: right; padding: 6px 16px; border-radius: 14px; color: #fff; background: linear-gradient(135deg, #10b981, #0ea5e9);
+  box-shadow: 0 10px 22px -12px #10b981; }
+.nettile.neg { background: linear-gradient(135deg, #f43f5e, #f97316); box-shadow: 0 10px 22px -12px #f43f5e; }
+.nettile small { font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; opacity: .9; font-weight: 700; } .nettile b { font-size: 21px; font-variant-numeric: tabular-nums; }
+.bgnote { grid-column: 2 / -1; font-size: 12.5px; color: var(--muted); } .bgnote b { color: var(--text); font-variant-numeric: tabular-nums; } .bgnote b.neg { color: var(--b-over); }
 .bnamerow { display: flex; align-items: flex-start; gap: 7px; }
 .bnamerow b { flex: 0 1 auto; }
 .ibtn { flex: none; width: 20px; height: 20px; margin-top: 1px; padding: 0; border-radius: 50%; display: inline-grid; place-items: center; cursor: pointer;
@@ -547,7 +558,8 @@ form.input button { border: 0; border-radius: 13px; background: var(--grad); col
 @keyframes blink { 0%, 80%, 100% { opacity: .3; transform: none; } 40% { opacity: 1; transform: translateY(-3px); } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 @media (max-width: 980px) { .layout { grid-template-columns: 1fr; } .hero, .todo-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .bghead { grid-template-columns: auto minmax(0, 1fr); } .bgfig, .bghead .meter, .bgyear { grid-column: 1 / -1; } .bgyear { text-align: left; } }
+  .bghead { grid-template-columns: auto minmax(0, 1fr); } .bgfig, .bghead .meter, .bgyear, .bgnote { grid-column: 1 / -1; } .bgyear { text-align: left; }
+  .nettile { justify-self: start; text-align: left; } }
 @media (max-width: 640px) {
   .bar { padding: 10px 16px; flex-wrap: wrap; } .shield span, .widths { display: none; } main { padding: 20px 16px 100px; } h1 { font-size: 26px; }
   .tabs { order: 9; width: 100%; overflow-x: auto; } .tabs a { flex: 1; justify-content: center; padding: 7px 10px; }
@@ -1091,19 +1103,21 @@ function budgetQuery(extra = {}) {
 }
 function donut(part, whole, kind = "") {  // a ring: amber spent over green left, red when over; a fund's ring fills green
   const filled = ratio(part, whole) ?? 0, known = finite(whole) && Number(whole) > 0 && finite(part);
-  const over = kind !== "fund" && finite(whole) && finite(part) && Number(whole) >= 0 && Number(part) > Number(whole);
+  const calm = kind === "fund" || kind === "income";  // a fund's or rent's ring fills green and is never an alarm
+  const over = !calm && finite(whole) && finite(part) && Number(whole) >= 0 && Number(part) > Number(whole);
   const text = known ? `${Math.round(Number(part) / Number(whole) * 100)}%` : "—";
   const el = h("div", { class: `donut ${kind}${over ? " over" : ""}`, role: "img",
-    "aria-label": known ? `${text} ${kind === "fund" ? "of the target" : "used"}` : "no budget" });
+    "aria-label": known ? `${text} ${kind === "fund" ? "of the target" : kind === "income" ? "received" : "used"}` : "no budget" });
   el.innerHTML = `<svg viewBox="0 0 42 42"><circle class="track" cx="21" cy="21" r="15.915"/><circle class="arc" cx="21" cy="21" r="15.915" stroke-dasharray="0 100"/></svg>`;
   el.append(h("span", {}, text));
   requestAnimationFrame(() => requestAnimationFrame(() => el.querySelector(".arc").setAttribute("stroke-dasharray", `${(filled * 100).toFixed(1)} ${(100 - filled * 100).toFixed(1)}`)));
   return el;
 }
-function meter(part, whole) {
+function meter(part, whole, kind = "") {
   const filled = ratio(part, whole) ?? 0, bar = h("i", { style: "width:0" });
   requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.width = `${(filled * 100).toFixed(1)}%`; }));
-  return h("div", { class: "meter" + (finite(part) && finite(whole) && Number(part) > Number(whole) ? " over" : "") }, bar);
+  const over = kind !== "income" && finite(part) && finite(whole) && Number(part) > Number(whole);
+  return h("div", { class: "meter" + (kind === "income" ? " inc" : "") + (over ? " over" : "") }, bar);
 }
 function fig(label, value, cls = "") { return h("div", {}, h("dt", {}, label), h("dd", { class: cls }, value)); }
 // -- one modal for the cards' info icons: a native <dialog> (Esc closes it, the page behind is inert and focus stays
@@ -1158,9 +1172,9 @@ function basisBtn(x) {
 }
 // the Spent figure's info icon: the payments behind it for the selected view, in the same dialog as the basis. `ownOnly`
 // is a parent's own payments (its "Not split" card), without its sub-lines'.
-function paymentsModal(title, name, ownOnly = false, group = "") {
+function paymentsModal(title, name, ownOnly = false, group = "", verb = "spent") {
   const body = h("div", { class: "pays-modal" }, h("p", { class: "how" }, "Loading…"));
-  const dlg = openModal({ title: `${title} spent`, sub: budgetData.label, body, group });
+  const dlg = openModal({ title: `${title} ${verb}`, sub: budgetData.label, body, group });
   api("/api/budget/payments?" + budgetQuery({ line: name })).then(d => {
     const rows = ownOnly ? d.payments.filter(p => p.line === name) : d.payments;  // a parent's own, not its sub-lines'
     const bucket = name === "unmatched" || name === "excluded";
@@ -1179,27 +1193,32 @@ function paymentsModal(title, name, ownOnly = false, group = "") {
   }).catch(e => { body.replaceChildren(h("p", { class: "how" }, `Couldn't load them: ${e.message}`)); });
   return dlg;
 }
-function spentBtn(title, name, ownOnly = false, group = "") {
-  return iBtn("pay", `Payments behind ${title}`, "Payments behind this number", () => paymentsModal(title, name, ownOnly, group));
+function spentBtn(title, name, ownOnly = false, group = "", verb = "spent") {
+  return iBtn("pay", `Payments behind ${title}`, "Payments behind this number", () => paymentsModal(title, name, ownOnly, group, verb));
 }
-function spentFig(x, name, ownOnly = false) {  // the Spent figure with its payments icon
-  return h("div", {}, h("dt", {}, "Spent", spentBtn(x.name, name, ownOnly, x.group ? `grp-${x.group}` : "")), h("dd", {}, money(x.spent)));
+function spentFig(x, name, ownOnly = false) {  // the Spent figure with its payments icon ("Received" for rent)
+  const income = x.kind === "income";
+  return h("div", {}, h("dt", {}, income ? "Received" : "Spent", spentBtn(x.name, name, ownOnly, x.group ? `grp-${x.group}${income ? " income" : ""}` : "",
+    income ? "received" : "spent")), h("dd", {}, money(x.spent)));
 }
 function lineCard(x, i, ytd) {  // a line, or one sub-line of a group: the same card, in the group's colour
-  const group = budgetData.groups[x.group] || { label: x.group };
+  const income = x.kind === "income", rental = !!x.kind;  // a rental property's rent (green, "received") or cost
+  const group = rental ? { label: income ? "Rent in" : "Property cost" } : budgetData.groups[x.group] || { label: x.group };
   const left = x.remaining, unsplit = x.unsplit;  // "Not split": a parent's own payments, which has no budget of its own
-  return h("div", { class: `card bcard grp-${x.group}${x.over ? " over" : ""}${unsplit ? " unsplit" : ""}`, "data-line": x.name, "data-parent": x.parent || null,
-    style: `animation-delay:${Math.min(i * 35, 420)}ms` },
+  return h("div", { class: `card bcard grp-${x.group}${income ? " income" : ""}${x.over ? " over" : ""}${unsplit ? " unsplit" : ""}`, "data-line": x.name,
+    "data-parent": x.parent || null, style: `animation-delay:${Math.min(i * 35, 420)}ms` },
     h("div", { class: "bhead" }, h("div", { class: "bico", "aria-hidden": "true" }, x.icon || "•"),
       h("div", { class: "bname" }, nameRow(x.name, unsplit ? null : basisBtn(x)), h("div", { class: "badges" }, h("span", { class: "badge" }, group.label),
+        x.funded_by ? h("span", { class: "badge" }, `from ${x.funded_by}`) : null,
         x.cap ? h("span", { class: "badge cap" }, "CAP") : null, x.over ? h("span", { class: "badge over" }, "OVER") : null,
         x.near ? h("span", { class: "badge near" }, "NEAR") : null)),
-      unsplit ? donut(0, 0) : donut(x.spent, x.budget)),
+      unsplit ? donut(0, 0) : donut(x.spent, x.budget, income ? "income" : "")),
     h("dl", { class: "bfig" }, fig(ytd ? "Budget so far" : "Budget", unsplit ? "none" : money(x.budget)),
       spentFig(x, unsplit ? x.parent : x.name, unsplit),
-      unsplit ? fig("Left", "—") : fig(left < 0 ? "Over by" : "Left", money(Math.abs(left)), left < 0 ? "neg" : "")),
-    unsplit ? h("div", { class: "meter" }, h("i", { style: "width:0" })) : meter(x.spent, x.budget),
-    h("div", { class: "bnote" }, h("span", {}, h("b", {}, pctText(x.pct)), " used · pace ", h("b", {}, pctText(x.pace))),
+      unsplit ? fig("Left", "—") : income ? fig(left > 0 ? "Still to come" : "Extra", money(Math.abs(left)))
+        : fig(left < 0 ? "Over by" : "Left", money(Math.abs(left)), left < 0 ? "neg" : "")),
+    unsplit ? h("div", { class: "meter" }, h("i", { style: "width:0" })) : meter(x.spent, x.budget, income ? "income" : ""),
+    h("div", { class: "bnote" }, h("span", {}, h("b", {}, pctText(x.pct)), income ? " received · pace " : " used · pace ", h("b", {}, pctText(x.pace))),
       unsplit ? h("span", {}, "avg ", h("b", {}, money(x.avg)), " / month")
         : ytd ? h("span", {}, "avg ", h("b", {}, money(x.avg)), " / month of ", h("b", {}, money(x.monthly)))
           : h("span", {}, h("b", {}, money(x.yearly)), " a year")));
@@ -1229,6 +1248,22 @@ function budgetLines(lines, ytd) {  // plain lines in a grid; each parent a head
   }
   flush();
   return out;
+}
+function propertyBlock(p, i, ytd) {  // a rental property: a header with what it nets, then a card per rent and cost line
+  const t = p.totals, up = Number(t.monthly_net) >= 0;
+  const head = h("div", { class: "card bghead prop grp-property", "data-property": p.name, style: `animation-delay:${Math.min(i * 35, 420)}ms` },
+    h("div", { class: "bico", "aria-hidden": "true" }, p.icon || "🏘️"),
+    h("div", { class: "bname" }, nameRow(p.name, basisBtn({ name: p.name, basis: p.basis, monthly: t.monthly_net, group: "property" })),
+      h("div", { class: "badges" }, h("span", { class: "badge" }, "Rental property"))),
+    h("dl", { class: "bgfig" }, fig("Rent in / month", money(t.monthly_income)), fig("Costs / month", money(t.monthly_costs)),
+      fig("Net / month", money(t.monthly_net), up ? "pos" : "neg"), fig("Net / year", money(t.yearly_net), up ? "pos" : "neg")),
+    h("div", { class: "bgyear nettile" + (up ? "" : " neg") }, h("small", {}, "net a month"), h("b", {}, money(t.monthly_net))),
+    meter(t.income_received, t.income_budget, "income"),
+    h("div", { class: "bgnote" }, `${ytd ? "Year to date" : "This month"}: received `, h("b", {}, money(t.income_received)), " of ", h("b", {}, money(t.income_budget)),
+      " · costs ", h("b", {}, money(t.cost_spent)), " of ", h("b", {}, money(t.cost_budget)), " · net ", h("b", { class: Number(t.net) < 0 ? "neg" : "" }, money(t.net))));
+  let n = 0;
+  const costs = [...p.costs].sort((a, b) => urgency(a) - urgency(b));
+  return h("div", { class: "bgroup" }, head, h("div", { class: "blines" }, [...p.income, ...costs].map(x => lineCard(x, n++, ytd))));
 }
 function fundCard(f, i) {
   const started = f.balance != null;
@@ -1306,6 +1341,8 @@ function renderBudget(d) {
       h("div", { class: "blist", id: "budget-lines" }, budgetLines(lines, ytd))),
     d.funds.length ? h("section", { class: "bsec" }, h("h2", {}, "Sinking funds"),
       h("div", { class: "blines", id: "budget-funds" }, d.funds.map(fundCard))) : [],
+    (d.properties || []).length ? h("section", { class: "bsec", id: "budget-properties" }, h("h2", {}, "Properties"),
+      h("div", { class: "blist" }, d.properties.map((p, i) => propertyBlock(p, i, ytd)))) : [],
     h("section", { class: "bsec" }, h("h2", {}, "Not in the lines"), otherCards(d.other)));
 }
 async function loadBudget() {
