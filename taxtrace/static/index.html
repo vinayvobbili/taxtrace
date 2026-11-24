@@ -22,6 +22,9 @@
   --radius: 16px;
   --grad: linear-gradient(135deg, #14b8a6, #6366f1);
   --grad-warm: linear-gradient(135deg, #f59e0b, #ec4899);
+  /* the budget's four groups (fixed bills, daily essentials, family, discretionary) and its donuts' three states */
+  --b-fixed: #3b82f6; --b-essentials: #0d9488; --b-family: #8b5cf6; --b-discretionary: #f97316;
+  --b-ok: #10b981; --b-spent: #f59e0b; --b-over: #ef4444; --b-track: rgba(16, 185, 129, .16);
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -33,6 +36,8 @@
     --cloud: #a5a8ff; --cloud-soft: rgba(139, 141, 255, .15); --mine: #2dd4bf; --mine-soft: rgba(45, 212, 191, .14);
     --shadow: 0 1px 0 rgba(255, 255, 255, .03) inset, 0 12px 32px -20px rgba(0, 0, 0, .9);
     --shadow-hover: 0 1px 0 rgba(255, 255, 255, .05) inset, 0 22px 48px -20px rgba(45, 212, 191, .35);
+    --b-fixed: #60a5fa; --b-essentials: #2dd4bf; --b-family: #a78bfa; --b-discretionary: #fb923c;
+    --b-ok: #34d399; --b-spent: #fbbf24; --b-over: #f87171; --b-track: rgba(52, 211, 153, .18);
     color-scheme: dark;
   }
 }
@@ -44,6 +49,8 @@
   --cloud: #a5a8ff; --cloud-soft: rgba(139, 141, 255, .15); --mine: #2dd4bf; --mine-soft: rgba(45, 212, 191, .14);
   --shadow: 0 1px 0 rgba(255, 255, 255, .03) inset, 0 12px 32px -20px rgba(0, 0, 0, .9);
   --shadow-hover: 0 1px 0 rgba(255, 255, 255, .05) inset, 0 22px 48px -20px rgba(45, 212, 191, .35);
+  --b-fixed: #60a5fa; --b-essentials: #2dd4bf; --b-family: #a78bfa; --b-discretionary: #fb923c;
+  --b-ok: #34d399; --b-spent: #fbbf24; --b-over: #f87171; --b-track: rgba(52, 211, 153, .18);
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -372,6 +379,112 @@ form.input button { border: 0; border-radius: 13px; background: var(--grad); col
 .entry-extra .hint { margin: 0 0 12px; font-size: 12.5px; color: var(--muted); }
 .entry-extra .ok { color: var(--good); font-weight: 650; }
 
+/* budget */
+.grp-fixed { --gc: var(--b-fixed); --gg: linear-gradient(135deg, #3b82f6, #6366f1); }
+.grp-essentials { --gc: var(--b-essentials); --gg: linear-gradient(135deg, #14b8a6, #0ea5e9); }
+.grp-family { --gc: var(--b-family); --gg: linear-gradient(135deg, #8b5cf6, #d946ef); }
+.grp-discretionary { --gc: var(--b-discretionary); --gg: linear-gradient(135deg, #f97316, #f59e0b); }
+.switch { display: inline-flex; align-items: center; gap: 9px; border: 1px solid var(--line); background: var(--panel-solid); color: var(--text);
+  font: inherit; font-size: 13px; font-weight: 650; padding: 6px 12px 6px 7px; border-radius: 999px; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+.switch:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); box-shadow: var(--shadow); }
+.switch .knob { width: 34px; height: 20px; border-radius: 99px; background: var(--chip); position: relative; transition: background .2s; }
+.switch .knob::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .25); transition: transform .25s cubic-bezier(.2, .8, .2, 1); }
+.switch[aria-checked="true"] .knob { background: var(--grad-warm); }
+.switch[aria-checked="true"] .knob::after { transform: translateX(14px); }
+.demo-note { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 750; padding: 3px 10px; border-radius: 99px; color: #fff;
+  background: var(--grad-warm); vertical-align: 3px; margin-left: 8px; letter-spacing: .02em; }
+.demo-note[hidden] { display: none; }
+.b-stats { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.b-stats .stat { color: #fff; border-color: transparent; background: var(--tile); }
+.b-stats .stat .lbl { color: rgba(255, 255, 255, .88); }
+.b-stats .stat .num small { font-size: 15px; font-weight: 700; opacity: .85; margin-left: 4px; }
+.b-stats .stat:nth-child(5) { animation-delay: 240ms; }
+.b-stats .stat::after { content: ""; position: absolute; right: -30px; top: -30px; width: 110px; height: 110px; border-radius: 50%; background: rgba(255, 255, 255, .13); }
+.t-budget { --tile: linear-gradient(135deg, #3b82f6, #6366f1); } .t-spent { --tile: linear-gradient(135deg, #f59e0b, #f97316); }
+.t-left { --tile: linear-gradient(135deg, #10b981, #14b8a6); } .t-left.neg { --tile: linear-gradient(135deg, #f43f5e, #f97316); }
+.t-pace { --tile: linear-gradient(135deg, #8b5cf6, #ec4899); } .t-over { --tile: linear-gradient(135deg, #0ea5e9, #14b8a6); }
+.t-over.bad { --tile: linear-gradient(135deg, #ef4444, #f59e0b); }
+.mix { padding: 18px 20px 16px; margin-bottom: 26px; animation: rise .5s .1s cubic-bezier(.2, .7, .2, 1) both; }
+.mix-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; margin-bottom: 12px; }
+.mix-top b { font-size: 16px; } .mix-top span { color: var(--muted); font-size: 13px; }
+.mixbar { display: flex; height: 20px; border-radius: 99px; overflow: hidden; background: var(--chip); }
+.mixbar i { display: block; height: 100%; background: var(--gg); transition: width .9s cubic-bezier(.2, .8, .2, 1); box-shadow: inset -2px 0 0 rgba(255, 255, 255, .35); }
+.mixbar i:last-child { box-shadow: none; }
+.key { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 12px; font-size: 13px; }
+.key span { display: inline-flex; align-items: center; gap: 7px; }
+.key i { width: 11px; height: 11px; border-radius: 4px; background: var(--gg); box-shadow: 0 0 0 3px color-mix(in srgb, var(--gc) 18%, transparent); }
+.key em { font-style: normal; color: var(--muted); }
+.bsec { margin-bottom: 28px; }
+.blines { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr)); gap: 14px; align-items: start; }
+.bcard { padding: 16px 16px 12px; position: relative; overflow: hidden; animation: rise .45s cubic-bezier(.2, .7, .2, 1) both;
+  transition: transform .2s, box-shadow .2s, border-color .2s; }
+.bcard::before { content: ""; position: absolute; left: 0; top: 0; right: 0; height: 4px; background: var(--gg, var(--grad)); }
+.bcard:hover { transform: translateY(-3px); box-shadow: var(--shadow-hover); border-color: color-mix(in srgb, var(--gc, var(--accent)) 35%, var(--line)); }
+.bcard.over { border-color: color-mix(in srgb, var(--b-over) 45%, var(--line)); background: linear-gradient(180deg, color-mix(in srgb, var(--b-over) 7%, var(--panel)), var(--panel) 60%); }
+.bcard.over::before { background: linear-gradient(90deg, var(--b-over), #f59e0b); }
+.bhead { display: flex; gap: 12px; align-items: flex-start; }
+.bico { flex: none; width: 42px; height: 42px; border-radius: 13px; display: grid; place-items: center; font-size: 21px; background: var(--gg, var(--grad));
+  box-shadow: 0 8px 18px -8px color-mix(in srgb, var(--gc, var(--accent)) 80%, transparent); transition: transform .3s cubic-bezier(.2, .8, .2, 1); }
+.bcard:hover .bico { transform: rotate(-8deg) scale(1.08); }
+.bname { flex: 1; min-width: 0; }
+.bname b { display: block; font-size: 15.5px; letter-spacing: -.01em; overflow-wrap: anywhere; }
+.badges { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+.badge { font-size: 10.5px; font-weight: 750; letter-spacing: .03em; padding: 2px 8px; border-radius: 99px; white-space: nowrap;
+  color: var(--gc, var(--accent)); background: color-mix(in srgb, var(--gc, var(--accent)) 14%, transparent); }
+.badge.cap { color: #fff; background: var(--grad-warm); }
+.badge.over { color: #fff; background: linear-gradient(135deg, #ef4444, #f97316); animation: pulse 2.4s ease-in-out infinite; }
+.badge.near { color: var(--warn); background: color-mix(in srgb, var(--warn) 15%, transparent); }
+.badge.trial { color: #fff; background: linear-gradient(135deg, #8b5cf6, #ec4899); }
+.donut { flex: none; width: 66px; height: 66px; position: relative; }
+.donut svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.donut circle { fill: none; stroke-width: 4.2; }
+.donut .track { stroke: var(--b-ok); opacity: .9; }
+.donut .arc { stroke: var(--b-spent); stroke-linecap: round; transition: stroke-dasharray 1s cubic-bezier(.2, .8, .2, 1); }
+.donut.over .track { stroke: var(--b-over); opacity: .35; } .donut.over .arc { stroke: var(--b-over); }
+.donut.fund .track { stroke: var(--chip); opacity: 1; } .donut.fund .arc { stroke: var(--b-ok); }
+.donut span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 12.5px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.bfig { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 13px 0 10px; }
+.bfig div { background: var(--chip); border-radius: 10px; padding: 6px 9px; min-width: 0; }
+.bfig dt { font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 700; }
+.bfig dd { margin: 0; font-weight: 800; font-variant-numeric: tabular-nums; font-size: 15px; overflow-wrap: anywhere; }
+.bfig dd.neg { color: var(--b-over); }
+.meter { height: 8px; border-radius: 99px; background: var(--b-track); overflow: hidden; }
+.meter i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--b-ok), var(--b-spent)); transition: width .9s cubic-bezier(.2, .8, .2, 1); }
+.meter.over i { background: linear-gradient(90deg, var(--b-spent), var(--b-over)); }
+.bnote { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 10px; margin-top: 7px; font-size: 12.5px; color: var(--muted); }
+.bnote b { color: var(--text); font-variant-numeric: tabular-nums; }
+.subs { list-style: none; margin: 10px 0 0; padding: 8px 0 0; border-top: 1px dashed var(--line); display: grid; gap: 5px; font-size: 13px; }
+.subs li { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: center; }
+.subs li .sm { grid-column: 1 / -1; height: 4px; border-radius: 99px; background: var(--chip); overflow: hidden; }
+.subs li .sm i { display: block; height: 100%; background: var(--gg, var(--grad)); }
+.subs li.unsplit { color: var(--muted); font-style: italic; }
+.subs .v { font-variant-numeric: tabular-nums; font-weight: 650; white-space: nowrap; }
+.bcard details { margin-top: 10px; }
+.bcard summary { cursor: pointer; font-size: 12.5px; font-weight: 700; color: var(--gc, var(--accent)); list-style: none; user-select: none; }
+.bcard summary::-webkit-details-marker { display: none; }
+.bcard summary::before { content: "\25B8"; display: inline-block; margin-right: 6px; transition: transform .15s; }
+.bcard details[open] summary::before { transform: rotate(90deg); }
+.pays { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12.5px; }
+.pays td { padding: 5px 4px; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); vertical-align: top; }
+.pays tr:last-child td { border-bottom: 0; }
+.pays td.d { color: var(--muted); white-space: nowrap; } .pays td.p { overflow-wrap: anywhere; }
+.pays td.a { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pays .tagp { font-size: 10px; font-weight: 750; padding: 1px 6px; border-radius: 99px; margin-left: 5px; background: var(--chip); color: var(--chip-text); }
+.pays .acct { display: block; color: var(--muted); font-size: 11.5px; }
+.bother { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 10px; }
+.bother .card { padding: 13px 15px; transition: transform .2s, box-shadow .2s; animation: rise .45s cubic-bezier(.2, .7, .2, 1) both; }
+.bother .card:hover { transform: translateY(-2px); box-shadow: var(--shadow-hover); }
+.bother b { font-size: 22px; font-weight: 800; letter-spacing: -.02em; display: block; }
+.bother .lbl { color: var(--muted); font-size: 12.5px; }
+.bempty { padding: 30px 26px; display: grid; gap: 14px; justify-items: start; position: relative; overflow: hidden; }
+.bempty::before { content: ""; position: absolute; right: -60px; top: -60px; width: 240px; height: 240px; border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--b-discretionary) 22%, transparent), transparent 70%); }
+.bempty h3 { margin: 0; font-size: 19px; }
+.bempty ol { margin: 0; padding-left: 20px; display: grid; gap: 7px; color: var(--muted); font-size: 14px; }
+.bempty ol b { color: var(--text); }
+@keyframes pulse { 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--b-over) 22%, transparent); } }
+
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes flash { 0%, 30% { box-shadow: 0 0 0 4px var(--accent-soft), 0 0 0 7px color-mix(in srgb, var(--accent) 55%, transparent); } }
 @keyframes rise { from { opacity: 0; transform: translateY(10px); } }
@@ -403,6 +516,7 @@ form.input button { border: 0; border-radius: 13px; background: var(--grad); col
       <a id="tab-home" href="#" data-view="home"><svg class="ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg>Overview</a>
       <a id="tab-import" href="#import" data-view="import"><svg class="ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 20h16"/></svg>Import</a>
       <a id="tab-entry" href="#entry" data-view="entry"><svg class="ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>Entry sheet</a>
+      <a id="tab-budget" href="#budget" data-view="budget"><svg class="ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9v9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/></svg>Budget</a>
     </nav>
     <div class="spacer"></div>
     <span class="shield" title="Before a question goes to Claude or agy, its amounts become # and names become *. A question with your values in it is answered on this Mac.">
@@ -462,6 +576,23 @@ form.input button { border: 0; border-radius: 13px; background: var(--grad); col
     <div class="sections" id="entry-sections"></div>
     <div class="entry-extra" id="entry-extra"></div>
     <p class="how imp-note" id="entry-how"></p>
+  </div>
+
+  <div class="view" id="view-budget" hidden>
+    <div class="pagehead">
+      <h1>Where our money <span class="g">goes</span><span class="demo-note" id="budget-demo-note" hidden>Demo data</span></h1>
+      <p class="sub" id="budget-where">Each budget line against what the bank and card exports say was spent.</p>
+    </div>
+    <div class="sheet-bar">
+      <div class="seg" id="budget-span" role="group" aria-label="Period">
+        <button type="button" data-v="ytd" class="on">Year to date</button><button type="button" data-v="month">Month</button>
+      </div>
+      <label for="budget-month">Month <select id="budget-month"></select></label>
+      <div class="spacer"></div>
+      <button class="switch" id="budget-demo" type="button" role="switch" aria-checked="false" title="Show a made-up household's budget instead of yours"><span class="knob"></span>Demo data</button>
+    </div>
+    <div class="hero b-stats" id="budget-stats"></div>
+    <div id="budget-body" aria-live="polite"></div>
   </div>
 
   <div class="view" id="view-home">
@@ -718,11 +849,12 @@ async function loadPlan() {
 }
 
 // -- screens: the hash picks one (#import, #entry), anything else is the overview; #todo-<line> scrolls to that to-do card
-const VIEWS = ["home", "import", "entry"];
-let entryLoaded = false;
+const VIEWS = ["home", "import", "entry", "budget"];
+let entryLoaded = false, budgetLoaded = false;
 function route() {
   const hash = decodeURIComponent(location.hash.slice(1)), view = VIEWS.includes(hash) ? hash : "home";
   if (view === "entry" && !entryLoaded) { entryLoaded = true; loadEntry(); }
+  if (view === "budget" && !budgetLoaded) { budgetLoaded = true; loadBudget(); }
   for (const v of VIEWS) {
     $("view-" + v).hidden = v !== view;
     if (v === view) $("tab-" + v).setAttribute("aria-current", "page"); else $("tab-" + v).removeAttribute("aria-current");
@@ -886,6 +1018,167 @@ $("entry-filter").addEventListener("click", e => {
   for (const x of $("entry-filter").children) x.classList.toggle("on", x === b);
   if (entryData) $("entry-sections").replaceChildren(...entryData.sections.map(sectionCard));
 });
+
+// -- the budget: each line against what was spent, for the year to date (the default) or a month, from the workspace's
+// budget folder, or a made-up household with Demo data. Amounts per line only; a line's payments load when opened.
+const GROUP_ORDER = ["fixed", "essentials", "family", "discretionary"];
+const money = v => v == null ? "—" : `${Number(v) < 0 ? "−" : ""}$${Math.abs(Number(v)).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+const cents = v => `${Number(v) < 0 ? "−" : ""}$${Math.abs(Number(v)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const pctText = v => v == null ? "—" : `${Math.round(v)}%`;
+let budgetDemo = false, budgetView = "", budgetData = null;
+try { budgetDemo = localStorage.getItem("taxtrace-budget-demo") === "1"; } catch { /* fine */ }
+function budgetQuery(extra = {}) {
+  return new URLSearchParams({ ...(budgetView ? { view: budgetView } : {}), ...(budgetDemo ? { demo: "1" } : {}), ...extra });
+}
+function donut(part, whole, kind = "") {  // a ring: amber spent over green left, red when over; a fund's ring fills green
+  const share = whole > 0 ? Math.max(0, Math.min(part / whole, 1)) : part > 0 ? 1 : 0;
+  const over = kind !== "fund" && whole >= 0 && part > whole;
+  const el = h("div", { class: `donut ${kind}${over ? " over" : ""}`, role: "img",
+    "aria-label": whole > 0 ? `${Math.round(part / whole * 100)}% ${kind === "fund" ? "of the target" : "used"}` : "no budget" });
+  el.innerHTML = `<svg viewBox="0 0 42 42"><circle class="track" cx="21" cy="21" r="15.915"/><circle class="arc" cx="21" cy="21" r="15.915" stroke-dasharray="0 100"/></svg>`;
+  el.append(h("span", {}, whole > 0 ? `${Math.round(part / whole * 100)}%` : "—"));
+  requestAnimationFrame(() => requestAnimationFrame(() => el.querySelector(".arc").setAttribute("stroke-dasharray", `${(share * 100).toFixed(1)} ${(100 - share * 100).toFixed(1)}`)));
+  return el;
+}
+function meter(part, whole) {
+  const share = whole > 0 ? Math.min(part / whole, 1) : part > 0 ? 1 : 0, bar = h("i", { style: "width:0" });
+  requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.width = `${(Math.max(share, 0) * 100).toFixed(1)}%`; }));
+  return h("div", { class: "meter" + (part > whole ? " over" : "") }, bar);
+}
+function fig(label, value, cls = "") { return h("div", {}, h("dt", {}, label), h("dd", { class: cls }, value)); }
+function paymentsBox(name, count) {  // "show payments": the rows behind a line, loaded from this computer when opened
+  const box = h("details", {}, h("summary", {}, `Show payments (${count})`));
+  box.addEventListener("toggle", async () => {
+    if (!box.open || box.dataset.loaded) return;
+    box.dataset.loaded = "1";
+    const holder = h("div", { class: "how", style: "margin-top:8px" }, "Loading…");
+    box.append(holder);
+    try {
+      const d = await api("/api/budget/payments?" + budgetQuery({ line: name }));
+      holder.replaceWith(d.payments.length ? h("table", { class: "pays" }, h("tbody", {}, d.payments.map(p => h("tr", {},
+        h("td", { class: "d" }, shortDay(p.date)),
+        h("td", { class: "p" }, p.payee, p.pending ? h("span", { class: "tagp" }, "pending") : null,
+          p.refund ? h("span", { class: "tagp" }, "refund") : null, p.one_off ? h("span", { class: "tagp" }, "one-off") : null,
+          p.line && p.line !== name ? h("span", { class: "tagp" }, p.line) : null, p.account ? h("span", { class: "acct" }, p.account) : null),
+        h("td", { class: "a" }, cents(p.amount)))))) : h("div", { class: "how", style: "margin-top:8px" }, "No payments in this period."));
+    } catch (e) { holder.textContent = `Couldn't load them: ${e.message}`; box.dataset.loaded = ""; }
+  });
+  return box;
+}
+function lineCard(x, i, ytd) {
+  const group = budgetData.groups[x.group] || { label: x.group };
+  const left = x.remaining;
+  return h("div", { class: `card bcard grp-${x.group}${x.over ? " over" : ""}`, "data-line": x.name, style: `animation-delay:${Math.min(i * 35, 420)}ms` },
+    h("div", { class: "bhead" }, h("div", { class: "bico", "aria-hidden": "true" }, x.icon || "•"),
+      h("div", { class: "bname" }, h("b", {}, x.name), h("div", { class: "badges" }, h("span", { class: "badge" }, group.label),
+        x.cap ? h("span", { class: "badge cap" }, "CAP") : null, x.over ? h("span", { class: "badge over" }, "OVER") : null,
+        x.near ? h("span", { class: "badge near" }, "NEAR") : null)),
+      donut(x.spent, x.budget)),
+    h("dl", { class: "bfig" }, fig(ytd ? "Budget so far" : "Budget", money(x.budget)), fig("Spent", money(x.spent)),
+      fig(left < 0 ? "Over by" : "Left", money(Math.abs(left)), left < 0 ? "neg" : "")),
+    meter(x.spent, x.budget),
+    h("div", { class: "bnote" }, h("span", {}, h("b", {}, pctText(x.pct)), " used · pace ", h("b", {}, pctText(x.pace))),
+      ytd ? h("span", {}, "avg ", h("b", {}, money(x.avg)), " / month of ", h("b", {}, money(x.monthly)))
+        : h("span", {}, h("b", {}, money(x.yearly)), " a year")),
+    x.subs ? h("ul", { class: "subs" }, x.subs.map(s => h("li", { class: s.unsplit ? "unsplit" : "" }, h("span", {}, s.name),
+      h("span", { class: "v" }, s.budget == null ? money(s.spent) : `${money(s.spent)} of ${money(s.budget)}`),
+      s.budget ? h("span", { class: "sm" }, h("i", { style: `width:${Math.min(100, s.spent / s.budget * 100).toFixed(1)}%` })) : null))) : null,
+    x.count ? paymentsBox(x.name, x.count) : null);
+}
+function fundCard(f, i) {
+  const started = f.balance != null;
+  return h("div", { class: "card bcard", style: `--gg: linear-gradient(135deg, #10b981, #0ea5e9); --gc: var(--b-ok); animation-delay:${Math.min(i * 35, 420)}ms` },
+    h("div", { class: "bhead" }, h("div", { class: "bico", "aria-hidden": "true" }, f.icon || "•"),
+      h("div", { class: "bname" }, h("b", {}, f.name), h("div", { class: "badges" }, h("span", { class: "badge" }, "Sinking fund"),
+        f.cap ? h("span", { class: "badge cap" }, "CAP") : null, f.over ? h("span", { class: "badge over" }, "OVERDRAWN") : null)),
+      donut(started ? f.balance : 0, f.target, "fund")),
+    h("dl", { class: "bfig" }, fig("Balance", started ? money(f.balance) : "—", started && f.balance < 0 ? "neg" : ""),
+      fig("Target", money(f.target)), fig("Spent", money(f.spent))),
+    started ? meter(Math.max(f.balance, 0), f.target) : null,
+    h("div", { class: "bnote" }, started ? h("span", {}, "in ", h("b", {}, money(f.transfers)), " · planned to pay ", h("b", {}, money(f.planned)))
+      : h("span", {}, `Starts with the ${budgetData.year} plan`), h("span", {}, h("b", {}, money(f.monthly)), " / month")),
+    f.count ? paymentsBox(f.name, f.count) : null);
+}
+function otherCards(o) {
+  const tile = (n, label, extra = null) => h("div", { class: "card" }, h("b", {}, n), h("div", { class: "lbl" }, label), extra);
+  return h("div", { class: "bother" },
+    tile(o.pending.count, `pending, counted in their lines (${money(o.pending.total)})`),
+    tile(o.refunds.count, `refunds, ${budgetData.refunds === "net" ? "netted in their lines" : "left out"} (${money(-o.refunds.total)})`),
+    tile(o.one_off.count, `one-off (${money(o.one_off.total)})`),
+    tile(o.excluded.count, "left out: transfers, card payments, income", o.excluded.count ? paymentsBox("excluded", o.excluded.count) : null),
+    tile(o.unmatched.count, `match no rule, from ${o.unmatched.payees} payee${o.unmatched.payees === 1 ? "" : "s"} (${money(o.unmatched.total)})`,
+      o.unmatched.count ? paymentsBox("unmatched", o.unmatched.count) : null));
+}
+function budgetEmpty(d) {
+  $("budget-stats").replaceChildren();
+  $("budget-where").textContent = `No budget yet in ${d.folder}.`;
+  $("budget-body").replaceChildren(h("div", { class: "card bempty" }, h("h3", {}, "Set up your budget"),
+    h("ol", {}, h("li", {}, h("b", {}, "Try the made-up one: "), h("code", {}, "taxtrace budget init"), " writes a sample plan, rules and a month to a sample folder."),
+      h("li", {}, h("b", {}, "Make it yours: "), "copy its ", h("code", {}, "budget-<year>.toml"), " and ", h("code", {}, "rules.toml"), " into ", h("code", {}, d.folder), " and put in your own lines and payees."),
+      h("li", {}, h("b", {}, "Each month: "), "export your bank and card transactions as CSV and run ", h("code", {}, "taxtrace budget import <file> --month YYYY-MM"), "."),
+      h("li", {}, h("b", {}, "Then: "), h("code", {}, "taxtrace budget rules --unmatched"), " lists payees to write rules for.")),
+    h("button", { class: "btn go", type: "button", onclick: () => setDemo(true) }, "Show demo data")));
+}
+function renderBudget(d) {
+  budgetData = d;
+  $("budget-demo").setAttribute("aria-checked", String(budgetDemo));
+  $("budget-demo-note").hidden = !budgetDemo;
+  if (d.source === "none") { budgetEmpty(d); return; }
+  const ytd = d.view === "ytd", t = d.totals;
+  for (const b of $("budget-span").children) b.classList.toggle("on", (b.dataset.v === "ytd") === ytd);
+  const months = d.available.length ? d.available : d.months.map(m => ({ month: m, label: m, trial: false }));
+  $("budget-month").replaceChildren(...months.map(m => h("option", { value: m.month, selected: !ytd && m.month === d.view }, m.label)));
+  $("budget-month").disabled = ytd;
+  $("budget-where").textContent = `${d.label}${budgetDemo ? " · a made-up household" : d.folder ? ` · from ${d.folder}` : ""}`
+    + (ytd ? "" : d.trial ? ". A trial month: never counted in the year." : "")
+    + (!ytd && budgetView !== d.view && !budgetView ? ` Nothing from ${d.year} is imported yet, so this is the latest month.` : "");
+  $("budget-stats").replaceChildren(
+    h("div", { class: "stat t-budget" }, h("div", { class: "num" }, money(t.budget)), h("div", { class: "lbl" },
+      ytd ? `budget so far · ${money(t.monthly)}/month · ${money(t.yearly)} a year` : `budget for the month · ${money(t.yearly)} a year`)),
+    h("div", { class: "stat t-spent" }, h("div", { class: "num" }, money(t.spent)), h("div", { class: "lbl" },
+      ytd ? `spent · avg ${money(t.avg)} a month` : `spent · ${pctText(t.pct)} of the budget`)),
+    h("div", { class: "stat t-left" + (t.remaining < 0 ? " neg" : "") }, h("div", { class: "num" }, money(Math.abs(t.remaining))),
+      h("div", { class: "lbl" }, t.remaining < 0 ? "over the budget" : "left to spend")),
+    h("div", { class: "stat t-pace" }, h("div", { class: "num" }, pctText(t.pace)), h("div", { class: "lbl" },
+      t.pace == null ? "pace vs plan" : t.pace > 100 ? "pace vs plan: ahead of it" : "pace vs plan: within it")),
+    h("div", { class: "stat t-over" + (t.over ? " bad" : "") }, h("div", { class: "num" }, t.over, h("small", {}, `/ ${d.lines.length}`)),
+      h("div", { class: "lbl" }, `lines over budget${t.near ? ` · ${t.near} near` : ""}`)));
+  const total = GROUP_ORDER.reduce((s, g) => s + Math.max(d.groups[g].spent, 0), 0);
+  const mix = h("div", { class: "mixbar", role: "img", "aria-label": "Spending by group" }, GROUP_ORDER.filter(g => d.groups[g].spent > 0).map(g => {
+    const seg = h("i", { class: `grp-${g}`, style: "width:0", title: `${d.groups[g].label}: ${money(d.groups[g].spent)}` });
+    requestAnimationFrame(() => requestAnimationFrame(() => { seg.style.width = `${(d.groups[g].spent / total * 100).toFixed(2)}%`; }));
+    return seg;
+  }));
+  const order = x => (x.over ? 0 : x.near ? 1 : 2) * 10 + GROUP_ORDER.indexOf(x.group);
+  const lines = [...d.lines].sort((a, b) => order(a) - order(b));
+  $("budget-body").replaceChildren(
+    h("div", { class: "card mix" }, h("div", { class: "mix-top" }, h("b", {}, "Where our money goes"),
+      h("span", {}, `${money(t.spent)} on the lines${t.funds_spent ? `, ${money(t.funds_spent)} from the funds` : ""}`)),
+      mix, h("div", { class: "key" }, GROUP_ORDER.map(g => h("span", { class: `grp-${g}` }, h("i"), d.groups[g].label,
+        h("em", {}, `${money(d.groups[g].spent)} of ${money(d.groups[g].budget)}`))))),
+    h("section", { class: "bsec" }, h("h2", {}, `Spending lines${t.over ? ` · ${t.over} over` : ""}`),
+      h("div", { class: "blines", id: "budget-lines" }, lines.map((x, i) => lineCard(x, i, ytd)))),
+    d.funds.length ? h("section", { class: "bsec" }, h("h2", {}, "Sinking funds"),
+      h("div", { class: "blines", id: "budget-funds" }, d.funds.map(fundCard))) : [],
+    h("section", { class: "bsec" }, h("h2", {}, "Not in the lines"), otherCards(d.other)));
+}
+async function loadBudget() {
+  try { renderBudget(await api("/api/budget?" + budgetQuery())); }
+  catch (e) { budgetLoaded = false; $("budget-body").replaceChildren(h("div", { class: "card empty" }, `Couldn't load the budget: ${e.message}`)); }
+}
+function setDemo(on) {
+  budgetDemo = on; budgetView = "";
+  try { localStorage.setItem("taxtrace-budget-demo", on ? "1" : "0"); } catch { /* fine */ }
+  loadBudget();
+}
+$("budget-demo").addEventListener("click", () => setDemo(!budgetDemo));
+$("budget-span").addEventListener("click", e => {
+  const b = e.target.closest("button");
+  if (!b || !budgetData) return;
+  budgetView = b.dataset.v === "ytd" ? "ytd" : ($("budget-month").value || (budgetData.available.at(-1) || {}).month || "");
+  loadBudget();
+});
+$("budget-month").addEventListener("change", e => { budgetView = e.target.value; loadBudget(); });
 
 // -- the chat
 const history = [];  // [{role, content}], kept while the page is open

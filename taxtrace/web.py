@@ -23,7 +23,7 @@ from importlib import resources
 from pathlib import Path, PurePosixPath
 from urllib.parse import parse_qs, urlparse
 
-from . import __version__, chat, cli, entry, importer, text, todo, workspace
+from . import __version__, budget, budget_demo, chat, cli, entry, importer, text, todo, workspace
 
 APP_HOST = "taxtrace.localhost"  # browsers and macOS send every *.localhost name to this machine, never the web
 PORT = 8766  # jobwatch's is 8765
@@ -116,6 +116,44 @@ def entry_screen(year: int | None = None) -> dict:
     return {**out, "years": sorted({*years, year}), "counts": {s: sheet.count(s) for s in
             (entry.READY, entry.ESTIMATE, entry.MISSING)}, "yourself": entry.YOURSELF, "coming_note": entry.COMING_NOTE,
             "file": str(file) if file.exists() else None, "open_todo": len(items)}
+
+
+def _budget(demo: bool, today: date | None = None):
+    """The plan, rules and months the Budget tab shows: the workspace's budget folder, or the made-up household."""
+    if demo:
+        return budget_demo.demo(today)
+    folder = workspace.home() / workspace.BUDGET
+    plan = budget.load_plan(folder)
+    if plan is None:
+        return None
+    return plan, budget.load_rules(folder, plan), budget.load_actuals(folder)
+
+
+def budget_view(asked: str) -> str | None:
+    """A view the page asked for: "ytd", a month, or nothing (the default)."""
+    if asked and asked != "ytd":
+        budget.month_key(asked)
+    return asked or None
+
+
+def budget_screen(view: str | None = None, demo: bool = False, today: date | None = None) -> dict:
+    """The Budget tab: each line's budget against what was spent, for a month or the year to date, from
+    <workspace>/budget/ (nothing is written by looking), or the made-up household's with `demo`."""
+    folder = workspace.home() / workspace.BUDGET
+    found = _budget(demo, today)
+    if found is None:
+        return {"source": "none", "folder": str(folder), "exists": folder.is_dir()}
+    data = budget.status(*found, view, today)
+    return {**data, "source": "demo" if demo else "workspace", "folder": None if demo else str(folder)}
+
+
+def budget_payments(view: str | None, name: str, demo: bool = False, today: date | None = None) -> dict:
+    """The transactions behind one line or fund (or the unmatched or left-out rows), for "show payments"."""
+    found = _budget(demo, today)
+    if found is None:
+        return {"payments": []}
+    view = view or budget.default_view(found[0], found[2], today or date.today())
+    return {"payments": budget.payments(*found, view, name, today)}
 
 
 def upload_name(name: str) -> PurePosixPath:
@@ -243,6 +281,13 @@ def make_handler(settings: chat.Settings, token: str, port_ref: list[int]):
                     if asked and not re.fullmatch(r"20\d\d", asked):
                         raise ValueError("the tax year is four digits, such as 2026")
                     return self._json(HTTPStatus.OK, entry_screen(int(asked) if asked else None))
+                if method == "GET" and url.path in ("/api/budget", "/api/budget/payments"):
+                    query = parse_qs(url.query)
+                    view = budget_view((query.get("view") or [""])[0])
+                    demo = (query.get("demo") or [""])[0] == "1"
+                    if url.path == "/api/budget":
+                        return self._json(HTTPStatus.OK, budget_screen(view, demo))
+                    return self._json(HTTPStatus.OK, budget_payments(view, (query.get("line") or [""])[0], demo))
                 if method == "POST" and url.path == "/api/todo/done":
                     line, expect = int(body.get("line", 0)), str(body.get("text", ""))
                     try:
