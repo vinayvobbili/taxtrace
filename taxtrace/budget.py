@@ -80,6 +80,35 @@ def norm(text: str) -> str:
 # -- the plan -----------------------------------------------------------------------------------------------------
 
 @dataclass
+class BasisItem:
+    """One past payment a budget was worked out from."""
+    month: str
+    payee: str
+    amount: Decimal
+
+
+@dataclass
+class Basis:
+    """How a line's (or fund's) budget was set: the method in words, the period it covers, a note, the monthly
+    figure it came to and the past payments behind it. Every part is optional."""
+    method: str = ""
+    period: str = ""
+    note: str = ""
+    amount_per_month: Decimal | None = None
+    items: list[BasisItem] = field(default_factory=list)
+
+    def total(self) -> Decimal:
+        return sum((i.amount for i in self.items), ZERO)
+
+    def to_json(self) -> dict:
+        months = sorted({i.month for i in self.items})
+        return {"method": self.method, "period": self.period, "note": self.note,
+                "amount_per_month": _num(self.amount_per_month), "total": _num(self.total()), "months": len(months),
+                "items": [{"month": i.month, "payee": i.payee, "amount": _num(i.amount)}
+                          for i in sorted(self.items, key=lambda i: (i.month, i.payee.casefold()), reverse=True)]}
+
+
+@dataclass
 class Line:
     name: str
     group: str
@@ -89,6 +118,7 @@ class Line:
     cap: bool = False
     subs: list[Line] = field(default_factory=list)
     parent: str | None = None
+    basis: Basis | None = None
 
     def budget(self, month: str) -> Decimal:
         if month in self.overrides:
@@ -108,6 +138,7 @@ class Fund:
     opening: Decimal = ZERO
     target: Decimal | None = None  # what it should hold; the year's transfers when not given
     cap: bool = False
+    basis: Basis | None = None
 
     def transfer(self, month: str) -> Decimal:
         return self.transfers.get(month, self.monthly)
@@ -156,6 +187,34 @@ def _month_amounts(table, where: str) -> dict[str, Decimal]:
     return {month_key(k): amount(v, f"{where} {k}") for k, v in table.items()}
 
 
+def _text(raw: dict, key: str, where: str) -> str:
+    value = raw.get(key, "")
+    if not isinstance(value, str):
+        raise BudgetError(f"{where}: {key} is text, such as {key} = \"...\"")
+    return value.strip()
+
+
+def _basis(raw, where: str) -> Basis | None:
+    """A line's or fund's `basis` table: how its budget was set, and the past payments it came from."""
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise BudgetError(f"{where}: basis is a table: [lines.basis] with method, period, note, amount_per_month and "
+                          f"items")
+    items = raw.get("items") or []
+    if not isinstance(items, list):
+        raise BudgetError(f"{where}: basis items is a list of {{ month = \"2026-10\", payee = \"...\", amount = 120 }}")
+    out = []
+    for n, item in enumerate(items, 1):
+        if not isinstance(item, dict) or not str(item.get("payee", "")).strip():
+            raise BudgetError(f"{where}: basis item {n} needs a month, a payee and an amount")
+        out.append(BasisItem(month_key(str(item.get("month"))), str(item["payee"]).strip(),
+                             amount(item.get("amount"), f"{where} basis item {n}", signed=True)))
+    return Basis(method=_text(raw, "method", where), period=_text(raw, "period", where), note=_text(raw, "note", where),
+                 amount_per_month=amount(raw["amount_per_month"], f"{where} basis amount_per_month")
+                 if "amount_per_month" in raw else None, items=out)
+
+
 def _line(raw: dict, where: str, parent: Line | None = None) -> Line:
     if not isinstance(raw, dict) or not str(raw.get("name", "")).strip():
         raise BudgetError(f"{where}: every line needs a name")
@@ -166,7 +225,7 @@ def _line(raw: dict, where: str, parent: Line | None = None) -> Line:
     line = Line(name=name, group=group, icon=str(raw.get("icon", "")), cap=bool(raw.get("cap", False)),
                 monthly=amount(raw["monthly"], f"{name} monthly") if "monthly" in raw else None,
                 overrides=_month_amounts(raw.get("overrides"), f"{name} overrides"),
-                parent=parent.name if parent else None)
+                parent=parent.name if parent else None, basis=_basis(raw.get("basis"), name))
     if parent is None:
         line.subs = [_line(s, f"{name} sub-line {i + 1}", line) for i, s in enumerate(raw.get("sub") or [])]
     if line.monthly is None and not line.subs:
@@ -183,7 +242,8 @@ def _fund(raw: dict, where: str) -> Fund:
                 transfers=_month_amounts(raw.get("transfers"), f"{name} transfers"),
                 planned=_month_amounts(raw.get("planned"), f"{name} planned"),
                 opening=amount(raw.get("opening", 0), f"{name} opening", signed=True),
-                target=amount(raw["target"], f"{name} target") if "target" in raw else None)
+                target=amount(raw["target"], f"{name} target") if "target" in raw else None,
+                basis=_basis(raw.get("basis"), name))
 
 
 def parse_plan(text: str) -> Plan:
@@ -497,7 +557,8 @@ def _line_json(line: Line, v: View, spent: dict[str, Decimal], counts: dict[str,
            "monthly": _num(line.budget(months[-1])), "budget": _num(budget), "yearly": _num(v.plan.yearly(line)),
            "spent": _num(total), "remaining": _num(budget - total), "pct": pct, "pace": _pct(total, expected),
            "avg": _num(total / span) if span else None, "count": sum(counts.get(n, 0) for n in names),
-           "over": total > budget, "near": pct is not None and pct >= v.plan.near and total <= budget}
+           "over": total > budget, "near": pct is not None and pct >= v.plan.near and total <= budget,
+           "basis": line.basis.to_json() if line.basis else None}
     if line.subs:
         subs = [{**_line_json(s, v, spent, counts, span, months), "parent": line.name} for s in line.subs]
         if spent.get(line.name):  # the parent's own payments that no sub-line took
@@ -505,7 +566,8 @@ def _line_json(line: Line, v: View, spent: dict[str, Decimal], counts: dict[str,
             subs.append({"name": "Not split", "parent": line.name, "group": line.group, "icon": line.icon,
                          "cap": False, "monthly": None, "budget": None, "yearly": None, "spent": _num(own),
                          "remaining": None, "pct": None, "pace": None, "avg": _num(own / span) if span else None,
-                         "count": counts.get(line.name, 0), "over": False, "near": False, "unsplit": True})
+                         "count": counts.get(line.name, 0), "over": False, "near": False, "unsplit": True,
+                         "basis": None})
         out["subs"] = subs
     return out
 
@@ -585,7 +647,7 @@ def _fund_json(fund: Fund, v: View, spent: dict[str, Decimal], counts: dict[str,
             "yearly": _num(sum((fund.transfer(m) for m in plan.months()), ZERO)),
             "spent": _num(total), "count": counts.get(fund.name, 0), "target": _num(target),
             "balance": _num(balance), "pct": _pct(balance, target) if balance is not None else None,
-            "over": balance is not None and balance < 0}
+            "over": balance is not None and balance < 0, "basis": fund.basis.to_json() if fund.basis else None}
 
 
 def sort_spent(v: View, name: str, month: str) -> Decimal:

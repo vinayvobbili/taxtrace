@@ -34,10 +34,24 @@ monthly = 410
 name = "Utilities"
 group = "fixed"
 icon = "💡"
+  [lines.basis]
+  method = "the three sub-lines' bases added up"
+  note = "Water and broadband are fixed bills; power moves with the seasons."
   [[lines.sub]]
   name = "Power"
   monthly = 120
   overrides = {{ "{year}-01" = 165, "{year}-07" = 155 }}
+    [lines.sub.basis]
+    method = "average of the last four bills, rounded up to the next 5"
+    period = "{last}-09 to {last}-12"
+    amount_per_month = 120
+    note = "January and July run higher, so the plan overrides them."
+    items = [
+      {{ month = "{last}-12", payee = "Initech Power Co", amount = 131.40 }},
+      {{ month = "{last}-11", payee = "Initech Power Co", amount = 109.85 }},
+      {{ month = "{last}-10", payee = "Initech Power Co", amount = 112.30 }},
+      {{ month = "{last}-09", payee = "Initech Power Co", amount = 122.15 }},
+    ]
   [[lines.sub]]
   name = "Water"
   monthly = 55
@@ -62,6 +76,18 @@ name = "Groceries"
 group = "essentials"
 icon = "🛒"
 monthly = 480
+  [lines.basis]
+  method = "average of the last three months, rounded up to the next 10"
+  period = "{last}-10 to {last}-12"
+  amount_per_month = 470
+  items = [
+    {{ month = "{last}-12", payee = "Globex Grocery", amount = 402.10 }},
+    {{ month = "{last}-12", payee = "Soylent Market", amount = 71.60 }},
+    {{ month = "{last}-11", payee = "Globex Grocery", amount = 388.45 }},
+    {{ month = "{last}-11", payee = "Soylent Market", amount = 64.20 }},
+    {{ month = "{last}-10", payee = "Globex Grocery", amount = 395.00 }},
+    {{ month = "{last}-10", payee = "Soylent Market", amount = 80.35 }},
+  ]
 
 [[lines]]
 name = "Fuel and transit"
@@ -122,6 +148,14 @@ monthly = 260
 opening = 520
 planned = {{ "{year}-07" = 1350, "{year}-12" = 980 }}
 cap = true
+  [funds.basis]
+  method = "set by decision: the two trips planned for the year, spread over twelve months"
+  period = "{last}"
+  note = "The summer trip and the winter trip, from what the same trips cost last year."
+  items = [
+    {{ month = "{last}-12", payee = "Monarch Air", amount = 980.00 }},
+    {{ month = "{last}-07", payee = "Monarch Air", amount = 1290.00 }},
+  ]
 
 [[funds]]
 name = "Gifts"
@@ -290,10 +324,15 @@ def sample_pipe(month: str) -> str:
     return "\n".join(lines) + "\n"
 
 
+def sample_plan(year: int) -> str:
+    """The made-up plan for `year`; its basis items are last year's invented bills."""
+    return SAMPLE_PLAN.format(year=year, last=year - 1)
+
+
 def demo(today: date | None = None) -> tuple[budget.Plan, list[budget.Rule], dict[str, Month]]:
     """The made-up household's plan for this year, its rules, and its months up to today (today's in part)."""
     today = today or date.today()
-    plan = budget.parse_plan(SAMPLE_PLAN.format(year=today.year))
+    plan = budget.parse_plan(sample_plan(today.year))
     rules = budget.parse_rules(SAMPLE_RULES, plan)
     months = {}
     for m in range(1, today.month + 1):
@@ -304,7 +343,7 @@ def demo(today: date | None = None) -> tuple[budget.Plan, list[budget.Rule], dic
 
 def write_sample(folder: Path, year: int, force: bool = False) -> list[Path]:
     """`taxtrace budget init`: the made-up plan, rules and one month of transactions, into `folder`."""
-    files = {folder / f"budget-{year}.toml": SAMPLE_PLAN.format(year=year), folder / budget.RULES_FILE: SAMPLE_RULES,
+    files = {folder / f"budget-{year}.toml": sample_plan(year), folder / budget.RULES_FILE: SAMPLE_RULES,
              folder / f"sample-transactions-{year}-01.txt": sample_pipe(f"{year}-01")}
     if not force and (existing := [p for p in files if p.exists()]):
         raise budget.BudgetError(f"{existing[0]} is already there: pass --force to write over the sample")

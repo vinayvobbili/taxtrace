@@ -96,7 +96,16 @@ taxtrace budget rules --unmatched                     # payees no rule matches y
 taxtrace budget rules --add "Globex Outlet -> Shopping"
 taxtrace budget status                                # the year to date, line by line
 taxtrace budget status --month 2031-03                # one month
+taxtrace budget basis                                 # which lines have a recorded basis
+taxtrace budget basis Groceries --method "average of the last three months, rounded up" \
+    --period "2030-08 to 2030-10" --items-from groceries-2030.txt
 ```
+
+- `basis` shows or sets how a line's budget was set (see below). With no line it lists which ones have one; with a
+  line and nothing else it shows that line's; with `--method`, `--period`, `--note`, `--amount-per-month` or
+  `--items-from` it writes them into the budget file (what is given replaces what was there, the rest stays;
+  `--clear` removes it). `--items-from` reads the past payments from a pipe-separated or CSV transactions file with
+  the importer's own readers and keeps each one's month, payee and amount, never the account.
 
 - `import` reads a CSV by its column names, never by who issued it: a date, a description (or payee, merchant,
   name), and an amount or separate debit and credit columns; a status column marks pending rows. Whether spending
@@ -110,6 +119,30 @@ taxtrace budget status --month 2031-03                # one month
 - `status` prints each line's budget, spent, remaining, share used and pace (spending against the plan for the
   days gone by: 100% is on plan), with the monthly average for the year to date, then the funds' balances and the
   rows outside the lines.
+
+## How a budget was set
+
+A line, a sub-line or a fund can carry a `basis` table: the method in words (an average of the last months, a
+quote, a round-up, a decision), the period it covers, a note, the monthly figure it came to, and the past payments
+it came from. All of it is optional.
+
+```toml
+[[lines]]
+name = "Groceries"
+group = "essentials"
+monthly = 400
+  [lines.basis]
+  method = "average of the last three months, rounded up"
+  period = "2030-08 to 2030-10"
+  amount_per_month = 395
+  note = "Dinner parties not counted."
+  items = [
+    { month = "2030-10", payee = "Globex Grocery", amount = 410.50 },
+    { month = "2030-09", payee = "Soylent Market", amount = 22.25 },
+  ]
+```
+
+A sub-line's table is `[lines.sub.basis]`, a fund's `[funds.basis]`. The Budget tab's info icon on a card opens it.
 
 ## The Budget tab
 
@@ -129,6 +162,12 @@ latest month), or any imported month.
   sub-line get a "Not split" card (only when there are some). The tiles, the group bar and the over count use the
   parent's totals, so nothing counts twice.
 - Sinking funds: each balance against its target.
+- Every card (lines, sub-lines, group headers and funds) has a small **i** icon beside its name. It opens a dialog
+  titled with the line, "How this budget was set": the budget, the basis figure and period, the method and note,
+  the past payments grouped by payee with their months (newest first), their total and the resulting monthly
+  budget. A line with no basis says "No basis recorded yet" and how to add one. Esc, the × or a click outside
+  closes it, and focus goes back to the icon.
+- Numbers the page has no value for read as a dash, never NaN; a period with nothing imported says so.
 - Not in the lines: pending, refunds, one-offs, what was left out and what matched no rule.
 - **Demo data** shows a made-up household instead of yours, to try the screen or take a picture of it.
 

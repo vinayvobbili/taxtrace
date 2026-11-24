@@ -1744,7 +1744,8 @@ def cmd_todo(args: argparse.Namespace) -> int:
 def cmd_budget(args: argparse.Namespace) -> int:
     """The household budget against what was spent, in <workspace>/budget/ (never read as documents): `init` writes
     a made-up sample to try, `import` reads a month's bank or card export (CSV) or pipe-separated transactions,
-    `rules` lists payee rules, adds one or lists the payees no rule matches, and `status` shows each line's budget,
+    `rules` lists payee rules, adds one or lists the payees no rule matches, `basis` shows or sets how a line's budget
+    was set (the method and the past payments it came from), and `status` shows each line's budget,
     spent, remaining, % used and pace, for a month or the year to date. Raw exports are copied to a folder on this
     computer only (TAXTRACE_BUDGET_PRIVATE), never the workspace. The page's Budget tab shows the same.
     """
@@ -1777,10 +1778,37 @@ def cmd_budget(args: argparse.Namespace) -> int:
             return 0
         if args.action == "rules":
             return _budget_rules(args, folder, plan, rules)
+        if args.action == "basis":
+            return _budget_basis(args, folder, plan)
         return _budget_status(args, plan, rules, budget.load_actuals(folder))
     except budget.BudgetError as err:
         print(f"taxtrace budget: {err}", file=sys.stderr)
         return 2
+
+
+def _budget_basis(args: argparse.Namespace, folder: Path, plan) -> int:
+    """`budget basis`: which lines have a recorded basis; one line's basis; or set it (what's given replaces what
+    was there). The Budget tab's info icon shows it."""
+    from . import budget, budget_basis
+
+    if not args.line:
+        names = [(i.name, i) for line in plan.lines for i in (line, *line.subs)] + [(f.name, f) for f in plan.funds]
+        for name, item in names:
+            print(f"  {name[:40]:<42}" + (f"{len(item.basis.items)} past payments, {item.basis.method or 'no method'}"
+                                          if item.basis else "no basis recorded yet"))
+        return 0
+    found = plan.find(args.line)
+    if found is None:
+        raise budget.BudgetError(f"{args.line!r} isn't a line, sub-line or fund in the budget")
+    given = [args.method, args.period, args.note, args.amount_per_month, args.items_from]
+    if args.clear or any(v is not None for v in given):
+        items = budget_basis.items_from(Path(args.items_from).expanduser()) if args.items_from else None
+        budget_basis.set_basis(folder, found.name, method=args.method, period=args.period, note=args.note,
+                               amount_per_month=args.amount_per_month, items=items, clear=args.clear)
+        found = budget.load_plan(folder).find(found.name)
+        print(f"wrote {budget.plan_path(folder)}")
+    print("\n".join(budget_basis.describe(found.name, found.basis, found.monthly)))
+    return 0
 
 
 def _budget_rules(args: argparse.Namespace, folder: Path, plan, rules) -> int:
@@ -2646,6 +2674,18 @@ def build_parser() -> argparse.ArgumentParser:
                                                 '"words -> EXCLUDE ONE-OFF"')
     a.add_argument("--unmatched", action="store_true", help="the payees no rule matches, with their row counts")
     a.add_argument("--month", help="--unmatched: only this month, YYYY-MM")
+    a = acts.add_parser("basis", parents=[where],
+                        help="how a line's budget was set: the method, the period, a note and the past payments it "
+                             "came from (the Budget tab's info icon)")
+    a.add_argument("line", nargs="?", help="a line, sub-line or fund (without it: which ones have a basis)")
+    a.add_argument("--method", help="how the budget was set, in words: an average of the last months, a quote, "
+                                    "a decision")
+    a.add_argument("--period", help="the period it covers, such as 2030-08 to 2030-10")
+    a.add_argument("--note", help="anything else worth knowing")
+    a.add_argument("--amount-per-month", help="the monthly figure the past payments came to")
+    a.add_argument("--items-from", metavar="FILE", help="the past payments, from a pipe-separated or CSV transactions "
+                                                         "file (replaces the ones recorded)")
+    a.add_argument("--clear", action="store_true", help="remove the basis")
     a = acts.add_parser("status", parents=[where],
                         help="each line's budget, spent, remaining, share used and pace, for a month or the year")
     a.add_argument("--month", help="YYYY-MM, or ytd for the year to date (default: the year to date once it has a "

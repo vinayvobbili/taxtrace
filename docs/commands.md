@@ -43,7 +43,7 @@ Early. What works today:
   trailing-12-months report is shown apart. Each Total row is checked against its account rows, and missing years of
   2020-2025 are named. With no paths it reads the workspace's `EJ-history` folder.
 - `taxtrace entry`: the year's entry sheet, to type into a filing site (see [Entry sheet](https://github.com/vinayvobbili/taxtrace/blob/main/docs/return.md#entry-sheet)).
-- `taxtrace budget`: a household budget against your bank and card exports: `init`, `import`, `rules` and `status`
+- `taxtrace budget`: a household budget against your bank and card exports: `init`, `import`, `rules`, `basis` and `status`
   (see [Budget](https://github.com/vinayvobbili/taxtrace/blob/main/docs/budget.md#budget)).
 - `taxtrace ui`: the workspace in the browser, with an Import screen (drop files in, filed as `import` files them), the entry sheet as a table, the Budget tab and a chat (see [Chat](https://github.com/vinayvobbili/taxtrace/blob/main/docs/chat.md#chat)).
 

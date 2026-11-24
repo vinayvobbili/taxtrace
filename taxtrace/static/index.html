@@ -481,6 +481,39 @@ form.input button { border: 0; border-radius: 13px; background: var(--grad); col
 .bgyear { color: var(--muted); font-size: 12.5px; text-align: right; white-space: nowrap; }
 .bgyear b { color: var(--text); font-variant-numeric: tabular-nums; }
 .bcard.unsplit .bname b { font-style: italic; }
+.bnamerow { display: flex; align-items: flex-start; gap: 7px; }
+.bnamerow b { flex: 0 1 auto; }
+.ibtn { flex: none; width: 20px; height: 20px; margin-top: 1px; padding: 0; border-radius: 50%; display: inline-grid; place-items: center; cursor: pointer;
+  font: italic 700 12px/1 Georgia, "Times New Roman", serif; color: var(--gc, var(--accent)); background: color-mix(in srgb, var(--gc, var(--accent)) 12%, transparent);
+  border: 1.5px solid color-mix(in srgb, var(--gc, var(--accent)) 55%, transparent); transition: transform .15s, background .15s, color .15s; }
+.ibtn:hover { transform: scale(1.12); color: #fff; background: var(--gg, var(--grad)); border-color: transparent; }
+.ibtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ibtn.pay { font: 700 13px/1 system-ui, sans-serif; border-radius: 6px; width: 20px; height: 18px; }
+.bmodal { border: 1px solid var(--line); border-radius: 20px; padding: 0; background: var(--panel-solid); color: var(--text); width: min(640px, calc(100vw - 32px));
+  max-height: min(84vh, 780px); box-shadow: 0 40px 90px -24px rgba(15, 23, 42, .55); overflow: hidden; }
+.bmodal[open] { display: flex; flex-direction: column; animation: pop .25s cubic-bezier(.2, .8, .2, 1) both; }
+:root[data-width="wide"] .bmodal { width: min(800px, calc(100vw - 48px)); } :root[data-width="full"] .bmodal { width: min(960px, calc(100vw - 48px)); }
+.bmodal::backdrop { background: rgba(15, 23, 42, .5); backdrop-filter: blur(3px); }
+.bmodal-head { display: flex; gap: 12px; justify-content: space-between; align-items: flex-start; padding: 18px 20px 14px; position: relative;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--gc, var(--accent)) 16%, var(--panel-solid)), var(--panel-solid) 70%); }
+.bmodal-head::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 4px; background: var(--gg, var(--grad)); }
+.bmodal-head h3 { margin: 0; font-size: 19px; letter-spacing: -.01em; overflow-wrap: anywhere; }
+.bmodal-head p { margin: 3px 0 0; color: var(--muted); font-size: 13px; }
+.bmodal-x { flex: none; width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--line); background: var(--chip); color: var(--text); font-size: 20px; line-height: 1; cursor: pointer; }
+.bmodal-x:hover { background: var(--gg, var(--grad)); color: #fff; border-color: transparent; }
+.bmodal-body { padding: 4px 20px 20px; overflow: auto; display: grid; gap: 10px; align-content: start; }
+.bmodal-body p { margin: 0; font-size: 14px; } .bmodal-body .how { color: var(--muted); font-size: 13px; } .bmodal-body .none { font-weight: 700; font-size: 15px; }
+.bmodal-body code { font-size: 12px; background: var(--chip); padding: 1px 6px; border-radius: 6px; overflow-wrap: anywhere; }
+.bbasis { display: grid; gap: 10px; }
+.blist-pay { display: grid; gap: 8px; }
+.bgrp { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.bgrp-h, .bgrp-r, .btotal { display: flex; justify-content: space-between; gap: 12px; font-variant-numeric: tabular-nums; }
+.bgrp-h { padding: 7px 12px; font-weight: 750; background: color-mix(in srgb, var(--gc, var(--accent)) 10%, var(--chip)); }
+.bgrp-r { padding: 5px 12px; font-size: 13px; border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
+.bgrp-r span:first-child { color: var(--muted); }
+.btotal { padding: 8px 12px; border-radius: 10px; background: var(--chip); font-size: 14px; } .btotal b { font-weight: 800; }
+.btotal.res { background: var(--gg, var(--grad)); color: #fff; }
+.pays-modal .pays { margin-top: 0; }
 .bcard details { margin-top: 10px; }
 .bcard summary { cursor: pointer; font-size: 12.5px; font-weight: 700; color: var(--gc, var(--accent)); list-style: none; user-select: none; }
 .bcard summary::-webkit-details-marker { display: none; }
@@ -1075,6 +1108,56 @@ function meter(part, whole) {
   return h("div", { class: "meter" + (finite(part) && finite(whole) && Number(part) > Number(whole) ? " over" : "") }, bar);
 }
 function fig(label, value, cls = "") { return h("div", {}, h("dt", {}, label), h("dd", { class: cls }, value)); }
+// -- one modal for the cards' info icons: a native <dialog> (Esc closes it, the page behind is inert and focus stays
+// inside), closed too by its x or a click on the backdrop; focus goes back to the icon that opened it
+function openModal({ title, sub, body, group = "" }) {
+  const opener = document.activeElement;
+  const dlg = h("dialog", { class: `bmodal ${group}`, "aria-labelledby": "bmodal-title" });
+  const x = h("button", { class: "bmodal-x", type: "button", "aria-label": "Close" }, "×");
+  dlg.append(h("div", { class: "bmodal-head" }, h("div", {}, h("h3", { id: "bmodal-title" }, title), sub ? h("p", {}, sub) : null), x),
+    h("div", { class: "bmodal-body" }, body));
+  x.addEventListener("click", () => dlg.close());
+  dlg.addEventListener("click", e => { if (e.target === dlg) dlg.close(); });
+  dlg.addEventListener("close", () => { dlg.remove(); if (opener && opener.isConnected) opener.focus(); });
+  document.body.append(dlg);
+  dlg.showModal();
+  return dlg;
+}
+function nameRow(name, ...icons) { return h("div", { class: "bnamerow" }, h("b", {}, name), ...icons); }
+function iBtn(kind, label, tip, onclick) {
+  return h("button", { class: `ibtn ${kind}`, type: "button", title: tip, "aria-label": label, onclick }, kind === "pay" ? "≡" : "i");
+}
+const monthText = m => { const [y, n] = String(m).split("-").map(Number); const d = new Date(y, n - 1, 1);
+  return Number.isNaN(d.getTime()) ? String(m) : d.toLocaleString("en-US", { month: "short", year: "numeric" }); };
+function basisBody(x) {
+  const b = x.basis;
+  if (!b) return h("div", { class: "bbasis" }, h("p", { class: "none" }, "No basis recorded yet."),
+    h("p", { class: "how" }, "A basis says how this budget was set and which past payments it came from. Add one with ",
+      h("code", {}, `taxtrace budget basis "${x.name}" --method "..." --period "..." --items-from <file>`),
+      ", or a ", h("code", {}, "basis"), " table under the line in the budget file."));
+  const months = b.months || 0, avg = !finite(b.amount_per_month) && months && finite(b.total) ? b.total / months : null;
+  const groups = new Map();
+  for (const i of b.items) groups.set(i.payee, [...(groups.get(i.payee) || []), i]);
+  return h("div", { class: "bbasis" },
+    h("dl", { class: "bfig" }, fig("Budget", finite(x.monthly) ? `${money(x.monthly)} / month` : money(x.budget)),
+      fig("Basis", finite(b.amount_per_month) ? `${money(b.amount_per_month)} / month` : avg != null ? `${money(avg)} / month` : "—"),
+      fig("Period", b.period || (months ? `${months} month${months === 1 ? "" : "s"}` : "—"))),
+    avg != null ? h("p", { class: "how" }, `No monthly figure was recorded, so ${money(avg)} is the average of the ${months} month${months === 1 ? "" : "s"} of payments below.`) : null,
+    b.method ? h("p", {}, h("b", {}, "Method: "), b.method) : h("p", { class: "how" }, "No method recorded."),
+    b.note ? h("p", {}, h("b", {}, "Note: "), b.note) : null,
+    b.items.length ? h("div", { class: "blist-pay" }, [...groups].map(([payee, rows]) => h("div", { class: "bgrp" },
+      h("div", { class: "bgrp-h" }, h("span", {}, payee), h("span", {}, cents(rows.reduce((s, r) => s + Number(r.amount), 0)))),
+      rows.map(r => h("div", { class: "bgrp-r" }, h("span", {}, monthText(r.month)), h("span", {}, cents(r.amount)))))))
+      : h("p", { class: "how" }, "No past payments recorded."),
+    b.items.length ? h("div", { class: "btotal" }, h("span", {}, `${b.items.length} past payment${b.items.length === 1 ? "" : "s"}`),
+      h("b", {}, cents(b.total))) : null,
+    h("div", { class: "btotal res" }, h("span", {}, "Resulting monthly budget"),
+      h("b", {}, finite(x.monthly) ? money(x.monthly) : money(x.budget))));
+}
+function basisBtn(x) {
+  return iBtn("basis", `How the ${x.name} budget was set`, "How this budget was set", () =>
+    openModal({ title: x.name, sub: "How this budget was set", body: basisBody(x), group: x.group ? `grp-${x.group}` : "" }));
+}
 function paymentsBox(name, count, ownOnly = false) {  // "show payments": the rows behind a line, loaded from this computer when opened
   const box = h("details", {}, h("summary", {}, `Show payments (${count})`));
   box.addEventListener("toggle", async () => {
@@ -1101,7 +1184,7 @@ function lineCard(x, i, ytd) {  // a line, or one sub-line of a group: the same 
   return h("div", { class: `card bcard grp-${x.group}${x.over ? " over" : ""}${unsplit ? " unsplit" : ""}`, "data-line": x.name, "data-parent": x.parent || null,
     style: `animation-delay:${Math.min(i * 35, 420)}ms` },
     h("div", { class: "bhead" }, h("div", { class: "bico", "aria-hidden": "true" }, x.icon || "•"),
-      h("div", { class: "bname" }, h("b", {}, x.name), h("div", { class: "badges" }, h("span", { class: "badge" }, group.label),
+      h("div", { class: "bname" }, nameRow(x.name, unsplit ? null : basisBtn(x)), h("div", { class: "badges" }, h("span", { class: "badge" }, group.label),
         x.cap ? h("span", { class: "badge cap" }, "CAP") : null, x.over ? h("span", { class: "badge over" }, "OVER") : null,
         x.near ? h("span", { class: "badge near" }, "NEAR") : null)),
       unsplit ? donut(0, 0) : donut(x.spent, x.budget)),
@@ -1118,7 +1201,7 @@ function groupHead(x, i, ytd) {  // a parent line is a heading over its sub-line
   const group = budgetData.groups[x.group] || { label: x.group }, left = x.remaining;
   return h("div", { class: `card bghead grp-${x.group}${x.over ? " over" : ""}`, "data-group": x.name, style: `animation-delay:${Math.min(i * 35, 420)}ms` },
     h("div", { class: "bico", "aria-hidden": "true" }, x.icon || "•"),
-    h("div", { class: "bname" }, h("b", {}, x.name), h("div", { class: "badges" }, h("span", { class: "badge" }, group.label),
+    h("div", { class: "bname" }, nameRow(x.name, basisBtn(x)), h("div", { class: "badges" }, h("span", { class: "badge" }, group.label),
       x.cap ? h("span", { class: "badge cap" }, "CAP") : null, x.over ? h("span", { class: "badge over" }, "OVER") : null,
       x.near ? h("span", { class: "badge near" }, "NEAR") : null)),
     h("dl", { class: "bgfig" }, fig(ytd ? "Budget so far" : "Budget", money(x.budget)), fig("Spent", money(x.spent)),
@@ -1144,7 +1227,7 @@ function fundCard(f, i) {
   const started = f.balance != null;
   return h("div", { class: "card bcard", style: `--gg: linear-gradient(135deg, #10b981, #0ea5e9); --gc: var(--b-ok); animation-delay:${Math.min(i * 35, 420)}ms` },
     h("div", { class: "bhead" }, h("div", { class: "bico", "aria-hidden": "true" }, f.icon || "•"),
-      h("div", { class: "bname" }, h("b", {}, f.name), h("div", { class: "badges" }, h("span", { class: "badge" }, "Sinking fund"),
+      h("div", { class: "bname" }, nameRow(f.name, basisBtn(f)), h("div", { class: "badges" }, h("span", { class: "badge" }, "Sinking fund"),
         f.cap ? h("span", { class: "badge cap" }, "CAP") : null, f.over ? h("span", { class: "badge over" }, "OVERDRAWN") : null)),
       donut(started ? f.balance : 0, f.target, "fund")),
     h("dl", { class: "bfig" }, fig("Balance", started ? money(f.balance) : "—", started && f.balance < 0 ? "neg" : ""),
