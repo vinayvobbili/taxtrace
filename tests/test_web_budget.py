@@ -131,6 +131,14 @@ def test_the_page_keeps_its_theme_and_width_settings_and_the_group_colours():
     assert "prefers-reduced-motion" in html
 
 
+def test_every_screen_shares_the_polish_the_active_tab_and_hover_lift():
+    css = web.page("t0ken").decode().split("<style>")[1].split("</style>")[0]
+    assert '.tabs a[aria-current="page"]::after' in css
+    for card in (".stat:hover", ".folder:hover", ".tcard:hover", ".sec:hover", ".res:hover", ".entry-extra .card:hover",
+                 ".bcard:hover"):
+        assert card in css, card
+
+
 def test_the_page_loads_nothing_from_the_network():
     html = web.page("t0ken").decode()
     assert "<script src" not in html and "https://" not in html.split("<style>")[1].split("</style>")[0]
