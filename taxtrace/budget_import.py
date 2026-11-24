@@ -79,7 +79,7 @@ def parse_date(text: str) -> date | None:
 
 
 def parse_amount(text: str) -> Decimal | None:
-    """$1,234.56, -12.75, (12.75) and 12.75- as amounts; blank or anything else as None."""
+    """$1,234.56, -12.75, (12.75) and 12.75- as amounts; blank or anything else (NaN and Infinity too) as None."""
     t = text.strip().replace("−", "-").replace("$", "").replace(",", "").replace(" ", "")
     if not t:
         return None
@@ -88,6 +88,8 @@ def parse_amount(text: str) -> Decimal | None:
     try:
         d = Decimal(t)
     except InvalidOperation:
+        return None
+    if not d.is_finite():  # Decimal reads "NaN" and "Infinity", which would show on the page as NaN
         return None
     return -d if negative else d
 

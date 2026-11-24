@@ -5,15 +5,18 @@ from __future__ import annotations
 
 import http.client
 import json
+import math
 import shutil
+import subprocess
 import threading
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
 from test_budget import PIPE, PLAN, RULES
 
-from taxtrace import budget_import, web, workspace
+from taxtrace import budget, budget_import, web, workspace
 
 
 @pytest.fixture
@@ -171,6 +174,82 @@ def test_the_page_draws_a_header_and_one_card_per_sub_line_not_a_list():
     assert "urgency(a) - urgency(b)" in js and "urgency(x) * 10" in html.split("function renderBudget")[1]
     render = html.split("function renderBudget")[1].split("async function loadBudget")[0]
     assert "t.over" in render and "d.groups[g].spent" in render
+
+
+def _finite(value) -> bool:
+    """Every number anywhere in a JSON value is a finite one (the page would print NaN or Infinity for any other)."""
+    if isinstance(value, float):
+        return math.isfinite(value)
+    if isinstance(value, dict):
+        return all(_finite(v) for v in value.values())
+    if isinstance(value, list):
+        return all(_finite(v) for v in value)
+    return True
+
+
+EDGE_PLAN = """\
+year = 2031
+[[lines]]
+name = "Initech Nothing"
+group = "fixed"
+monthly = 0
+
+[[lines]]
+name = "Initech Utilities"
+group = "fixed"
+  [[lines.sub]]
+  name = "Power"
+  monthly = 0
+  [[lines.sub]]
+  name = "Water"
+  monthly = 55
+
+[[funds]]
+name = "Initech Rainy Day"
+monthly = 0
+"""
+
+
+@pytest.mark.parametrize("view", [None, "ytd", "2031-03", "2030-11", "2031-12"])
+@pytest.mark.parametrize("today", [date(2030, 11, 24), date(2031, 1, 1), date(2031, 3, 15), date(2032, 2, 1)])
+def test_no_view_of_an_empty_or_zero_budget_has_a_number_that_is_not_one(view, today):
+    """Empty actuals, a zero budget, a sub-line with nothing, the year before it starts and the year after it ends."""
+    plan = budget.parse_plan(EDGE_PLAN)
+    s = budget.status(plan, [], {}, view, today)
+    assert _finite(s) and s["rows"] == 0
+    assert all(x["pct"] is None and x["pace"] is None for x in s["lines"] if x["budget"] == 0)
+    assert s["lines"][1]["subs"][0]["pct"] is None  # the zero-budget sub-line has no share to show
+
+
+def test_spending_on_a_zero_budget_line_is_over_with_no_share(workspace_home):
+    plan = budget.parse_plan(EDGE_PLAN)
+    rules = budget.parse_rules('[[rules]]\nmatch = "Initech Power"\nline = "Power"\n', plan)
+    month = budget.Month("2031-03", [budget.Txn(date(2031, 3, 4), "Initech Power Co", Decimal("9.50"))])
+    s = budget.status(plan, rules, {"2031-03": month}, "2031-03", date(2031, 3, 31))
+    power = s["lines"][1]["subs"][0]
+    assert (power["spent"], power["budget"], power["pct"], power["pace"], power["over"]) == (9.5, 0, None, None, True)
+    assert _finite(s)
+
+
+FORMATTERS = ("// -- number formatters", "// -- end of the number formatters")
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node isn't installed")
+def test_the_pages_number_formatters_print_a_dash_for_what_isnt_a_number():
+    html = web.page("t0ken").decode()
+    code = html.split(FORMATTERS[0])[1].split("\n", 1)[1].split(FORMATTERS[1])[0]
+    probe = ("const out = [money(undefined), money(NaN), money(Infinity), money(null), money(''), money(-1234.4), "
+             "cents(undefined), cents(NaN), cents(12.5), pctText(undefined), pctText(NaN), pctText(Infinity), "
+             "pctText(0), pctText(98.6), ratio(5, 0), ratio(0, 0), ratio(null, 10), ratio(NaN, 10), ratio(50, 200), "
+             "ratio(500, 200), ratio(undefined, undefined)]; console.log(JSON.stringify(out));")
+    run = subprocess.run(["node", "-e", code + probe], capture_output=True, text=True, check=True)
+    assert json.loads(run.stdout) == ["—", "—", "—", "—", "—", "−$1,234", "—", "—", "$12.50", "—", "—", "—", "0%",
+                                      "99%", 1, 0, None, None, 0.25, 1, None]
+
+
+def test_the_page_says_when_nothing_is_imported_for_the_period():
+    html = web.page("t0ken").decode()
+    assert "No actuals imported for this period yet" in html.split("function renderBudget")[1]
 
 
 def test_demo_mode_shows_the_made_up_household(server, workspace_home):

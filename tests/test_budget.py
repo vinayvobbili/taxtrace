@@ -329,9 +329,17 @@ def test_a_file_without_the_columns_says_what_it_needs():
 
 
 @pytest.mark.parametrize("text, value", [("$1,234.56", "1234.56"), ("(12.75)", "-12.75"), ("12.75-", "-12.75"),
-                                         ("−18.40", "-18.40"), ("", None), ("n/a", None)])
+                                         ("−18.40", "-18.40"), ("", None), ("n/a", None), ("NaN", None),
+                                         ("Infinity", None), ("-inf", None), ("(nan)", None)])
 def test_amounts_in_the_shapes_exports_write_them(text, value):
     assert budget_import.parse_amount(text) == (Decimal(value) if value else None)
+
+
+def test_a_row_whose_amount_is_not_a_number_is_skipped_not_shown_as_nan():
+    rows = ("2031-03-02 | Checking | Globex Grocery | Groceries | NaN |\n"
+            "2031-03-03 | Checking | Globex Grocery | Groceries | 12.50 |\n")
+    parsed = budget_import.parse(rows)
+    assert [t.amount for t in parsed.rows] == [Decimal("12.50")] and parsed.skipped == 1
 
 
 # -- importing a month --------------------------------------------------------------------------------------------
