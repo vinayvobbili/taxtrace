@@ -121,8 +121,13 @@ latest month), or any imported month.
 - "Where our money goes": spending by group as one bar, with the groups' colours: blue fixed bills, teal daily
   essentials, violet family, orange discretionary.
 - A card per line, over-budget lines first: its icon, budget, spent, left, share used, a bar and a ring (green
-  left, amber spent, red when over), its sub-lines, and "Show payments", which loads that line's rows from this
-  computer. Account numbers are never shown: an account's digits become ••••.
+  left, amber spent, red when over), and "Show payments", which loads that line's rows from this computer. Account
+  numbers are never shown: an account's digits become ••••.
+- A line with sub-lines is a heading, not a card: a full-width header with its icon, group, total budget, spent and
+  left, a thin bar and the year's figure, and under it one card per sub-line, the same card as any other line in
+  the group's colour, over-budget ones first, each with its own payments. Payments that match the parent but no
+  sub-line get a "Not split" card (only when there are some). The tiles, the group bar and the over count use the
+  parent's totals, so nothing counts twice.
 - Sinking funds: each balance against its target.
 - Not in the lines: pending, refunds, one-offs, what was left out and what matched no rule.
 - **Demo data** shows a made-up household instead of yours, to try the screen or take a picture of it.

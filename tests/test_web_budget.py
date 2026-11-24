@@ -48,6 +48,131 @@ def imported(workspace_home: Path, tmp_path: Path, monkeypatch) -> Path:
     return folder
 
 
+GROUPED_PLAN = """\
+year = 2031
+[[lines]]
+name = "Initech Utilities"
+group = "fixed"
+icon = "💡"
+  [[lines.sub]]
+  name = "Power"
+  icon = "⚡"
+  monthly = 120
+  [[lines.sub]]
+  name = "Water"
+  monthly = 55
+  [[lines.sub]]
+  name = "Internet"
+  monthly = 70
+  cap = true
+
+[[lines]]
+name = "Globex Groceries"
+group = "essentials"
+monthly = 400
+"""
+GROUPED_RULES = """\
+[[rules]]
+match = "Initech Power"
+line = "Power"
+
+[[rules]]
+match = "Initech Water"
+line = "Water"
+
+[[rules]]
+match = "Initech Broadband"
+line = "Internet"
+
+[[rules]]
+match = "Initech Utilities Fee"
+line = "Initech Utilities"
+
+[[rules]]
+match = "Globex Grocery"
+line = "Globex Groceries"
+"""
+GROUPED_MARCH = """\
+2031-03-02 | Checking | Initech Power Co | Utilities | 150.00 |
+2031-03-03 | Checking | Initech Water Works | Utilities | 20.00 |
+2031-03-04 | Checking | Initech Broadband | Utilities | 69.00 |
+2031-03-05 | Checking | Initech Utilities Fee | Utilities | 15.00 |
+2031-03-06 | Checking | Globex Grocery | Groceries | 100.00 |
+"""
+
+
+@pytest.fixture
+def grouped(workspace_home: Path, tmp_path: Path, monkeypatch) -> Path:
+    """A workspace whose Initech Utilities line is split into three sub-lines, March 2031 imported."""
+    from taxtrace import budget
+
+    monkeypatch.setenv(budget_import.PRIVATE_ENV, str(tmp_path / "private"))
+    folder = workspace_home / workspace.BUDGET
+    folder.mkdir(parents=True)
+    (folder / "budget-2031.toml").write_text(GROUPED_PLAN, encoding="utf-8")
+    (folder / "rules.toml").write_text(GROUPED_RULES, encoding="utf-8")
+    plan = budget.load_plan(folder)
+    march = tmp_path / "march.txt"
+    march.write_text(GROUPED_MARCH, encoding="utf-8")
+    budget_import.import_file(march, "2031-03", folder, plan, budget.load_rules(folder, plan))
+    return folder
+
+
+def test_a_parent_line_carries_a_full_set_of_numbers_for_each_sub_line(server, grouped):
+    d = get(server, "/api/budget?view=2031-03")[1]
+    parent = next(x for x in d["lines"] if x["name"] == "Initech Utilities")
+    subs = {s["name"]: s for s in parent["subs"]}
+    assert list(subs) == ["Power", "Water", "Internet", "Not split"]
+    line_keys = set(d["lines"][1]) - {"subs"}
+    assert line_keys <= set(subs["Power"]) and {"parent", "icon"} <= set(subs["Power"])
+    power, water, internet, rest = subs.values()
+    assert (power["budget"], power["spent"], power["remaining"], power["over"]) == (120, 150, -30, True)
+    assert power["parent"] == parent["name"]
+    assert (water["spent"], water["over"], water["near"], water["group"]) == (20, False, False, "fixed")
+    assert (internet["pct"], internet["near"], internet["over"], internet["cap"]) == (98.6, True, False, True)
+    assert (rest["spent"], rest["budget"], rest["over"], rest["count"], rest["unsplit"]) == (15, None, False, 1, True)
+
+
+def test_a_sub_lines_payments_are_its_own(server, grouped):
+    rows = get(server, "/api/budget/payments?view=2031-03&line=Power")[1]["payments"]
+    assert [(p["payee"], p["line"]) for p in rows] == [("Initech Power Co", "Power")]
+    assert len(get(server, "/api/budget/payments?view=2031-03&line=Initech+Utilities")[1]["payments"]) == 4
+
+
+def test_the_totals_come_from_the_parent_so_nothing_counts_twice(server, grouped):
+    d = get(server, "/api/budget?view=2031-03")[1]
+    t = d["totals"]
+    assert [x["name"] for x in d["lines"]] == ["Initech Utilities", "Globex Groceries"]
+    assert (t["budget"], t["spent"], t["remaining"], t["over"], t["near"]) == (645, 354, 291, 1, 0)
+    assert d["groups"]["fixed"]["spent"] == 254 and d["groups"]["fixed"]["budget"] == 245
+    assert d["groups"]["essentials"]["spent"] == 100
+    parent = d["lines"][0]
+    assert sum(s["spent"] for s in parent["subs"]) == parent["spent"] == 254
+
+
+def test_a_parent_whose_payments_are_all_split_has_no_not_split_card(server, grouped):
+    rules = GROUPED_RULES.replace('line = "Initech Utilities"', 'line = "Water"')
+    (grouped / "rules.toml").write_text(rules, encoding="utf-8")
+    parent = get(server, "/api/budget?view=2031-03")[1]["lines"][0]
+    assert [s["name"] for s in parent["subs"]] == ["Power", "Water", "Internet"]
+
+
+def test_the_page_draws_a_header_and_one_card_per_sub_line_not_a_list():
+    html = web.page("t0ken").decode()
+    js = html.split("function lineCard")[1].split("function fundCard")[0]
+    assert "function groupHead" in js and "bghead" in js and "bgroup" in js
+    assert "s => lineCard(s," in js  # each sub-line gets the same card as a line
+    assert 'class: "subs"' not in html and "h(\"ul\"" not in js
+    css = html.split("<style>")[1].split("</style>")[0]
+    assert ".bghead" in css and ".bgroup" in css
+    assert ".blines { display: grid; grid-template-columns: repeat(auto-fill" in css
+    assert '"blist"' in html.split("function renderBudget")[1]
+    # the over-budget lines still come first, the tiles and the group bar still read the parent totals
+    assert "urgency(a) - urgency(b)" in js and "urgency(x) * 10" in html.split("function renderBudget")[1]
+    render = html.split("function renderBudget")[1].split("async function loadBudget")[0]
+    assert "t.over" in render and "d.groups[g].spent" in render
+
+
 def test_demo_mode_shows_the_made_up_household(server, workspace_home):
     status, d = get(server, "/api/budget?demo=1")
     assert status == 200 and d["source"] == "demo" and d["folder"] is None

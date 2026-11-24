@@ -486,6 +486,8 @@ class View:
 
 def _line_json(line: Line, v: View, spent: dict[str, Decimal], counts: dict[str, int], span: Decimal,
                months: list[str]) -> dict:
+    """A line's numbers, its sub-lines' spending counted in. A parent's `subs` carry the same numbers for their own
+    spending, so the page can show a card per sub-line; the parent's totals stay the ones that count."""
     names = (line.name, *(s.name for s in line.subs))
     budget = sum((line.budget(m) for m in months), ZERO)
     expected = sum((line.budget(m) * elapsed(m, v.today) for m in months), ZERO)
@@ -497,11 +499,13 @@ def _line_json(line: Line, v: View, spent: dict[str, Decimal], counts: dict[str,
            "avg": _num(total / span) if span else None, "count": sum(counts.get(n, 0) for n in names),
            "over": total > budget, "near": pct is not None and pct >= v.plan.near and total <= budget}
     if line.subs:
-        subs = [{"name": s.name, "budget": _num(sum((s.budget(m) for m in months), ZERO)),
-                 "spent": _num(spent.get(s.name, ZERO)), "count": counts.get(s.name, 0)} for s in line.subs]
-        if spent.get(line.name):
-            subs.append({"name": "Not split", "budget": None, "spent": _num(spent[line.name]),
-                         "count": counts.get(line.name, 0), "unsplit": True})
+        subs = [{**_line_json(s, v, spent, counts, span, months), "parent": line.name} for s in line.subs]
+        if spent.get(line.name):  # the parent's own payments that no sub-line took
+            own = spent[line.name]
+            subs.append({"name": "Not split", "parent": line.name, "group": line.group, "icon": line.icon,
+                         "cap": False, "monthly": None, "budget": None, "yearly": None, "spent": _num(own),
+                         "remaining": None, "pct": None, "pace": None, "avg": _num(own / span) if span else None,
+                         "count": counts.get(line.name, 0), "over": False, "near": False, "unsplit": True})
         out["subs"] = subs
     return out
 
