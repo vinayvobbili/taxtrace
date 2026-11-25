@@ -17,16 +17,12 @@ from __future__ import annotations
 import calendar
 import json
 import re
+import tomllib
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-
-try:
-    import tomllib
-except ModuleNotFoundError:  # Python 3.10
-    import tomli as tomllib
 
 # The groups a line belongs to, in the order the page shows them, with their colour there.
 GROUPS = {"fixed": ("Fixed bills", "blue"), "essentials": ("Daily essentials", "teal"),

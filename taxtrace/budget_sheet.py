@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import csv
 import re
+import tomllib
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
@@ -48,11 +49,6 @@ from pathlib import Path
 
 from . import budget
 from .budget import ZERO, BudgetError, Fund, Line, Plan
-
-try:
-    import tomllib
-except ModuleNotFoundError:  # Python 3.10
-    import tomli as tomllib
 
 MAP_FILE = "sheet-map.toml"
 TOLERANCE = Decimal("0.50")

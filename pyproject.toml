@@ -9,12 +9,12 @@ description = "Prepare a US federal and state return from your own documents on 
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
-requires-python = ">=3.10"
-dependencies = ["pdfplumber>=0.11", "pypdfium2>=4", "tomli>=1.1; python_version < '3.11'"]
+requires-python = ">=3.11"
+dependencies = ["pdfplumber>=0.11", "pypdfium2>=4"]
 keywords = ["tax", "tax-return", "schedule-e", "rental-property", "fbar", "foreign-tax-credit", "provenance", "local-llm"]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.13",
     "Environment :: Console",
     "Intended Audience :: End Users/Desktop",
@@ -48,7 +48,7 @@ exclude = ["budget/", "statements/", "actuals/", "sheet-exports/", "ledger.jsonl
 
 [tool.ruff]
 line-length = 120
-target-version = "py310"
+target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "B", "UP", "RUF"]

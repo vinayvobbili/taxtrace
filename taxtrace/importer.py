@@ -21,7 +21,7 @@ import re
 import zipfile
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 
 from . import workspace
@@ -196,7 +196,7 @@ def import_documents(src: Path, home: Path, dry_run: bool = False, year: str | N
             target.write_bytes(data)
         placed.append(Placement(name, rel, reason))
         records.append({"source": name, "from": src.name, "sha256": digest, "dest": rel,
-                        "at": datetime.now(timezone.utc).isoformat(timespec="seconds")})
+                        "at": datetime.now(UTC).isoformat(timespec="seconds")})
     if records and not dry_run:
         with (home / MANIFEST).open("a") as f:
             f.writelines(json.dumps(r) + "\n" for r in records)

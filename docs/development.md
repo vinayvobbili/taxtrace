@@ -4,7 +4,7 @@
 
 ```bash
 git config core.hooksPath .githooks   # once: every push first runs scripts/check
-scripts/check                         # budget guards, then ruff + pytest on Python 3.10 and 3.13, as CI does
+scripts/check                         # budget guards, then ruff + pytest on Python 3.13 (CI runs 3.11 and 3.13)
 python scripts/build_vocab.py         # rebuild the redaction vocabulary from IRS publications
 ```
 

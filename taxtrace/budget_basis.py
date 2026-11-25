@@ -21,16 +21,12 @@ The file is edited as text, so its comments and layout stay as they are.
 from __future__ import annotations
 
 import re
+import tomllib
 from decimal import Decimal
 from pathlib import Path
 
 from . import budget, budget_import
 from .budget import Basis, BasisItem, BudgetError
-
-try:
-    import tomllib
-except ModuleNotFoundError:  # Python 3.10
-    import tomli as tomllib
 
 HEADER = re.compile(r"^\s*\[\[?[^\[\]]+\]\]?\s*(#.*)?$")
 NAME = re.compile(r"^\s*name\s*=\s*(\"[^\"]*\"|'[^']*')\s*(#.*)?$")

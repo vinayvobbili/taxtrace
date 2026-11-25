@@ -30,11 +30,11 @@ The real sheet is a plain text file, `entry/<year>.txt`, with one such row per l
 
 ## How well does it work
 
-More than 500 tests (`pytest`), run by CI on Python 3.10 and 3.13. Every fixture is invented, and a test builds a workspace full of made-up amounts and names and checks that none of them appear in any MCP tool's output. This is not a measured accuracy rate against real returns. A filed return, when you have one, is the cross-check: `agi`, `tax` and `d400` compare each line with it and say which way and roughly how far it differs.
+More than 500 tests (`pytest`), run by CI on Python 3.11 and 3.13. Every fixture is invented, and a test builds a workspace full of made-up amounts and names and checks that none of them appear in any MCP tool's output. This is not a measured accuracy rate against real returns. A filed return, when you have one, is the cross-check: `agi`, `tax` and `d400` compare each line with it and say which way and roughly how far it differs.
 
 ## Install
 
-taxtrace needs Python 3.10 or newer. [uv](https://docs.astral.sh/uv/getting-started/installation/) brings its own Python, so install uv first, then taxtrace:
+taxtrace needs Python 3.11 or newer. [uv](https://docs.astral.sh/uv/getting-started/installation/) brings its own Python, so install uv first, then taxtrace:
 
 ```
 curl -LsSf https://astral.sh/uv/install.sh | sh      # installs uv (or: brew install uv)
