@@ -23,7 +23,7 @@ from importlib import resources
 from pathlib import Path, PurePosixPath
 from urllib.parse import parse_qs, urlparse
 
-from . import __version__, budget, budget_demo, chat, cli, entry, importer, text, todo, workspace
+from . import __version__, budget, budget_demo, budget_sheet, chat, cli, entry, importer, text, todo, workspace
 
 APP_HOST = "taxtrace.localhost"  # browsers and macOS send every *.localhost name to this machine, never the web
 PORT = 8766  # jobwatch's is 8765
@@ -145,6 +145,15 @@ def budget_screen(view: str | None = None, demo: bool = False, today: date | Non
         return {"source": "none", "folder": str(folder), "exists": folder.is_dir()}
     data = budget.status(*found, view, today)
     return {**data, "source": "demo" if demo else "workspace", "folder": None if demo else str(folder)}
+
+
+def budget_sheet_check(demo: bool = False, differs: bool = False, today: date | None = None) -> dict:
+    """The Budget tab's Sheet badge: whether a spreadsheet copy of the budget (its CSV exports, mapped in
+    sheet-map.toml) still agrees with the budget file. Reads only; "unavailable" with the reason when there is no
+    map or export yet. With `demo`, an invented spreadsheet that agrees, or (`differs`) one that doesn't."""
+    if demo:
+        return budget_demo.sheet_check(differs, today)
+    return budget_sheet.summary(workspace.home() / workspace.BUDGET)
 
 
 def budget_payments(view: str | None, name: str, demo: bool = False, today: date | None = None) -> dict:
@@ -283,6 +292,10 @@ def make_handler(settings: chat.Settings, token: str, port_ref: list[int]):
                     if asked and not re.fullmatch(r"20\d\d", asked):
                         raise ValueError("the tax year is four digits, such as 2026")
                     return self._json(HTTPStatus.OK, entry_screen(int(asked) if asked else None))
+                if method == "GET" and url.path == "/api/budget/sheet":
+                    query = parse_qs(url.query)
+                    return self._json(HTTPStatus.OK, budget_sheet_check(
+                        (query.get("demo") or [""])[0] == "1", (query.get("differs") or [""])[0] == "1"))
                 if method == "GET" and url.path in ("/api/budget", "/api/budget/payments"):
                     query = parse_qs(url.query)
                     view = budget_view((query.get("view") or [""])[0])

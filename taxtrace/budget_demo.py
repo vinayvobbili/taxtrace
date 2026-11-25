@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import random
-from datetime import date
+from datetime import date, datetime, time
 from decimal import Decimal
 from pathlib import Path
 
@@ -424,6 +424,34 @@ def demo(today: date | None = None) -> tuple[budget.Plan, list[budget.Rule], dic
         key = f"{today.year}-{m:02d}"
         months[key] = Month(month=key, txns=sample_month(key, upto=today.day if m == today.month else None))
     return plan, rules, months
+
+
+def sheet_check(differs: bool = False, today: date | None = None) -> dict:
+    """The page's Sheet badge for the made-up household: an invented spreadsheet copy of its plan that agrees with
+    it, or (`differs`) one where two months of a cap were typed differently and a line was added only there."""
+    from . import budget_sheet
+
+    today = today or date.today()
+    plan = budget.parse_plan(sample_plan(today.year))
+    items = [x for line in plan.lines for x in (line.subs or [line])] + [x for p in plan.properties for x in p.lines()]
+    src = budget_sheet.Source(
+        file="demo-tracker.csv", kind="month-grid", month_column="Month",
+        lines={x.name: f"{x.name} budget" for x in items},
+        transfers={f.name: f"{f.name} transfer" for f in plan.funds},
+        planned={f.name: f"{f.name} planned" for f in plan.funds if any(f.planned.values())})
+    header = ["Month", *src.lines.values(), *src.transfers.values(), *src.planned.values()]
+    rows = [[m, *(str(x.budget(m)) for x in items), *(str(f.transfer(m)) for f in plan.funds),
+             *(str(f.planned.get(m, 0)) for f in plan.funds if any(f.planned.values()))] for m in plan.months()]
+    if differs:
+        col = header.index("Dining out budget")
+        for row in rows[2:4]:
+            row[col] = str(Decimal(row[col]) + 40)
+        src.lines["Pet sitting"] = "Pet sitting budget"
+        header.append("Pet sitting budget")
+        rows = [[*row, "60"] for row in rows]
+    result = budget_sheet.check_tables(plan, budget_sheet.SheetMap(sources=[src]), {src.file: [header, *rows]})
+    result.exported = datetime.combine(today, time())
+    return result.to_json()
 
 
 def write_sample(folder: Path, year: int, force: bool = False) -> list[Path]:

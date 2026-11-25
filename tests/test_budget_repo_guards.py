@@ -12,7 +12,8 @@ ROOT = Path(__file__).resolve().parents[1]
 PRIVATE = [
     "budget/budget-2027.toml", "TaxData/budget/rules.toml", "budget/statements/2026-11/globex-card.csv",
     "statements/2026-11/export.csv", "actuals/2026-11.json", "ledger.jsonl", "rules.toml", "docs/rules.toml",
-    "budget-2027.toml", "export.csv", "docs/umbrella-streaming.csv", "tests/other/globex.csv", "taxtrace/x/y.csv",
+    "budget-2027.toml", "sheet-map.toml", "docs/sheet-map.toml", "sheet-exports/tracker.csv", "export.csv",
+    "docs/umbrella-streaming.csv", "tests/other/globex.csv", "taxtrace/x/y.csv",
 ]
 KEPT = ["tests/data/made-up-bank.csv", "taxtrace/budget.py", "docs/budget.md", "tests/test_budget.py"]
 

@@ -1745,7 +1745,8 @@ def cmd_budget(args: argparse.Namespace) -> int:
     """The household budget against what was spent, in <workspace>/budget/ (never read as documents): `init` writes
     a made-up sample to try, `import` reads a month's bank or card export (CSV) or pipe-separated transactions,
     `rules` lists payee rules, adds one or lists the payees no rule matches, `basis` shows or sets how a line's budget
-    was set (the method and the past payments it came from), and `status` shows each line's budget,
+    was set (the method and the past payments it came from), `check` lists where a spreadsheet's copy of the budget
+    (CSV exports, mapped in sheet-map.toml) disagrees with the budget file, and `status` shows each line's budget,
     spent, remaining, % used and pace, for a month or the year to date. Raw exports are copied to a folder on this
     computer only (TAXTRACE_BUDGET_PRIVATE), never the workspace. The page's Budget tab shows the same.
     """
@@ -1766,7 +1767,9 @@ def cmd_budget(args: argparse.Namespace) -> int:
         if plan is None:
             print(f"no budget-<year>.toml in {folder}: `taxtrace budget init` writes a made-up one to copy",
                   file=sys.stderr)
-            return 1
+            return 2 if args.action == "check" else 1
+        if args.action == "check":
+            return _budget_check(args, folder, plan)
         rules = budget.load_rules(folder, plan)
         if args.action == "import":
             private = budget_import.check_private(budget_import.private_home(), home)
@@ -1780,10 +1783,25 @@ def cmd_budget(args: argparse.Namespace) -> int:
             return _budget_rules(args, folder, plan, rules)
         if args.action == "basis":
             return _budget_basis(args, folder, plan)
-        return _budget_status(args, plan, rules, budget.load_actuals(folder))
+        return _budget_status(args, folder, plan, rules, budget.load_actuals(folder))
     except budget.BudgetError as err:
         print(f"taxtrace budget: {err}", file=sys.stderr)
         return 2
+
+
+def _budget_check(args: argparse.Namespace, folder: Path, plan) -> int:
+    """`budget check`: the budget file against CSV exports of the spreadsheet's tabs, as sheet-map.toml maps them.
+    Reads only; 0 when they agree, 1 when they differ (2 when the map or an export can't be read)."""
+    from . import budget, budget_sheet
+
+    try:
+        tolerance = budget.amount(args.tolerance, "--tolerance") if args.tolerance is not None else None
+    except budget.BudgetError:
+        raise budget.BudgetError(f"--tolerance is an amount, such as 0.50, not {args.tolerance!r}") from None
+    result = budget_sheet.run(folder, plan, Path(args.map).expanduser() if args.map else None,
+                              tuple(Path(s).expanduser() for s in args.sheet or ()), tolerance)
+    print("\n".join(budget_sheet.lines(result)))
+    return 0 if result.in_sync else 1
 
 
 def _budget_basis(args: argparse.Namespace, folder: Path, plan) -> int:
@@ -1840,8 +1858,8 @@ def _budget_rules(args: argparse.Namespace, folder: Path, plan, rules) -> int:
     return 0
 
 
-def _budget_status(args: argparse.Namespace, plan, rules, actuals) -> int:
-    from . import budget
+def _budget_status(args: argparse.Namespace, folder: Path, plan, rules, actuals) -> int:
+    from . import budget, budget_sheet
 
     if args.month and args.month != "ytd":
         budget.month_key(args.month)
@@ -1884,6 +1902,11 @@ def _budget_status(args: argparse.Namespace, plan, rules, actuals) -> int:
           f"({'netted' if s['refunds'] == 'net' else 'left out'}), {o['one_off']['count']} one-off, "
           f"{o['excluded']['count']} left out as transfers or income, {o['unmatched']['count']} rows from "
           f"{o['unmatched']['payees']} payees match no rule")
+    if (folder / budget_sheet.MAP_FILE).is_file():  # a spreadsheet copy is mapped: say whether it still agrees
+        s = budget_sheet.summary(folder, plan)
+        print({"in_sync": "Sheet check: in sync",
+               "differs": f"Sheet check: {budget_sheet.count_text(s.get('count', 0))}, run taxtrace budget check"}.get(
+            s["state"], "Sheet check: unavailable, run taxtrace budget check"))
     return 0
 
 
@@ -2695,6 +2718,14 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--items-from", metavar="FILE", help="the past payments, from a pipe-separated or CSV transactions "
                                                          "file (replaces the ones recorded)")
     a.add_argument("--clear", action="store_true", help="remove the basis")
+    a = acts.add_parser("check", parents=[where],
+                        help="the budget file against CSV exports of a spreadsheet's copy of it: every figure on "
+                             "which they disagree (reads only; exit 0 agree, 1 differ, 2 unreadable)")
+    a.add_argument("--sheet", action="append", metavar="PATH",
+                   help="an export to use in place of the map's file of the same name (repeat for several)")
+    a.add_argument("--map", metavar="PATH", help="the map (default: sheet-map.toml in the budget folder)")
+    a.add_argument("--tolerance", metavar="AMOUNT", help="differences up to this are the same figure (default: the "
+                                                         "map's, else 0.50)")
     a = acts.add_parser("status", parents=[where],
                         help="each line's budget, spent, remaining, share used and pace, for a month or the year")
     a.add_argument("--month", help="YYYY-MM, or ytd for the year to date (default: the year to date once it has a "

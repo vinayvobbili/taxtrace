@@ -337,6 +337,22 @@ form.input button { border: 0; border-radius: 13px; background: var(--grad); col
 .sheet-bar label { font-size: 13px; color: var(--muted); display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
 .sheet-bar select { font: inherit; font-size: 13.5px; padding: 7px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel-solid); color: var(--text); }
 .sheet-bar .spacer { flex: 1; }
+/* the Sheet badge: is the spreadsheet's copy of the budget the same as this one; green, amber or grey, never in the way */
+.sheetchk { --c: var(--muted); display: inline-flex; align-items: center; gap: 7px; font: inherit; font-size: 12.5px; font-weight: 750; cursor: pointer;
+  padding: 5px 12px 5px 10px; border-radius: 99px; color: var(--c); border: 1px solid color-mix(in srgb, var(--c) 35%, transparent);
+  background: color-mix(in srgb, var(--c) 12%, transparent); transition: transform .2s, box-shadow .2s; }
+.sheetchk:hover { transform: translateY(-1px); box-shadow: 0 8px 18px -12px var(--c); }
+.sheetchk i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+.sheetchk[data-state="in_sync"] { --c: var(--good); } .sheetchk[data-state="differs"] { --c: var(--warn); }
+.sheetchk[data-state="differs"] i { animation: pulse 2.4s ease-in-out infinite; }
+.sheetchk[hidden], .sheetdemo[hidden] { display: none; }
+.sheetdemo { font: inherit; font-size: 12px; color: var(--muted); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline dotted; }
+.sheetd { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.sheetd th { text-align: left; font-size: 11px; color: var(--muted); font-weight: 700; padding: 4px; }
+.sheetd td { padding: 5px 4px; border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
+.sheetd .n { text-align: right; white-space: nowrap; } .sheetd th.n { text-align: right; }
+.sheetd td.diff { font-weight: 800; color: var(--warn); }
+.sheetl { margin: 0; padding-left: 18px; font-size: 13px; } .sheetl li { margin: 2px 0; overflow-wrap: anywhere; }
 .seg { display: flex; gap: 2px; padding: 3px; background: var(--chip); border-radius: 11px; }
 .seg button { border: 0; background: none; color: var(--muted); font: inherit; font-size: 12.5px; font-weight: 650; padding: 5px 12px; border-radius: 8px; cursor: pointer; }
 .seg button:hover { color: var(--text); }
@@ -689,6 +705,8 @@ form.input button { border: 0; border-radius: 13px; background: var(--grad); col
       <div class="seg" id="budget-layout" role="group" aria-label="Layout">
         <button type="button" data-l="cards" class="on" aria-pressed="true">Cards</button><button type="button" data-l="charts" aria-pressed="false">Charts</button>
       </div>
+      <button class="sheetchk" id="budget-sheet" type="button" data-state="loading" aria-haspopup="dialog" title="Checking the Sheet's copy of the budget…"><i></i><span>Checking the Sheet…</span></button>
+      <button class="sheetdemo" id="budget-sheet-demo" type="button" hidden></button>
       <div class="spacer"></div>
       <button class="switch" id="budget-demo" type="button" role="switch" aria-checked="false" title="Show a made-up household's budget instead of yours"><span class="knob"></span>Demo data</button>
     </div>
@@ -1508,7 +1526,51 @@ function renderBudget(d) {
       h("div", { class: "blist" }, d.properties.map((p, i) => propertyBlock(p, i, ytd)))) : [],
     h("section", { class: "bsec" }, h("h2", {}, "Not in the lines"), otherCards(d.other)));
 }
+// -- the Sheet badge: does the spreadsheet's copy of the budget (CSV exports, mapped in sheet-map.toml) still match the
+// budget file? Asked apart from the page, never waited for; any trouble reads as "Sheet check unavailable".
+let sheetDemoDiffers = false, sheetData = null;
+const sheetDay = iso => { const [y, m, d] = String(iso || "").split("-").map(Number); const t = new Date(y, m - 1, d);
+  return Number.isNaN(t.getTime()) ? "" : t.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); };
+function sheetLines(d) {  // how many lines the differences touch
+  return new Set([...(d.diffs || []).map(x => x.line), ...(d.only_sheet || []), ...(d.only_taxtrace || [])]).size;
+}
+function renderSheetBadge(d) {
+  sheetData = d && typeof d === "object" ? d : { state: "unavailable", reason: "no answer" };
+  const el = $("budget-sheet"), when = sheetDay(sheetData.exported);
+  const state = sheetData.state === "in_sync" || sheetData.state === "differs" ? sheetData.state : "unavailable";
+  const n = sheetLines(sheetData);
+  el.dataset.state = state;
+  el.querySelector("span").textContent = state === "in_sync" ? "Sheet in sync" : state === "differs" ? `Sheet differs: ${n} line${n === 1 ? "" : "s"}` : "Sheet check unavailable";
+  el.title = state === "unavailable" ? sheetData.reason || "No Sheet export to compare with yet" :
+    `Compared with the Sheet export of ${when || "an unknown date"}. Click for details and how to refresh it.`;
+  el.hidden = false;
+  $("budget-sheet-demo").hidden = !budgetDemo;
+  $("budget-sheet-demo").textContent = sheetDemoDiffers ? "Demo: show the Sheet in sync" : "Demo: show a Sheet that differs";
+}
+function sheetBody(d) {
+  const when = sheetDay(d.exported), diffs = d.diffs || [], onlyS = d.only_sheet || [], onlyT = d.only_taxtrace || [];
+  const refresh = h("p", { class: "how" }, h("b", {}, "To refresh: "), d.refresh || "Export the Sheet's tabs as CSV over the files in budget/sheet-exports/, then run taxtrace budget check.");
+  if (d.state !== "in_sync" && d.state !== "differs")
+    return h("div", { class: "bbasis" }, h("p", { class: "none" }, "Nothing to compare yet."), h("p", { class: "how" }, d.reason || "There is no Sheet export or map."), refresh);
+  const counts = `${finite(d.lines) ? d.lines : "—"} lines and ${finite(d.values) ? d.values : "—"} figures compared`;
+  return h("div", { class: "bbasis" },
+    h("p", {}, d.state === "in_sync" ? `The Sheet and the budget file agree: ${counts}.` : `${counts}; ${sheetLines(d)} line${sheetLines(d) === 1 ? "" : "s"} differ.`),
+    diffs.length ? h("table", { class: "sheetd" }, h("thead", {}, h("tr", {}, h("th", {}, "Line"), h("th", {}, "When"), h("th", { class: "n" }, "Sheet"),
+      h("th", { class: "n" }, "taxtrace"), h("th", { class: "n" }, "Difference"))),
+      h("tbody", {}, diffs.map(x => h("tr", {}, h("td", {}, x.line), h("td", {}, x.period), h("td", { class: "n" }, cents(x.sheet)),
+        h("td", { class: "n" }, cents(x.taxtrace)), h("td", { class: "n diff" }, cents(x.difference)))))) : null,
+    onlyS.length ? [h("p", { class: "none" }, "Only in the Sheet"), h("ul", { class: "sheetl" }, onlyS.map(x => h("li", {}, x)))] : null,
+    onlyT.length ? [h("p", { class: "none" }, "Only in taxtrace"), h("ul", { class: "sheetl" }, onlyT.map(x => h("li", {}, x)))] : null,
+    h("p", { class: "how" }, when ? `Sheet export read: ${when}.` : "Sheet export date unknown."), refresh);
+}
+async function loadSheetCheck() {
+  try { renderSheetBadge(await api("/api/budget/sheet?" + new URLSearchParams(budgetDemo ? { demo: "1", ...(sheetDemoDiffers ? { differs: "1" } : {}) } : {}))); }
+  catch { renderSheetBadge({ state: "unavailable", reason: "The Sheet check couldn't be asked." }); }
+}
+$("budget-sheet").addEventListener("click", () => { if (sheetData) openModal({ title: "Sheet check", sub: "The Sheet's copy of the budget against this one", body: sheetBody(sheetData) }); });
+$("budget-sheet-demo").addEventListener("click", () => { sheetDemoDiffers = !sheetDemoDiffers; loadSheetCheck(); });
 async function loadBudget() {
+  loadSheetCheck();  // not awaited: the badge fills in when it can
   try { renderBudget(await api("/api/budget?" + budgetQuery())); }
   catch (e) { budgetLoaded = false; $("budget-body").replaceChildren(h("div", { class: "card empty" }, `Couldn't load the budget: ${e.message}`)); }
 }

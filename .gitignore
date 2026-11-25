@@ -28,6 +28,8 @@ actuals/
 ledger.jsonl
 rules.toml
 budget-*.toml
+sheet-map.toml
+sheet-exports/
 *.csv
 !tests/data/*.csv
 # Rendered videos and their clips (scripts/videos/make-videos); the published ones are copied to site/

@@ -99,6 +99,7 @@ taxtrace budget status --month 2031-03                # one month
 taxtrace budget basis                                 # which lines have a recorded basis
 taxtrace budget basis Groceries --method "average of the last three months, rounded up" \
     --period "2030-08 to 2030-10" --items-from groceries-2030.txt
+taxtrace budget check                                 # a spreadsheet's copy against the budget file (see below)
 ```
 
 - `basis` shows or sets how a line's budget was set (see below). With no line it lists which ones have one; with a
@@ -174,6 +175,80 @@ The property's net is the income budgeted less the costs budgeted, a month and a
 received less what was spent in the period in view. `taxtrace budget status` prints each property's lines and its
 net.
 
+## Checking a spreadsheet's copy
+
+If you also keep the budget in a spreadsheet (a Google Sheet, say) the two copies drift apart: you change a cap in one
+and forget the other. `taxtrace budget check` reads CSV exports of the spreadsheet's tabs and lists every figure on
+which they disagree with the budget file. It only reports: it never writes to either side and never signs in to
+anything.
+
+```
+taxtrace budget check                          # the exports named in sheet-map.toml
+taxtrace budget check --sheet ~/Downloads/tracker.csv   # use this export in place of the map's tracker.csv
+taxtrace budget check --map other-map.toml --tolerance 1
+```
+
+It prints the counts first (lines and figures compared, differences), then the list: lines only in the spreadsheet,
+lines only in taxtrace, and each figure that differs with its line, month (or "year"), the spreadsheet's figure,
+taxtrace's and the difference (spreadsheet minus taxtrace). Amounts only. The exit code is 0 when they agree, 1 when
+they differ and 2 when the map or an export can't be read (the message names the file and the column or row).
+Differences up to the tolerance (0.50 by default; `--tolerance` or `tolerance =` in the map) count as the same.
+
+Export each tab as CSV (in Google Sheets: File, Download, Comma-separated values) over the files in
+`budget/sheet-exports/`, then run the check again. The check reads those files as they are, so it is only as fresh
+as the last export; the Budget tab says which day that was.
+
+The map, `sheet-map.toml` in the budget folder, says which column or row holds which line. A made-up one:
+
+```toml
+tolerance = 0.50                       # optional
+
+[[sources]]
+file = "sheet-exports/tracker.csv"     # relative to the map's folder
+kind = "month-grid"                    # one row per month, one column per figure
+month_column = "Month"                 # the header of the column that names the month
+months = "2031-01..2031-12"            # optional: default is the plan's twelve months
+total_row = "2031 total"               # optional: the row of yearly totals, compared with the plan's year
+total = "Spending lines total"         # optional: the column holding every spending line's total
+watch = ["budget", "CAP"]              # optional: a column ending in one of these words and not mapped
+                                       # below is reported as only in the spreadsheet
+ignore = ["Variance (actual - budget)"]  # optional: columns that `watch` should pass over (not lines)
+  [sources.lines]                      # line, sub-line or property line -> its monthly budget column
+  "Groceries" = "Groceries budget"
+  "Dining out" = "Dining out CAP"
+  "Power" = "Power budget"
+  "Rent" = "Rent budget"
+  [sources.transfers]                  # sinking fund -> its monthly transfer column
+  "Travel" = "Travel transfer"
+  [sources.planned]                    # sinking fund -> what it is planned to pay, by month
+  "Travel" = "Travel spent plan"
+
+[[sources]]
+file = "sheet-exports/detail.csv"
+kind = "year-table"                    # one row per line, with a yearly and/or a monthly figure
+name_column = "Sub-line"               # the header of the column that names the row
+annual_column = "Annual budget"        # compared with the plan's year
+monthly_column = "Monthly budget"      # compared with the plan's usual monthly figure
+  [sources.lines]                      # line -> the row's name
+  "Power" = "Power"
+  "Water" = "Water"
+```
+
+- A column or row is found by its words alone: case, emoji and punctuation don't matter, so a header written
+  "💡 Power budget" matches `"Power budget"`. Two columns with the same words are refused.
+- A tab's export can hold several tables or a title above the header: the header row is the first one that has the
+  month column (or the name column). Rows below it whose month cell isn't a month (a total, a baseline) are skipped,
+  except the `total_row`. A month is written 2031-03, 2031-03-01, 3/1/2031, Mar 2031 or March 2031.
+- An amount is read from $1,250, -$40, (40) or 12.5. A blank cell is no budget (zero); a cell that isn't an
+  amount is a read error naming its file, column and month.
+- A line the map names that the budget file doesn't have is "only in the spreadsheet". A line, sub-line, property
+  line or fund in the budget file that no source maps is "only in taxtrace" (a fund by its transfer, and by its
+  planned spending when it plans any). A line with sub-lines is covered by its own column or by one for each sub-line.
+- `taxtrace budget status` ends with one line, "Sheet check: in sync", "Sheet check: N differences, run taxtrace
+  budget check" or "Sheet check: unavailable, run taxtrace budget check", once a `sheet-map.toml` is there.
+- The map and the exports are private like the rest of the budget folder: git and the package build leave them out,
+  and nothing lists them as documents or sends them to a model.
+
 ## The Budget tab
 
 `taxtrace ui`, then **Budget**. Year to date by default (once the plan's year has a month imported; until then, the
@@ -181,6 +256,12 @@ latest month), or any imported month.
 
 - Tiles: the budget so far (and per month and per year), spent (with the monthly average), what's left, pace
   against the plan, and how many lines are over.
+- A small badge beside the period and layout controls, after a quiet check that never holds the page up: green
+  **Sheet in sync**, amber **Sheet differs: N lines** or grey **Sheet check unavailable** (no `sheet-map.toml` or
+  export yet). Clicking it opens a dialog with the counts, the differences (line, month, the spreadsheet's figure,
+  taxtrace's, the difference), the lines on one side only, the day of the export it compared and how to refresh it
+  (export the tabs again, see above). With Demo data on, a small link beside it switches between an invented
+  spreadsheet that agrees and one that doesn't.
 - "Where our money goes": spending by group as one bar, with the groups' colours: blue fixed bills, teal daily
   essentials, violet family, orange discretionary.
 - A card per line, over-budget lines first: its icon, budget, spent, left, share used, a bar and a ring (green

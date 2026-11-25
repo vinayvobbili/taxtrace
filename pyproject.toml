@@ -41,10 +41,10 @@ taxtrace-mcp = "taxtrace.mcp_server:main"
 [tool.hatch.build.targets.wheel]
 packages = ["taxtrace"]
 # Never a person's budget, rules or bank exports (tests/test_budget_guards.py builds both and checks the files).
-exclude = ["budget/", "statements/", "actuals/", "ledger.jsonl", "rules.toml", "budget-*.toml", "*.csv"]
+exclude = ["budget/", "statements/", "actuals/", "sheet-exports/", "ledger.jsonl", "rules.toml", "budget-*.toml", "sheet-map.toml", "*.csv"]
 
 [tool.hatch.build.targets.sdist]
-exclude = ["budget/", "statements/", "actuals/", "ledger.jsonl", "rules.toml", "budget-*.toml", "*.csv"]
+exclude = ["budget/", "statements/", "actuals/", "sheet-exports/", "ledger.jsonl", "rules.toml", "budget-*.toml", "sheet-map.toml", "*.csv"]
 
 [tool.ruff]
 line-length = 120

@@ -19,9 +19,12 @@ BUDGET_FILES = {
     "rules.toml": '[[rule]]\nmatch = "VANDELAY PHARMACY"\ncategory = "Health"\n',
     "ledger.jsonl": '{"description": "UMBRELLA STREAMING", "amount": "-12.75"}\n',
     "actuals/2026-11.json": '{"groceries": {"spent": "64.10"}}',
+    "sheet-map.toml": '[[sources]]\nfile = "sheet-exports/wonka-tracker.csv"\nkind = "month-grid"\n',
+    "sheet-exports/wonka-tracker.csv": "Month,Kramerica Pet Fund budget\n2026-11,$317.55\n",
 }
 SECRETS = ["umbrella-streaming", "globex-card", "INITECH FUEL", "GLOBEX GROCERY", "VANDELAY", "UMBRELLA STREAMING",
-           "88.20", "245.00", "129.99", "12.75", "64.10", "ledger", "rules.toml"]
+           "88.20", "245.00", "129.99", "12.75", "64.10", "ledger", "rules.toml", "sheet-map", "wonka-tracker",
+           "Kramerica", "317.55"]
 OWN_DOCUMENT = "2025/Thistledown 1098.pdf"
 
 

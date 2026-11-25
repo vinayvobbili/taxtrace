@@ -13,8 +13,8 @@ import subprocess
 import sys
 from pathlib import Path, PurePosixPath
 
-PRIVATE_FOLDERS = {"budget", "statements", "actuals"}
-PRIVATE_FILES = ("ledger.jsonl", "rules.toml", "budget-*.toml")
+PRIVATE_FOLDERS = {"budget", "statements", "actuals", "sheet-exports"}
+PRIVATE_FILES = ("ledger.jsonl", "rules.toml", "budget-*.toml", "sheet-map.toml")
 MADE_UP_CSVS = PurePosixPath("tests/data")
 
 

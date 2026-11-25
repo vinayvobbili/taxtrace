@@ -55,6 +55,7 @@ taxtrace agi --year 2026                        # adjusted gross income, against
 taxtrace ui                                     # the workspace and a chat in the browser
 taxtrace budget status                          # the household budget against what was spent (Budget tab too)
 taxtrace budget basis Groceries                 # how a line's budget was set, and the past payments behind it
+taxtrace budget check                           # where a spreadsheet's copy of the budget disagrees with the budget file
 taxtrace --help                                 # every command
 ```
 

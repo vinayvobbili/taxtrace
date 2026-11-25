@@ -15,7 +15,8 @@ spec.loader.exec_module(guards)
 @pytest.mark.parametrize("path", [
     "budget/budget-2027.toml", "TaxData/budget/rules.toml", "budget/statements/2026-11/globex-card.csv",
     "statements/2026-11/export.csv", "actuals/2026-11.json", "ledger.jsonl", "docs/rules.toml", "budget-2027.toml",
-    "export.CSV", "docs/umbrella-streaming.csv", "tests/other/globex.csv", "scripts/budget/helper.py",
+    "export.CSV", "docs/sheet-map.toml", "sheet-exports/tracker.csv", "docs/umbrella-streaming.csv",
+    "tests/other/globex.csv", "scripts/budget/helper.py",
 ])
 def test_private_files_are_named(path):
     assert guards.private(path)
